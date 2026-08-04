@@ -1,7 +1,12 @@
-@"
 node_modules/
 dist/
+dist-ssr/
 .env
+.env.local
 CLAUDE.local.md
 .DS_Store
-"@ | Out-File -Encoding utf8 .gitignore
+Thumbs.db
+*.local
+.vscode/*
+!.vscode/extensions.json
+.idea/

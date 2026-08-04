@@ -22,11 +22,13 @@ Vampire-Survivors-style to carve it back.
 
 ## Build / run commands
 
-<!-- Fill these in once the project is scaffolded, e.g.:
-- `npm run dev` — local dev server
-- `npm run build` — production build
-- `npm run typecheck` — TypeScript check
--->
+- `npm install` — install dependencies (Node version pinned in `.nvmrc`)
+- `npm run dev` — local dev server with hot reload
+- `npm run build` — typecheck + production build to `dist/`
+- `npm run preview` — serve the production build locally
+- `npm run typecheck` — TypeScript check only, no build
+- `npm run test` — run Vitest once
+- `npm run test:watch` — Vitest in watch mode
 
 ## Conventions
 
