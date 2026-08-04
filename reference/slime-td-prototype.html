@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Slime TD — Outbreak Prototype</title>
+<style>
+  :root{
+    --bg:#0b060a;
+    --bg2:#150a10;
+    --panel:#161019e6;
+    --line:#3a1f2c;
+    --text:#f2e9ee;
+    --muted:#9c8391;
+    --accent:#6df0ff;
+    --accent-dim:#2c6b74;
+    --gold:#ffcf4d;
+    --danger:#ff3f68;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background: radial-gradient(ellipse at center, var(--bg2) 0%, var(--bg) 75%);
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    color:var(--text);
+    user-select:none;
+  }
+  #game-canvas{ position:absolute; top:0; left:0; display:block; }
+
+  /* ---------- HUD ---------- */
+  #hud{ position:absolute; top:0; left:0; width:100%; padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; z-index:10;}
+  .hud-block{ display:flex; flex-direction:column; gap:6px; min-width:220px;}
+  .hp-row{ display:flex; align-items:center; gap:8px;}
+  .bar-wrap{ width:220px; height:14px; background:#0006; border:1px solid var(--line); border-radius:7px; overflow:hidden; position:relative;}
+  .bar-fill{ height:100%; border-radius:7px; transition:width .15s ease;}
+  #hp-fill{ background:linear-gradient(90deg,#ff3f68,#ff8a3d);}
+  #xp-fill{ background:linear-gradient(90deg,#6df0ff,#a8ffb0);}
+  .bar-label{ font-size:10px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase;}
+  #level-badge{
+    width:34px; height:34px; border-radius:50%; border:2px solid var(--accent);
+    display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px;
+    background:#0008; flex-shrink:0; color:var(--accent);
+  }
+  .stat-row{ display:flex; gap:14px; font-size:12px; color:var(--muted);}
+  .stat-row b{ color:var(--text);}
+  #weapon-tray{ position:absolute; bottom:14px; left:50%; transform:translateX(-50%); display:flex; gap:8px; z-index:10; pointer-events:none;}
+  .weapon-chip{
+    width:40px; height:40px; border-radius:9px; border:1px solid var(--line); background:#0008;
+    display:flex; align-items:center; justify-content:center; font-size:16px; position:relative;
+  }
+  .weapon-chip .lvl{ position:absolute; bottom:-2px; right:-2px; background:var(--accent); color:#04121a; font-size:9px; font-weight:bold; border-radius:5px; padding:1px 3px; line-height:1;}
+
+  /* ---------- Difficulty (Risk-of-Rain style) HUD ---------- */
+  #difficulty-hud{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:10;
+    display:flex; flex-direction:column; align-items:center; gap:5px; pointer-events:none;
+    min-width:260px;
+  }
+  #difficulty-name{
+    font-size:13px; font-weight:bold; letter-spacing:.16em; text-transform:uppercase;
+    text-shadow:0 0 14px #000; transition:color .4s ease;
+  }
+  .diff-bar-wrap{ width:260px; height:6px; background:#0007; border:1px solid var(--line); border-radius:4px; overflow:hidden;}
+  #diff-bar-fill{ height:100%; width:0%; transition:width .3s linear, background .4s ease;}
+
+  /* ---------- Modals ---------- */
+  .overlay{
+    position:absolute; inset:0; background:#040305cc; display:flex; align-items:center; justify-content:center;
+    z-index:50; backdrop-filter: blur(2px);
+  }
+  .hidden{ display:none !important;}
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:28px 32px;
+    max-width:560px; width:90%; text-align:center; box-shadow:0 20px 60px #000a;
+  }
+  h1{ font-size:26px; margin:0 0 6px; letter-spacing:.03em; color:var(--accent); text-shadow:0 0 18px var(--accent-dim);}
+  .subtitle{ color:var(--muted); font-size:13px; margin-bottom:20px; line-height:1.7;}
+  button.primary{
+    background:linear-gradient(180deg,var(--accent),#2c9aae); border:none; color:#03181c; font-weight:bold;
+    padding:12px 26px; border-radius:9px; font-size:14px; cursor:pointer; letter-spacing:.03em;
+    box-shadow:0 6px 0 #1c6570, 0 8px 18px #0006;
+  }
+  button.primary:active{ transform:translateY(3px); box-shadow:0 3px 0 #1c6570;}
+  .kv{ display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px dashed var(--line); color:var(--muted);}
+  .kv b{ color:var(--text);}
+
+  #upgrade-title{ font-size:13px; letter-spacing:.15em; text-transform:uppercase; color:var(--gold); margin-bottom:16px;}
+  #cards{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap;}
+  .card{
+    width:150px; background:#150c13; border:1px solid var(--line); border-radius:12px; padding:16px 12px;
+    cursor:pointer; transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+  }
+  .card:hover{ transform:translateY(-4px); border-color:var(--accent); box-shadow:0 10px 24px #0007;}
+  .card .icon{ font-size:30px; margin-bottom:8px;}
+  .card .name{ font-size:13px; font-weight:bold; margin-bottom:4px;}
+  .card .rank{ font-size:10px; color:var(--gold); margin-bottom:8px; letter-spacing:.05em;}
+  .card .desc{ font-size:11px; color:var(--muted); line-height:1.5;}
+  .card.new .rank{ color:#a8ffb0;}
+
+  #announce{
+    position:absolute; top:68px; left:50%; transform:translateX(-50%); z-index:20;
+    font-size:14px; font-weight:bold; letter-spacing:.08em; color:var(--danger); text-shadow:0 0 12px #000;
+    opacity:0; transition:opacity .4s ease; pointer-events:none; text-transform:uppercase; text-align:center;
+  }
+  #announce.show{ opacity:1;}
+</style>
+</head>
+<body>
+
+<canvas id="game-canvas"></canvas>
+
+<div id="announce"></div>
+
+<div id="difficulty-hud">
+  <div id="difficulty-name">Simple Infection</div>
+  <div class="diff-bar-wrap"><div id="diff-bar-fill"></div></div>
+</div>
+
+<div id="hud">
+  <div class="hud-block">
+    <div class="hp-row">
+      <div id="level-badge">1</div>
+      <div>
+        <div class="bar-label">Core Integrity</div>
+        <div class="bar-wrap"><div id="hp-fill" class="bar-fill" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="bar-label">Experience</div>
+      <div class="bar-wrap" style="width:220px;"><div id="xp-fill" class="bar-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div class="hud-block" style="align-items:flex-end;">
+    <div class="stat-row"><span>Time <b id="stat-time">00:00</b></span></div>
+    <div class="stat-row"><span>Purged <b id="stat-kills">0</b></span></div>
+    <div class="stat-row"><span>Tier <b id="stat-wave">1</b></span></div>
+  </div>
+</div>
+
+<div id="weapon-tray"></div>
+
+<div id="start-overlay" class="overlay">
+  <div class="panel">
+    <h1>SLIME TD</h1>
+    <div class="subtitle">
+      A living wall of infection surrounds your core and creeps inward from every side.<br>
+      Your weapons fire automatically, carving the tissue back — but dense, matured tissue<br>
+      resists more per hit, so don't let it sit unchecked. Glowing <b>nodes</b> accelerate growth<br>
+      around themselves and must be prioritized before they thicken the wall for good.<br><br>
+      Survive the escalating outbreak.
+    </div>
+    <button class="primary" id="start-btn">Start Run</button>
+  </div>
+</div>
+
+<div id="upgrade-overlay" class="overlay hidden">
+  <div class="panel" style="max-width:640px;">
+    <div id="upgrade-title">Level Up — Choose an Upgrade</div>
+    <div id="cards"></div>
+  </div>
+</div>
+
+<div id="gameover-overlay" class="overlay hidden">
+  <div class="panel">
+    <h1 style="color:var(--danger); text-shadow:0 0 18px #ff3f6855;">Core Overwhelmed</h1>
+    <div class="subtitle">The infection reached the center.</div>
+    <div class="kv"><span>Time Survived</span><b id="go-time">00:00</b></div>
+    <div class="kv"><span>Level Reached</span><b id="go-level">1</b></div>
+    <div class="kv"><span>Nodes Purged</span><b id="go-kills">0</b></div>
+    <div style="margin-top:22px;"><button class="primary" id="restart-btn">Try Again</button></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* Declared early: resize() (called immediately below) reads this,
+   and a `let` further down would leave it in the temporal dead zone. */
+let state = null;
+
+/* =========================================================
+   CANVAS SETUP
+========================================================= */
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  if(state && state.running){
+    // Recenter the core; the density grid keeps its own absolute pixel
+    // coordinate system from run-start, so this stays consistent.
+    state.tower.x = W/2; state.tower.y = H/2;
+  }
+}
+window.addEventListener('resize', resize);
+resize();
+
+function screenCenter(){ return {x: W/2, y: H/2}; }
+
+/* =========================================================
+   UTIL
+========================================================= */
+function rand(a,b){ return a + Math.random()*(b-a); }
+function randInt(a,b){ return Math.floor(rand(a,b+1)); }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function dist2(x1,y1,x2,y2){ const dx=x2-x1, dy=y2-y1; return dx*dx+dy*dy; }
+function dist(x1,y1,x2,y2){ return Math.sqrt(dist2(x1,y1,x2,y2)); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function fmtTime(s){
+  s = Math.floor(s);
+  const m = Math.floor(s/60), sec = s%60;
+  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+}
+
+/* =========================================================
+   DIFFICULTY TIERS (Risk-of-Rain style escalation)
+========================================================= */
+const TIERS_LIST = [
+  { name:'Simple Infection',    t:0,   infectionMult:1.0, nodeInterval:30, safeRadius:190, contactMult:1.0, color:'#8fd17a' },
+  { name:'Localized Outbreak',  t:90,  infectionMult:1.35,nodeInterval:24, safeRadius:170, contactMult:1.2, color:'#e0c34d' },
+  { name:'Spreading Epidemic',  t:220, infectionMult:1.8, nodeInterval:19, safeRadius:145, contactMult:1.4, color:'#ff9a3d' },
+  { name:'Full Outbreak',       t:380, infectionMult:2.3, nodeInterval:15, safeRadius:120, contactMult:1.7, color:'#ff5d5d' },
+  { name:'Apocalypse',          t:560, infectionMult:3.1, nodeInterval:11, safeRadius:95,  contactMult:2.1, color:'#ff2f56' }
+];
+function computeTierIndex(t){
+  let idx = 0;
+  for(let k=0;k<TIERS_LIST.length;k++){ if(t >= TIERS_LIST[k].t) idx = k; }
+  return idx;
+}
+
+/* =========================================================
+   WEAPON DEFINITIONS
+========================================================= */
+const WEAPON_DEFS = {
+  bolt: {
+    name:'Bolt Turret', icon:'⚡', maxLevel:8,
+    desc:(lvl)=>`Fires at the nearest wall of infection. Lv${lvl}: ${boltDamage(lvl).toFixed(0)} pwr`,
+    startLevel:1
+  },
+  blades: {
+    name:'Orbiting Blades', icon:'🗡️', maxLevel:8,
+    desc:(lvl)=>`Spinning blades shred any tissue they touch. Lv${lvl}: ${bladeCount(lvl)} blade(s)`
+  },
+  chain: {
+    name:'Chain Bolt', icon:'🔗', maxLevel:8,
+    desc:(lvl)=>`Strikes the wall, then arcs to ${chainCount(lvl)} nearby clusters.`
+  },
+  frost: {
+    name:'Frost Nova', icon:'❄️', maxLevel:8,
+    desc:(lvl)=>`Pulses outward, damaging tissue and freezing growth nearby.`
+  },
+  poison: {
+    name:'Caustic Cloud', icon:'☠️', maxLevel:8,
+    desc:(lvl)=>`Drops a lingering cloud that erodes tissue over time.`
+  },
+  missile: {
+    name:'Homing Missile', icon:'🚀', maxLevel:8,
+    desc:(lvl)=>`Homes onto growth nodes (or the nearest wall) and explodes.`
+  }
+};
+
+function boltDamage(lvl){ return 10 + (lvl-1)*5; }
+function boltCooldown(lvl){ return Math.max(0.16, 0.55 - (lvl-1)*0.045); }
+function bladeCount(lvl){ return Math.min(1 + Math.floor((lvl-1)/2), 5); }
+function bladeDamage(lvl){ return 7 + (lvl-1)*3.2; }
+function chainCount(lvl){ return Math.min(1 + Math.floor((lvl-1)/1.6), 6); }
+function chainDamage(lvl){ return 11 + (lvl-1)*4; }
+function chainCooldown(lvl){ return Math.max(0.4, 1.15 - (lvl-1)*0.08); }
+function frostDamage(lvl){ return 9 + (lvl-1)*3.4; }
+function frostRadius(lvl){ return 115 + (lvl-1)*12; }
+function frostCooldown(lvl){ return Math.max(1.5, 3.6 - (lvl-1)*0.24); }
+function poisonDamage(lvl){ return 6 + (lvl-1)*2.4; }
+function poisonRadius(lvl){ return 58 + (lvl-1)*5; }
+function poisonCooldown(lvl){ return Math.max(1.0, 2.3 - (lvl-1)*0.15); }
+function missileDamage(lvl){ return 30 + (lvl-1)*10; }
+function missileRadius(lvl){ return 58 + (lvl-1)*5; }
+function missileCooldown(lvl){ return Math.max(1.2, 2.7 - (lvl-1)*0.18); }
+
+/* =========================================================
+   PASSIVE DEFINITIONS
+========================================================= */
+const PASSIVE_DEFS = {
+  maxHp:   { name:'Vitality',     icon:'❤️', maxLevel:8, desc:'+20 max core integrity, heals on pickup.' },
+  regen:   { name:'Regeneration', icon:'💧', maxLevel:8, desc:'+0.3 integrity regen per second.' },
+  armor:   { name:'Armor Plating',icon:'🛡️', maxLevel:6, desc:'-7% damage taken from contact.' },
+  atkSpeed:{ name:'Overclock',    icon:'⏱️', maxLevel:8, desc:'+9% attack speed, all weapons.' },
+  damage:  { name:'Amplifier',    icon:'💥', maxLevel:8, desc:'+10% damage, all weapons.' },
+  pickup:  { name:'Magnetism',    icon:'🧲', maxLevel:6, desc:'Gems drift toward the core faster.' },
+  xpGain:  { name:'Insight',      icon:'📖', maxLevel:6, desc:'+14% experience gained.' },
+  ward:    { name:'Ward Pulse',   icon:'🌀', maxLevel:6, desc:'Periodically purges a ring around the core.' }
+};
+
+/* =========================================================
+   GRID CONSTANTS
+========================================================= */
+const CELL_SIZE = 13;
+const AMBIENT_BASE = 0.05;
+const CONTACT_SCALE = 15;
+const MAX_NODES = 5;
+const SIM_TICK = 0.18;
+
+/* =========================================================
+   GAME STATE
+========================================================= */
+function freshState(){
+  const c = screenCenter();
+  return {
+    running:false,
+    paused:false,
+    time:0,
+    nodesPurged:0,
+    tierIndex:0,
+    tower:{
+      x:c.x, y:c.y, radius:22,
+      hp:100, maxHp:100,
+      level:1, xp:0, xpToNext:10,
+      shake:0
+    },
+    weapons:{},
+    passives:{},
+    grid:null,
+    slimeLayer:null,
+    dirty:new Set(),
+    nodes:[],
+    projectiles:[],
+    orbitals:[],
+    chainFx:[],
+    clouds:[],
+    particles:[],
+    gems:[],
+    frontier:null,
+    weaponTimers:{ bolt:0, blades:0, chain:0, frost:0, poison:0, missile:0 },
+    bladeNextHit:{},
+    wardTimer:0,
+    nodeSpawnTimer:14,
+    simAcc:0,
+    announceTimer:0,
+    contactPressure:0
+  };
+}
+
+function passiveMult(key, per, cap){
+  const lvl = state.passives[key]||0;
+  return Math.min(cap!==undefined?cap:99, lvl*per);
+}
+function damageMult(){ return 1 + passiveMult('damage', 0.10); }
+function atkSpeedMult(){ return 1 + passiveMult('atkSpeed', 0.09); }
+function armorMult(){ return 1 - passiveMult('armor', 0.07, 0.55); }
+function pickupMult(){ return 1 + passiveMult('pickup', 0.35); }
+function xpMult(){ return 1 + passiveMult('xpGain', 0.14); }
+
+/* =========================================================
+   REACTION-DIFFUSION VEIN FIELD (Gray-Scott)
+   Produces the coral / maze-like pattern used as the static
+   "reveal shape" the growth field lights up over time.
+
+   IMPORTANT: explicit-Euler 2D diffusion is only numerically
+   stable when D*step <= ~0.25 (5-point stencil). Du=1.0 with
+   step=1 diverges to NaN almost immediately, so this runs
+   several small sub-steps (step=0.15) instead of one big one.
+   Simulated at half the grid's resolution and upsampled 2x
+   (nearest-neighbor) to keep one-time startup cost low even
+   on large screens.
+========================================================= */
+function generateVeinFieldRaw(cols, rows, iterations, feed, kill, step){
+  const size = cols*rows;
+  let u = new Float32Array(size).fill(1);
+  let v = new Float32Array(size).fill(0);
+  const seeds = Math.max(6, Math.floor(size/450));
+  for(let s=0;s<seeds;s++){
+    const cx = randInt(2,cols-3), cy = randInt(2,rows-3);
+    for(let y=-2;y<=2;y++){
+      for(let x=-2;x<=2;x++){
+        const xx=cx+x, yy=cy+y;
+        if(xx>=0&&xx<cols&&yy>=0&&yy<rows){
+          v[yy*cols+xx] = 1; u[yy*cols+xx] = 0;
+        }
+      }
+    }
+  }
+  const Du=1.0, Dv=0.5;
+  let u2 = new Float32Array(size), v2 = new Float32Array(size);
+  for(let it=0; it<iterations; it++){
+    for(let y=0;y<rows;y++){
+      const yU = (y>0?y-1:rows-1)*cols;
+      const yD = (y<rows-1?y+1:0)*cols;
+      const yRow = y*cols;
+      for(let x=0;x<cols;x++){
+        const xL = x>0?x-1:cols-1;
+        const xR = x<cols-1?x+1:0;
+        const i = yRow+x;
+        const lapU = u[yRow+xL]+u[yRow+xR]+u[yU+x]+u[yD+x]-4*u[i];
+        const lapV = v[yRow+xL]+v[yRow+xR]+v[yU+x]+v[yD+x]-4*v[i];
+        const uu=u[i], vv=v[i];
+        const reaction = uu*vv*vv;
+        u2[i] = uu + step*(Du*lapU - reaction + feed*(1-uu));
+        v2[i] = vv + step*(Dv*lapV + reaction - (kill+feed)*vv);
+      }
+    }
+    const tu=u; u=u2; u2=tu;
+    const tv=v; v=v2; v2=tv;
+  }
+  return v;
+}
+function generateVeinField(cols, rows){
+  const cols2 = Math.max(4, Math.ceil(cols/2));
+  const rows2 = Math.max(4, Math.ceil(rows/2));
+  const raw = generateVeinFieldRaw(cols2, rows2, 2000, 0.0545, 0.062, 0.15);
+  let min=Infinity, max=-Infinity;
+  for(let i=0;i<raw.length;i++){ if(raw[i]<min) min=raw[i]; if(raw[i]>max) max=raw[i]; }
+  const range = Math.max(1e-6, max-min);
+  const field = new Float32Array(cols*rows);
+  for(let cy=0; cy<rows; cy++){
+    const sy = Math.min(rows2-1, Math.floor(cy/2));
+    for(let cx=0; cx<cols; cx++){
+      const sx = Math.min(cols2-1, Math.floor(cx/2));
+      const raw_i = sy*cols2+sx;
+      field[cy*cols+cx] = (raw[raw_i]-min)/range;
+    }
+  }
+  return field;
+}
+
+/* =========================================================
+   GRID BUILD / HELPERS
+========================================================= */
+function buildGrid(){
+  const cols = Math.ceil(W/CELL_SIZE)+2;
+  const rows = Math.ceil(H/CELL_SIZE)+2;
+  const size = cols*rows;
+  const vein = generateVeinField(cols, rows);
+  const threshold = new Float32Array(size);
+  for(let i=0;i<size;i++){ threshold[i] = clamp(1-vein[i], 0.045, 0.94); }
+  return {
+    cols, rows, size, cellSize: CELL_SIZE,
+    vein, threshold,
+    growth: new Float32Array(size),
+    frozen: new Float32Array(size),
+    bucket: new Int8Array(size),
+    maxRange: Math.hypot(W/2,H/2)+50,
+    safeRadius: TIERS_LIST[0].safeRadius
+  };
+}
+function gIdx(cx,cy){ return cy*state.grid.cols+cx; }
+function worldToCell(x,y){
+  const g = state.grid;
+  return {
+    cx: clamp(Math.floor(x/g.cellSize),0,g.cols-1),
+    cy: clamp(Math.floor(y/g.cellSize),0,g.rows-1)
+  };
+}
+function cellBucket(i){
+  const g = state.grid;
+  if(g.growth[i] <= g.threshold[i]) return 0;
+  const t = (g.growth[i]-g.threshold[i]) / Math.max(0.001, 1-g.threshold[i]);
+  return 1 + Math.min(4, Math.floor(t*5));
+}
+const BUCKET_COLORS = ['transparent','#5c2430','#8a2f42','#c23a5a','#ff3f68','#ff7590'];
+
+function initSlimeLayer(grid){
+  const c = document.createElement('canvas');
+  c.width = grid.cols*grid.cellSize;
+  c.height = grid.rows*grid.cellSize;
+  return { canvas:c, ctx:c.getContext('2d') };
+}
+function markDirty(i){ state.dirty.add(i); }
+function flushDirtyCells(){
+  if(state.dirty.size===0) return;
+  const g = state.grid, layer = state.slimeLayer;
+  const r = g.cellSize*0.62;
+  for(const i of state.dirty){
+    const cx = i % g.cols, cy = Math.floor(i/g.cols);
+    const px = cx*g.cellSize, py = cy*g.cellSize;
+    layer.ctx.clearRect(px-1,py-1,g.cellSize+2,g.cellSize+2);
+    const b = g.bucket[i];
+    if(b>0){
+      layer.ctx.beginPath();
+      layer.ctx.fillStyle = BUCKET_COLORS[b];
+      layer.ctx.arc(px+g.cellSize/2, py+g.cellSize/2, r, 0, Math.PI*2);
+      layer.ctx.fill();
+    }
+  }
+  state.dirty.clear();
+}
+function isRevealedIdx(i){ const g=state.grid; return g.growth[i] > g.threshold[i]; }
+
+/* =========================================================
+   RUN START
+========================================================= */
+function startRun(){
+  state = freshState();
+  state.grid = buildGrid();
+  state.slimeLayer = initSlimeLayer(state.grid);
+  state.weapons.bolt = 1;
+  state.running = true;
+  document.getElementById('start-overlay').classList.add('hidden');
+  document.getElementById('gameover-overlay').classList.add('hidden');
+  updateWeaponTray();
+  updateDifficultyHud();
+  lastTs = performance.now();
+  requestAnimationFrame(loop);
+}
+
+/* =========================================================
+   NODES (growth hotspots / priority targets)
+========================================================= */
+function spawnNode(){
+  const g = state.grid, t = state.tower, tier = TIERS_LIST[state.tierIndex];
+  const angle = rand(0, Math.PI*2);
+  const r = rand(g.safeRadius+70, g.maxRange-30);
+  const x = clamp(t.x+Math.cos(angle)*r, 20, g.cols*g.cellSize-20);
+  const y = clamp(t.y+Math.sin(angle)*r, 20, g.rows*g.cellSize-20);
+  const hp = 220*(1+0.35*state.tierIndex);
+  state.nodes.push({
+    x,y, hp, maxHp:hp,
+    radius: 95+state.tierIndex*10,
+    strength: 0.55+state.tierIndex*0.08,
+    hitRadius:16, dead:false,
+    pulseSeed: rand(0,Math.PI*2)
+  });
+  announce('Infection node forming');
+}
+function destroyNode(node){
+  node.dead = true;
+  spawnParticles(node.x,node.y,'#ffcf4d',30,180);
+  state.nodesPurged++;
+  grantXp(45 + state.tierIndex*12);
+  document.getElementById('stat-kills').textContent = state.nodesPurged;
+}
+
+/* =========================================================
+   ANNOUNCEMENTS
+========================================================= */
+function announce(msg){
+  const el = document.getElementById('announce');
+  el.textContent = msg;
+  el.classList.add('show');
+  state.announceTimer = 2.6;
+}
+
+/* =========================================================
+   XP / LEVEL
+========================================================= */
+function grantXp(amount){
+  const t = state.tower;
+  t.xp += amount * xpMult();
+  while(t.xp >= t.xpToNext){
+    t.xp -= t.xpToNext;
+    t.level += 1;
+    // Roughly linear curve so the ~8-tier weapon progression paces
+    // out across most of a run instead of front- or back-loading.
+    // NOTE: this is a first-pass estimate — real balance needs a
+    // human playtest loop, which automated testing can't judge.
+    t.xpToNext = Math.round(12 + t.level*6.5);
+    onLevelUp();
+  }
+}
+
+function onLevelUp(){
+  state.paused = true;
+  showUpgradeCards();
+}
+
+/* =========================================================
+   UPGRADE CARD SYSTEM
+========================================================= */
+function buildCardPool(){
+  const pool = [];
+  for(const key in WEAPON_DEFS){
+    const def = WEAPON_DEFS[key];
+    const lvl = state.weapons[key] || 0;
+    if(lvl < def.maxLevel) pool.push({ kind:'weapon', key, nextLevel:lvl+1, isNew: lvl===0 });
+  }
+  for(const key in PASSIVE_DEFS){
+    const def = PASSIVE_DEFS[key];
+    const lvl = state.passives[key] || 0;
+    if(lvl < def.maxLevel) pool.push({ kind:'passive', key, nextLevel:lvl+1, isNew: lvl===0 });
+  }
+  return pool;
+}
+
+function showUpgradeCards(){
+  const overlay = document.getElementById('upgrade-overlay');
+  const cardsEl = document.getElementById('cards');
+  cardsEl.innerHTML = '';
+  let pool = buildCardPool();
+  pool.sort(()=>Math.random()-0.5);
+  let choices = pool.slice(0,3);
+  if(choices.length===0){ choices = [{kind:'heal', key:'heal'}]; }
+  choices.forEach(choice=>{
+    const div = document.createElement('div');
+    div.className = 'card' + (choice.isNew ? ' new' : '');
+    let icon, name, rank, desc;
+    if(choice.kind==='weapon'){
+      const def = WEAPON_DEFS[choice.key];
+      icon = def.icon; name = def.name;
+      rank = choice.isNew ? 'NEW WEAPON' : `Level ${choice.nextLevel} / ${def.maxLevel}`;
+      desc = def.desc(choice.nextLevel);
+    } else if(choice.kind==='passive'){
+      const def = PASSIVE_DEFS[choice.key];
+      icon = def.icon; name = def.name;
+      rank = choice.isNew ? 'NEW' : `Level ${choice.nextLevel} / ${def.maxLevel}`;
+      desc = def.desc;
+    } else {
+      icon = '✚'; name = 'Emergency Repair'; rank = 'FULL HEAL'; desc = 'Restore all core integrity.';
+    }
+    div.innerHTML = `<div class="icon">${icon}</div><div class="name">${name}</div><div class="rank">${rank}</div><div class="desc">${desc}</div>`;
+    div.addEventListener('click', ()=> applyUpgrade(choice));
+    cardsEl.appendChild(div);
+  });
+  overlay.classList.remove('hidden');
+}
+
+function applyUpgrade(choice){
+  if(choice.kind==='weapon'){
+    state.weapons[choice.key] = choice.nextLevel;
+  } else if(choice.kind==='passive'){
+    state.passives[choice.key] = choice.nextLevel;
+    if(choice.key==='maxHp'){
+      state.tower.maxHp += 20;
+      state.tower.hp = Math.min(state.tower.maxHp, state.tower.hp + 20);
+    }
+  } else if(choice.kind==='heal'){
+    state.tower.hp = state.tower.maxHp;
+  }
+  document.getElementById('upgrade-overlay').classList.add('hidden');
+  state.paused = false;
+  updateWeaponTray();
+}
+
+function updateWeaponTray(){
+  const tray = document.getElementById('weapon-tray');
+  tray.innerHTML = '';
+  for(const key in state.weapons){
+    const lvl = state.weapons[key];
+    if(!lvl) continue;
+    const def = WEAPON_DEFS[key];
+    const chip = document.createElement('div');
+    chip.className = 'weapon-chip';
+    chip.innerHTML = `${def.icon}<span class="lvl">${lvl}</span>`;
+    tray.appendChild(chip);
+  }
+}
+
+/* =========================================================
+   CLEAR / DAMAGE-THE-FIELD CORE FUNCTION
+   Density directly resists both the radius and magnitude of
+   a hit: sparse tissue clears in a big satisfying chunk,
+   mature tissue only chips down a little per hit.
+========================================================= */
+function clearAt(x,y,power,opts){
+  opts = opts||{};
+  const g = state.grid;
+  const { cx, cy } = worldToCell(x,y);
+  const i0 = gIdx(cx,cy);
+  const baseDensity = g.growth[i0]||0;
+  const radiusPx = (opts.radiusPx||30) * clamp(1.25-baseDensity, 0.4, 1.25);
+  const radiusCells = Math.max(1, Math.round(radiusPx/g.cellSize));
+  const freezeDuration = opts.freezeDuration||0;
+  let totalRemoved = 0;
+
+  for(let oy=-radiusCells; oy<=radiusCells; oy++){
+    const gy = cy+oy;
+    if(gy<0||gy>=g.rows) continue;
+    for(let ox=-radiusCells; ox<=radiusCells; ox++){
+      const gx = cx+ox;
+      if(gx<0||gx>=g.cols) continue;
+      const ddx = ox*g.cellSize, ddy = oy*g.cellSize;
+      const d = Math.sqrt(ddx*ddx+ddy*ddy);
+      if(d>radiusPx) continue;
+      const i = gy*g.cols+gx;
+      if(freezeDuration>0) g.frozen[i] = Math.max(g.frozen[i], freezeDuration);
+      const dens = g.growth[i];
+      if(dens<=0.001) continue;
+      const falloff = 1-(d/radiusPx);
+      const resistance = clamp(1.3-dens, 0.12, 1.3);
+      const removeAmt = clamp(power*0.022*falloff*resistance, 0, dens);
+      if(removeAmt<=0) continue;
+      const newDens = Math.max(0, dens-removeAmt);
+      totalRemoved += (dens-newDens);
+      g.growth[i] = newDens;
+      const nb = cellBucket(i);
+      if(nb !== g.bucket[i]){ g.bucket[i]=nb; markDirty(i); }
+    }
+  }
+
+  for(const node of state.nodes){
+    if(node.dead) continue;
+    if(dist(x,y,node.x,node.y) <= radiusPx+node.hitRadius){
+      node.hp -= power;
+      spawnParticles(node.x,node.y,'#ffcf4d',3,60);
+      if(node.hp<=0 && !node.dead) destroyNode(node);
+    }
+  }
+
+  if(totalRemoved > 0.08){
+    const xpVal = clamp(Math.round(totalRemoved*1.3), 0, 10);
+    if(xpVal>=1) dropGem(x+rand(-10,10), y+rand(-10,10), xpVal);
+    spawnParticles(x,y,'#ff5d8a', Math.min(10, Math.round(totalRemoved*3)), 70);
+  }
+  return totalRemoved;
+}
+
+function pushChainFx(x1,y1,x2,y2){
+  // A brief jagged lightning-arc visual so Chain Bolt hits read as
+  // clearly distinct from the plain Bolt Turret dot they were being
+  // confused with.
+  const mx = (x1+x2)/2, my = (y1+y2)/2;
+  const dx = x2-x1, dy = y2-y1;
+  const len = Math.max(1, Math.hypot(dx,dy));
+  const nx = -dy/len, ny = dx/len;
+  const jitter = rand(-16,16);
+  state.chainFx.push({
+    x1,y1,x2,y2, mx: mx+nx*jitter, my: my+ny*jitter,
+    life:0.22, maxLife:0.22
+  });
+  if(state.chainFx.length>60) state.chainFx.splice(0, state.chainFx.length-60);
+}
+function updateChainFx(dt){
+  const remaining = [];
+  for(const fx of state.chainFx){
+    fx.life -= dt;
+    if(fx.life>0) remaining.push(fx);
+  }
+  state.chainFx = remaining;
+}
+function spawnParticles(x,y,color,count,speed){
+  for(let i=0;i<count;i++){
+    const a = rand(0,Math.PI*2);
+    const sp = rand((speed||60)*0.4, speed||60);
+    state.particles.push({
+      x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+      life: rand(0.3,0.7), maxLife:0.7, color, size: rand(1.5,3.5)
+    });
+  }
+  if(state.particles.length>400) state.particles.splice(0, state.particles.length-400);
+}
+function dropGem(x,y,xpValue){
+  state.gems.push({ x,y, xp:xpValue, radius: 4 + Math.min(4, xpValue*0.15) });
+}
+function damageTower(amount, skipShake){
+  const t = state.tower;
+  const dmg = amount * armorMult();
+  t.hp -= dmg;
+  if(!skipShake) t.shake = Math.min(14, t.shake + dmg*0.6);
+  if(t.hp <= 0){ t.hp = 0; endRun(); }
+}
+
+/* =========================================================
+   FRONTIER (nearest-threat direction sampling)
+========================================================= */
+const FRONTIER_SECTORS = 48;
+function computeFrontier(){
+  const g = state.grid, t = state.tower;
+  const arr = state.frontier || new Float32Array(FRONTIER_SECTORS);
+  for(let s=0;s<FRONTIER_SECTORS;s++){
+    const angle = (s/FRONTIER_SECTORS)*Math.PI*2;
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    let found = g.maxRange;
+    for(let r=g.safeRadius; r<g.maxRange; r+=g.cellSize){
+      const x = t.x+dx*r, y = t.y+dy*r;
+      if(x<0||x>=g.cols*g.cellSize||y<0||y>=g.rows*g.cellSize) break;
+      const { cx, cy } = worldToCell(x,y);
+      if(isRevealedIdx(gIdx(cx,cy))){ found = r; break; }
+    }
+    arr[s] = found;
+  }
+  state.frontier = arr;
+}
+function nearestFrontierPoint(){
+  const g = state.grid, t = state.tower;
+  if(!state.frontier) return null;
+  let bestS = -1, bestD = Infinity;
+  for(let s=0;s<state.frontier.length;s++){
+    if(state.frontier[s] < bestD){ bestD = state.frontier[s]; bestS = s; }
+  }
+  if(bestS<0 || bestD >= g.maxRange-1) return null;
+  const angle = (bestS/state.frontier.length)*Math.PI*2;
+  return { x: t.x+Math.cos(angle)*bestD, y: t.y+Math.sin(angle)*bestD, dist:bestD };
+}
+function findNearbyRevealedPoint(x,y,searchRadius,visited){
+  const g = state.grid;
+  const { cx, cy } = worldToCell(x,y);
+  const rc = Math.ceil(searchRadius/g.cellSize);
+  let best = null, bestG = -1;
+  for(let oy=-rc; oy<=rc; oy++){
+    const gy = cy+oy;
+    if(gy<0||gy>=g.rows) continue;
+    for(let ox=-rc; ox<=rc; ox++){
+      const gx = cx+ox;
+      if(gx<0||gx>=g.cols) continue;
+      const i = gy*g.cols+gx;
+      if(visited.has(i)) continue;
+      if(g.growth[i] <= g.threshold[i]) continue;
+      const wx = gx*g.cellSize+g.cellSize/2, wy = gy*g.cellSize+g.cellSize/2;
+      const d = dist(x,y,wx,wy);
+      if(d>searchRadius) continue;
+      if(g.growth[i] > bestG){ bestG = g.growth[i]; best = {x:wx,y:wy,i}; }
+    }
+  }
+  return best;
+}
+
+/* =========================================================
+   SIMULATION TICK (growth spread, nodes, tier, contact)
+========================================================= */
+function updateTier(){
+  const newIdx = computeTierIndex(state.time);
+  if(newIdx !== state.tierIndex){
+    state.tierIndex = newIdx;
+    state.grid.safeRadius = TIERS_LIST[newIdx].safeRadius;
+    announce('OUTBREAK ESCALATING: ' + TIERS_LIST[newIdx].name);
+  }
+}
+function applyAmbientGrowth(dt){
+  const g = state.grid, t = state.tower, tier = TIERS_LIST[state.tierIndex];
+  const span = Math.max(1, g.maxRange-g.safeRadius);
+  for(let cy=0; cy<g.rows; cy++){
+    const wyBase = cy*g.cellSize+g.cellSize/2;
+    for(let cx=0; cx<g.cols; cx++){
+      const i = cy*g.cols+cx;
+      if(g.frozen[i]>0){ g.frozen[i] = Math.max(0, g.frozen[i]-dt); continue; }
+      const wx = cx*g.cellSize+g.cellSize/2;
+      const d = dist(wx,wyBase,t.x,t.y);
+      if(d < g.safeRadius) continue;
+      const ramp = Math.pow(clamp((d-g.safeRadius)/span,0,1), 0.6);
+      if(ramp<=0) continue;
+      const rate = AMBIENT_BASE*tier.infectionMult*ramp;
+      const dens = g.growth[i];
+      const newDens = Math.min(1, dens + rate*dt*(1-dens));
+      if(newDens !== dens){
+        g.growth[i] = newDens;
+        const nb = cellBucket(i);
+        if(nb !== g.bucket[i]){ g.bucket[i]=nb; markDirty(i); }
+      }
+    }
+  }
+}
+function applyNodeInfluence(dt){
+  const g = state.grid;
+  for(const node of state.nodes){
+    if(node.dead) continue;
+    const rCells = Math.ceil(node.radius/g.cellSize);
+    const { cx:ncx, cy:ncy } = worldToCell(node.x,node.y);
+    for(let oy=-rCells; oy<=rCells; oy++){
+      const cy = ncy+oy;
+      if(cy<0||cy>=g.rows) continue;
+      for(let ox=-rCells; ox<=rCells; ox++){
+        const cx = ncx+ox;
+        if(cx<0||cx>=g.cols) continue;
+        const i = cy*g.cols+cx;
+        if(g.frozen[i]>0) continue;
+        const wx = cx*g.cellSize+g.cellSize/2, wy = cy*g.cellSize+g.cellSize/2;
+        const d = dist(wx,wy,node.x,node.y);
+        if(d>node.radius) continue;
+        const falloff = Math.pow(1-d/node.radius, 1.4);
+        const rate = node.strength*falloff;
+        const dens = g.growth[i];
+        const newDens = Math.min(1, dens + rate*dt*(1-dens));
+        if(newDens !== dens){
+          g.growth[i] = newDens;
+          const nb = cellBucket(i);
+          if(nb !== g.bucket[i]){ g.bucket[i]=nb; markDirty(i); }
+        }
+      }
+    }
+  }
+}
+function updateNodeSpawn(dt){
+  const tier = TIERS_LIST[state.tierIndex];
+  state.nodeSpawnTimer -= dt;
+  const liveCount = state.nodes.reduce((n,x)=>n+(x.dead?0:1),0);
+  if(state.nodeSpawnTimer<=0 && liveCount<MAX_NODES){
+    state.nodeSpawnTimer = tier.nodeInterval*rand(0.85,1.2);
+    spawnNode();
+  }
+}
+function tickContactDamage(dt){
+  // Sampled right at the visible safe-zone ring (the dashed circle
+  // the player sees), not a tiny radius around the tower itself —
+  // ambient growth is hard-gated to zero inside that ring, so
+  // sampling any closer meant the wall could never physically reach
+  // the sample point and the tower would take no damage at all.
+  //
+  // IMPORTANT: only count cells that are actually REVEALED (visible
+  // slime), not raw sub-threshold density. Raw density can creep
+  // above the 0.05 damage floor while still being invisible (below
+  // that individual cell's reveal threshold), which was draining HP
+  // with no slime on screen at all.
+  const g = state.grid, t = state.tower, tier = TIERS_LIST[state.tierIndex];
+  const samples = 24;
+  const ringR = g.safeRadius + g.cellSize*1.5;
+  let sum = 0;
+  for(let s=0;s<samples;s++){
+    const a = (s/samples)*Math.PI*2;
+    const x = t.x+Math.cos(a)*ringR, y = t.y+Math.sin(a)*ringR;
+    const { cx, cy } = worldToCell(x,y);
+    const i = gIdx(cx,cy);
+    if(isRevealedIdx(i)) sum += g.growth[i];
+  }
+  const avg = sum/samples;
+  state.contactPressure = avg;
+  if(avg>0.05){ damageTower(avg*tier.contactMult*CONTACT_SCALE*dt); }
+}
+function simulateTick(dt){
+  updateTier();
+  updateNodeSpawn(dt);
+  applyNodeInfluence(dt);
+  applyAmbientGrowth(dt);
+  computeFrontier();
+  tickContactDamage(dt);
+  if(state.nodes.some(n=>n.dead)) state.nodes = state.nodes.filter(n=>!n.dead);
+}
+
+/* =========================================================
+   WEAPON FIRING LOGIC
+========================================================= */
+function updateWeapons(dt){
+  const t = state.tower;
+  const spdMult = atkSpeedMult();
+  const dmgMult = damageMult();
+
+  if(state.weapons.bolt){
+    const lvl = state.weapons.bolt;
+    state.weaponTimers.bolt -= dt;
+    if(state.weaponTimers.bolt<=0){
+      const target = nearestFrontierPoint();
+      if(target){
+        state.weaponTimers.bolt = boltCooldown(lvl)/spdMult;
+        fireBolt(target, boltDamage(lvl)*dmgMult);
+      }
+    }
+  }
+
+  if(state.weapons.blades){
+    const lvl = state.weapons.blades;
+    const count = bladeCount(lvl);
+    const dmg = bladeDamage(lvl)*dmgMult;
+    const spin = state.time*2.4;
+    const radius = 62+Math.min(24,lvl*2);
+    state.orbitals = [];
+    for(let i=0;i<count;i++){
+      const a = spin+(i/count)*Math.PI*2;
+      const bx = t.x+Math.cos(a)*radius, by = t.y+Math.sin(a)*radius;
+      state.orbitals.push({x:bx,y:by,radius:10});
+      const { cx, cy } = worldToCell(bx,by);
+      const ci = gIdx(cx,cy);
+      const nextAllowed = state.bladeNextHit[i]||0;
+      if(isRevealedIdx(ci) && state.time>=nextAllowed){
+        clearAt(bx,by,dmg,{radiusPx:16});
+        state.bladeNextHit[i] = state.time+0.22;
+      }
+    }
+  } else { state.orbitals = []; }
+
+  if(state.weapons.chain){
+    const lvl = state.weapons.chain;
+    state.weaponTimers.chain -= dt;
+    if(state.weaponTimers.chain<=0){
+      const target = nearestFrontierPoint();
+      if(target){
+        state.weaponTimers.chain = chainCooldown(lvl)/spdMult;
+        fireChain(target, chainCount(lvl), chainDamage(lvl)*dmgMult);
+      }
+    }
+  }
+
+  if(state.weapons.frost){
+    const lvl = state.weapons.frost;
+    state.weaponTimers.frost -= dt;
+    if(state.weaponTimers.frost<=0){
+      state.weaponTimers.frost = frostCooldown(lvl)/spdMult;
+      const radius = frostRadius(lvl);
+      clearAt(t.x,t.y,frostDamage(lvl)*dmgMult,{radiusPx:radius, freezeDuration:2.0});
+      state.novaFx = { x:t.x, y:t.y, radius, life:0.4, maxLife:0.4 };
+    }
+  }
+
+  if(state.weapons.poison){
+    const lvl = state.weapons.poison;
+    state.weaponTimers.poison -= dt;
+    if(state.weaponTimers.poison<=0){
+      state.weaponTimers.poison = poisonCooldown(lvl)/spdMult;
+      const activeNode = state.nodes.find(n=>!n.dead);
+      const target = activeNode || nearestFrontierPoint();
+      if(target){
+        state.clouds.push({
+          x:target.x, y:target.y, radius:poisonRadius(lvl), life:3.4, maxLife:3.4,
+          dmgPerSec:poisonDamage(lvl)*dmgMult, color:'#8aff4d', tickTimer:0
+        });
+      }
+    }
+  }
+
+  if(state.weapons.missile){
+    const lvl = state.weapons.missile;
+    state.weaponTimers.missile -= dt;
+    if(state.weaponTimers.missile<=0){
+      const activeNode = state.nodes.find(n=>!n.dead);
+      const target = activeNode || nearestFrontierPoint();
+      if(target){
+        state.weaponTimers.missile = missileCooldown(lvl)/spdMult;
+        fireMissile(target, missileDamage(lvl)*dmgMult, missileRadius(lvl));
+      }
+    }
+  }
+
+  if(state.passives.ward){
+    state.wardTimer -= dt;
+    if(state.wardTimer<=0){
+      state.wardTimer = 1.1;
+      clearAt(t.x,t.y, 10*state.passives.ward, {radiusPx: 60+state.passives.ward*6});
+    }
+  }
+}
+
+function fireBolt(target,dmg){
+  const t = state.tower;
+  const a = Math.atan2(target.y-t.y, target.x-t.x);
+  state.projectiles.push({
+    type:'bolt', x:t.x, y:t.y, vx:Math.cos(a)*620, vy:Math.sin(a)*620,
+    dmg, radius:4, color:'#6df0ff', life:1.6
+  });
+}
+function fireChain(target,hops,dmg){
+  const t = state.tower;
+  const a = Math.atan2(target.y-t.y, target.x-t.x);
+  state.projectiles.push({
+    type:'chain', x:t.x, y:t.y, vx:Math.cos(a)*760, vy:Math.sin(a)*760,
+    dmg, radius:5, color:'#e6c8ff', life:1.4, hopsLeft:hops, visited:new Set(),
+    legStart:{x:t.x,y:t.y}
+  });
+}
+function fireMissile(target,dmg,splashRadius){
+  const t = state.tower;
+  state.projectiles.push({
+    type:'missile', x:t.x, y:t.y, vx:0, vy:0, speed:300,
+    dmg, splashRadius, radius:5, color:'#ff9d6b', life:5,
+    targetNode: target.hp!==undefined ? target : null,
+    targetPoint: { x:target.x, y:target.y }
+  });
+}
+
+/* =========================================================
+   PROJECTILE UPDATE
+========================================================= */
+function updateProjectiles(dt){
+  const g = state.grid;
+  const remaining = [];
+  for(const p of state.projectiles){
+    p.life -= dt;
+    if(p.life<=0) continue;
+
+    if(p.type==='missile'){
+      let tx,ty;
+      if(p.targetNode && !p.targetNode.dead){ tx=p.targetNode.x; ty=p.targetNode.y; }
+      else { tx=p.targetPoint.x; ty=p.targetPoint.y; }
+      const a = Math.atan2(ty-p.y, tx-p.x);
+      p.vx = lerp(p.vx, Math.cos(a)*p.speed, 0.15);
+      p.vy = lerp(p.vy, Math.sin(a)*p.speed, 0.15);
+      p.x += p.vx*dt; p.y += p.vy*dt;
+      const reached = dist(p.x,p.y,tx,ty) < 14;
+      const { cx, cy } = worldToCell(p.x,p.y);
+      const hitWall = isRevealedIdx(gIdx(cx,cy));
+      if(reached || hitWall){
+        spawnParticles(p.x,p.y,'#ff9d6b',18,160);
+        clearAt(p.x,p.y,p.dmg,{radiusPx:p.splashRadius});
+        continue;
+      }
+      remaining.push(p);
+      continue;
+    }
+
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    if(p.x<-60||p.x>W+60||p.y<-60||p.y>H+60){ continue; }
+    const { cx, cy } = worldToCell(p.x,p.y);
+    const i = gIdx(cx,cy);
+    const revealed = isRevealedIdx(i);
+    if(revealed){
+      spawnParticles(p.x,p.y,p.color,5,60);
+      if(p.type==='chain'){
+        pushChainFx(p.legStart.x, p.legStart.y, p.x, p.y);
+        clearAt(p.x,p.y,p.dmg,{radiusPx:26});
+        p.visited.add(i);
+        p.hopsLeft -= 1;
+        if(p.hopsLeft>0){
+          const next = findNearbyRevealedPoint(p.x,p.y,150,p.visited);
+          if(next){
+            const a = Math.atan2(next.y-p.y, next.x-p.x);
+            p.legStart = {x:p.x, y:p.y};
+            p.vx = Math.cos(a)*760; p.vy = Math.sin(a)*760;
+            p.dmg *= 0.82;
+            remaining.push(p);
+          }
+        }
+      } else {
+        clearAt(p.x,p.y,p.dmg,{radiusPx:30});
+      }
+      continue;
+    }
+    remaining.push(p);
+  }
+  state.projectiles = remaining;
+}
+
+/* =========================================================
+   CLOUD (poison) UPDATE
+========================================================= */
+function updateClouds(dt){
+  const remaining = [];
+  for(const c of state.clouds){
+    c.life -= dt;
+    c.tickTimer -= dt;
+    if(c.tickTimer<=0){
+      c.tickTimer = 0.4;
+      clearAt(c.x,c.y, c.dmgPerSec*0.4, {radiusPx:c.radius});
+    }
+    if(c.life>0) remaining.push(c);
+  }
+  state.clouds = remaining;
+}
+
+/* =========================================================
+   GEMS
+========================================================= */
+function updateGems(dt){
+  // The tower never moves and weapons routinely clear tissue well
+  // outside any modest "pickup radius", so gems always drift in
+  // (this is the idle-defense equivalent of walking over loot).
+  // Magnetism now boosts drift speed rather than gating a radius.
+  const t = state.tower;
+  const mult = pickupMult();
+  const refDist = 260;
+  const remaining = [];
+  for(const gem of state.gems){
+    const d = dist(gem.x,gem.y,t.x,t.y);
+    const speed = lerp(90*mult, 320*mult, 1-clamp(d/refDist,0,1));
+    const a = Math.atan2(t.y-gem.y, t.x-gem.x);
+    gem.x += Math.cos(a)*speed*dt;
+    gem.y += Math.sin(a)*speed*dt;
+    if(d < t.radius+6){
+      grantXp(gem.xp);
+      spawnParticles(gem.x,gem.y,'#6df0ff',5,60);
+      continue;
+    }
+    remaining.push(gem);
+  }
+  state.gems = remaining;
+}
+
+/* =========================================================
+   PARTICLES
+========================================================= */
+function updateParticles(dt){
+  const remaining = [];
+  for(const p of state.particles){
+    p.life -= dt;
+    if(p.life<=0) continue;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= 0.92; p.vy *= 0.92;
+    remaining.push(p);
+  }
+  state.particles = remaining;
+}
+
+/* =========================================================
+   PASSIVE TICK (regen / shake decay)
+========================================================= */
+function updatePassiveTick(dt){
+  const t = state.tower;
+  if(state.passives.regen){
+    t.hp = Math.min(t.maxHp, t.hp + 0.3*state.passives.regen*dt);
+  }
+  t.shake = Math.max(0, t.shake - dt*30);
+}
+
+/* =========================================================
+   HUD
+========================================================= */
+function updateHud(){
+  const t = state.tower;
+  document.getElementById('hp-fill').style.width = clamp(t.hp/t.maxHp*100,0,100)+'%';
+  document.getElementById('xp-fill').style.width = clamp(t.xp/t.xpToNext*100,0,100)+'%';
+  document.getElementById('level-badge').textContent = t.level;
+  document.getElementById('stat-time').textContent = fmtTime(state.time);
+  document.getElementById('stat-wave').textContent = state.tierIndex+1;
+  updateDifficultyHud();
+}
+function updateDifficultyHud(){
+  const tier = TIERS_LIST[state.tierIndex];
+  const nameEl = document.getElementById('difficulty-name');
+  const fillEl = document.getElementById('diff-bar-fill');
+  nameEl.textContent = tier.name.toUpperCase();
+  nameEl.style.color = tier.color;
+  fillEl.style.background = tier.color;
+  const next = TIERS_LIST[state.tierIndex+1];
+  if(next){
+    fillEl.style.width = (clamp((state.time-tier.t)/(next.t-tier.t),0,1)*100)+'%';
+  } else {
+    fillEl.style.width = '100%';
+  }
+}
+
+/* =========================================================
+   RENDER
+========================================================= */
+function render(){
+  ctx.clearRect(0,0,W,H);
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(109,240,255,0.035)';
+  ctx.lineWidth = 1;
+  const gridSize = 64;
+  for(let x=(state.time*4)%gridSize; x<W; x+=gridSize){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=(state.time*4)%gridSize; y<H; y+=gridSize){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.restore();
+
+  const t = state.tower;
+  const shakeX = (Math.random()-0.5)*t.shake;
+  const shakeY = (Math.random()-0.5)*t.shake;
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  if(state.grid){
+    if(state.slimeLayer) ctx.drawImage(state.slimeLayer.canvas, 0, 0);
+
+    for(const c of state.clouds){ drawCausticCloud(c); }
+
+    if(state.novaFx){
+      state.novaFx.life -= 1/60;
+      if(state.novaFx.life>0){
+        const p = 1 - state.novaFx.life/state.novaFx.maxLife;
+        ctx.beginPath();
+        ctx.strokeStyle = hexAlpha('#bfe9ff', 1-p);
+        ctx.lineWidth = 3;
+        ctx.arc(state.novaFx.x, state.novaFx.y, state.novaFx.radius*p, 0, Math.PI*2);
+        ctx.stroke();
+      } else state.novaFx = null;
+    }
+
+    ctx.beginPath();
+    ctx.setLineDash([6,6]);
+    ctx.strokeStyle = 'rgba(109,240,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.arc(t.x,t.y, state.grid.safeRadius, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for(const node of state.nodes){ if(!node.dead) drawNode(node); }
+  }
+
+  // Gems: small pastel-green diamonds — deliberately distinct in
+  // shape and color from the cyan bolt projectiles they were easy
+  // to mistake for a "bounced back" shot.
+  for(const gem of state.gems){
+    drawGemDiamond(gem.x, gem.y, gem.radius);
+  }
+
+  for(const o of state.orbitals){
+    ctx.beginPath();
+    ctx.fillStyle = '#cfe8ff';
+    ctx.shadowColor = '#6df0ff'; ctx.shadowBlur = 10;
+    ctx.arc(o.x,o.y,o.radius,0,Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  for(const p of state.projectiles){
+    ctx.beginPath();
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color; ctx.shadowBlur = p.type==='missile'?14:8;
+    ctx.arc(p.x,p.y,p.radius,0,Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  for(const fx of state.chainFx){
+    const a = clamp(fx.life/fx.maxLife,0,1);
+    ctx.beginPath();
+    ctx.strokeStyle = hexAlpha('#e6c8ff', a);
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#e6c8ff'; ctx.shadowBlur = 12;
+    ctx.moveTo(fx.x1,fx.y1);
+    ctx.lineTo(fx.mx,fx.my);
+    ctx.lineTo(fx.x2,fx.y2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  for(const pt of state.particles){
+    const alpha = clamp(pt.life/pt.maxLife,0,1);
+    ctx.beginPath();
+    ctx.fillStyle = hexAlpha(pt.color, alpha);
+    ctx.arc(pt.x,pt.y,pt.size,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  drawTower(t);
+
+  ctx.restore();
+}
+
+function drawGemDiamond(x,y,radius){
+  const r = Math.max(3, radius*0.85);
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(Math.PI/4);
+  ctx.beginPath();
+  ctx.fillStyle = '#b6ffd1';
+  ctx.shadowColor = '#b6ffd1'; ctx.shadowBlur = 7;
+  ctx.fillRect(-r*0.62, -r*0.62, r*1.24, r*1.24);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillRect(-r*0.62, -r*0.62, r*0.5, r*0.5);
+  ctx.restore();
+}
+function drawCausticCloud(c){
+  const lifeFrac = clamp(c.life/c.maxLife,0,1);
+  const fillAlpha = lifeFrac*0.55;
+  ctx.beginPath();
+  ctx.fillStyle = hexAlpha('#8aff4d', fillAlpha);
+  ctx.arc(c.x,c.y,c.radius,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.strokeStyle = hexAlpha('#c9ff8a', lifeFrac*0.8);
+  ctx.lineWidth = 2;
+  ctx.arc(c.x,c.y,c.radius,0,Math.PI*2);
+  ctx.stroke();
+
+  // A few animated "bubbles" so it reads as a toxic pool, not a
+  // flat translucent disc that's easy to miss against the field.
+  if(!c.bubbleSeeds){
+    c.bubbleSeeds = [];
+    const n = 4;
+    for(let i=0;i<n;i++){
+      c.bubbleSeeds.push({ a: rand(0,Math.PI*2), r: rand(0.15,0.7), speed: rand(1.5,3), phase: rand(0,Math.PI*2) });
+    }
+  }
+  for(const b of c.bubbleSeeds){
+    const bx = c.x + Math.cos(b.a)*c.radius*b.r;
+    const by = c.y + Math.sin(b.a)*c.radius*b.r;
+    const pulse = 0.5+0.5*Math.sin(state.time*b.speed+b.phase);
+    const br = (3+pulse*3.5)*lifeFrac;
+    ctx.beginPath();
+    ctx.fillStyle = hexAlpha('#e4ffbf', 0.6*lifeFrac);
+    ctx.arc(bx,by,br,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+function drawNode(n){
+  const pulse = 1 + Math.sin(state.time*4+n.pulseSeed)*0.15;
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(255,207,77,0.12)';
+  ctx.arc(n.x,n.y,n.radius*0.45,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = '#ffcf4d';
+  ctx.shadowColor = '#ffcf4d'; ctx.shadowBlur = 18;
+  ctx.arc(n.x,n.y,12*pulse,0,Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  const w = 54;
+  ctx.fillStyle = '#0008';
+  ctx.fillRect(n.x-w/2, n.y-30, w, 5);
+  ctx.fillStyle = '#ff5d5d';
+  ctx.fillRect(n.x-w/2, n.y-30, w*clamp(n.hp/n.maxHp,0,1), 5);
+}
+
+function drawTower(t){
+  const pulse = 1 + Math.sin(state.time*3)*0.03;
+  const pressure = clamp(state.contactPressure*2,0,1);
+
+  if(pressure>0.02){
+    ctx.beginPath();
+    ctx.strokeStyle = hexAlpha('#ff3f68', pressure*0.6);
+    ctx.lineWidth = 3;
+    ctx.arc(t.x,t.y, t.radius*pulse+16, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(109,240,255,0.25)';
+  ctx.lineWidth = 2;
+  ctx.arc(t.x,t.y, t.radius*pulse+10, 0, Math.PI*2);
+  ctx.stroke();
+
+  const ringCount = Math.min(4, Object.keys(state.weapons).length);
+  for(let i=0;i<ringCount;i++){
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(109,240,255,0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.arc(t.x,t.y, t.radius+16+i*8, state.time*0.6+i, state.time*0.6+i+2.4);
+    ctx.stroke();
+  }
+
+  ctx.beginPath();
+  ctx.fillStyle = '#0e0a12';
+  ctx.arc(t.x,t.y,t.radius*pulse,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.strokeStyle = '#6df0ff';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#6df0ff'; ctx.shadowBlur = 18;
+  ctx.arc(t.x,t.y,t.radius*pulse,0,Math.PI*2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.fillStyle = '#eafcff';
+  ctx.arc(t.x,t.y,t.radius*0.35,0,Math.PI*2);
+  ctx.fill();
+}
+
+function hexAlpha(hex, alpha){
+  const c = hex.replace('#','');
+  const r = parseInt(c.substring(0,2),16), gg = parseInt(c.substring(2,4),16), b = parseInt(c.substring(4,6),16);
+  return `rgba(${r},${gg},${b},${alpha})`;
+}
+
+/* =========================================================
+   ANNOUNCE FADE
+========================================================= */
+function updateAnnounce(dt){
+  if(state.announceTimer>0){
+    state.announceTimer -= dt;
+    if(state.announceTimer<=0) document.getElementById('announce').classList.remove('show');
+  }
+}
+
+/* =========================================================
+   MAIN LOOP
+========================================================= */
+let lastTs = 0;
+function loop(ts){
+  if(!state || !state.running) return;
+  let dt = (ts-lastTs)/1000;
+  lastTs = ts;
+  dt = clamp(dt, 0, 0.05);
+
+  if(!state.paused){
+    state.time += dt;
+    state.simAcc += dt;
+    while(state.simAcc >= SIM_TICK){
+      simulateTick(SIM_TICK);
+      state.simAcc -= SIM_TICK;
+    }
+    updateWeapons(dt);
+    updateProjectiles(dt);
+    updateClouds(dt);
+    updateGems(dt);
+    updateParticles(dt);
+    updateChainFx(dt);
+    updatePassiveTick(dt);
+    updateAnnounce(dt);
+    flushDirtyCells();
+    updateHud();
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* =========================================================
+   GAME OVER / RESTART
+========================================================= */
+function endRun(){
+  state.running = false;
+  document.getElementById('go-time').textContent = fmtTime(state.time);
+  document.getElementById('go-level').textContent = state.tower.level;
+  document.getElementById('go-kills').textContent = state.nodesPurged;
+  document.getElementById('gameover-overlay').classList.remove('hidden');
+}
+
+document.getElementById('start-btn').addEventListener('click', startRun);
+document.getElementById('restart-btn').addEventListener('click', startRun);
+
+/* initial idle render (title screen background) */
+state = freshState();
+render();
+
+})();
+</script>
+</body>
+</html>
