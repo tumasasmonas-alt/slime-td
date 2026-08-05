@@ -152,8 +152,7 @@ describe('tickContactDamage — outcome guard for superseded bug #2', () => {
   // by running the real growth+damage simulation rather than asserting
   // how/where the sample is taken: an undefended core in a dirty zone
   // must be killable, and a core kept clean must take no damage,
-  // regardless of the exact sampling method. See decision 20 in
-  // docs/PROGRESS.md.
+  // regardless of the exact sampling method. See docs/DECISIONS.md #20.
   const tier = TIERS_LIST[0]!;
 
   it('an undefended core eventually dies when the safe zone is left dirty', () => {

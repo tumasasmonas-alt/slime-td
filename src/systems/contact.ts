@@ -8,11 +8,11 @@ import { damageTower } from './tower';
 const CONTACT_FLOOR = 0.02;
 
 // Depth-weighted average of revealed density over the whole disc inside
-// the safe radius — not a fixed ring sample outside it. Confirmed
-// decision 18 in docs/PROGRESS.md: zero when the zone is clear (a real
-// grace period), volume-aware (a wide breach hurts more than a narrow
-// finger), and depth-aware (slime touching the core counts far more than
-// slime just over the line).
+// the safe radius — not a fixed ring sample outside it. See
+// docs/DECISIONS.md #18: zero when the zone is clear (a real grace
+// period), volume-aware (a wide breach hurts more than a narrow finger),
+// and depth-aware (slime touching the core counts far more than slime
+// just over the line).
 //
 // NOTE — supersedes documented prototype bug #2 ("sample at the ring,
 // never closer") on purpose, with the project owner's explicit
@@ -20,7 +20,7 @@ const CONTACT_FLOOR = 0.02;
 // ambient growth was hard-gated to zero inside the safe radius, making
 // near-core space guaranteed empty. Decision 15 removes that gate, so
 // sampling inside the line is now correct, not broken. See decision 20
-// and the "documented prototype bugs" list in docs/PROGRESS.md before
+// and the "documented prototype bugs" list in docs/DECISIONS.md before
 // changing this back.
 //
 // Still gated on REVEALED density, never raw — that half of bug #2 is

@@ -14,7 +14,7 @@ describe('dropGem', () => {
 
 describe('updateGems', () => {
   it('drifts a distant gem toward the (stationary) core rather than requiring it to already be in range', () => {
-    // This is exactly the bug documented in docs/PROTOTYPE_HANDOFF.md:
+    // This is exactly the bug documented in archive/PROTOTYPE_HANDOFF.md:
     // weapons clear tissue well outside any modest "pickup radius", so
     // gems must always drift, never gate on one.
     const state = freshState();

@@ -1,9 +1,37 @@
 <!DOCTYPE html>
+<!--
+  ============================================================
+  ⚠️  DEPRECATED — ARCHIVED 2026-08-05
+  ============================================================
+
+  This prototype is NO LONGER GROUND TRUTH. It was fully ported into the
+  real project (src/) as of Phase 2E, verified by an audit covering all
+  86 functions, all 20 DOM targets, and every weapon/passive formula.
+
+  DO NOT change src/ to match this file. The real project has
+  deliberately diverged:
+    - safe-radius tier table is now 100/85/70/58/45 (was 190/170/145/120/95)
+    - ambient growth now creeps INTO the safe zone (this file hard-gates it,
+      which was unintended behavior — the core was unreachable)
+    - Orbiting Blades / Frost Nova / Ward Pulse radii now anchor to the
+      safe radius (this file's flat values made Blades unable to hit
+      ambient infection at ANY tier or level — a real bug)
+    - contact damage now samples the disc inside the line, not a ring
+      outside it (supersedes this prototype's own bug-#2 advice)
+    - three prototype bugs fixed at port time: novaFx frame-rate-dependent
+      decay, double-level-up card overwrite, bubbleSeeds created during render
+
+  All divergences are intentional and recorded in docs/DECISIONS.md.
+
+  Kept only so you can run the original and compare feel. See
+  archive/README.md.
+  ============================================================
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Slime TD — Outbreak Prototype</title>
+<title>[ARCHIVED] Slime TD — Outbreak Prototype</title>
 <style>
   :root{
     --bg:#0b060a;

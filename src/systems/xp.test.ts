@@ -24,7 +24,7 @@ describe('grantXp', () => {
     // overlay) inline on every crossing, so a grant crossing several
     // thresholds at once silently discarded all but the last card. Here
     // it should just count the crossings for the UI to consume one at a
-    // time. See docs/KNOWN_ISSUES.md.
+    // time. See docs/BACKLOG.md.
     const state = freshState();
     grantXp(state, 100);
     expect(state.pendingLevelUps).toBeGreaterThan(1);

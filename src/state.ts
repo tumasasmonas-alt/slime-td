@@ -118,7 +118,7 @@ export interface CausticCloud {
   // inside the draw call — the prototype's `if (!c.bubbleSeeds)` in its
   // render function mutated state during a draw call, the same
   // anti-pattern novaFx's frame-rate-dependent decay was (Confirmed
-  // decision 4 in docs/PROGRESS.md). Required, not optional, since it's
+  // docs/DECISIONS.md #4). Required, not optional, since it's
   // always populated up front.
   bubbleSeeds: BubbleSeed[];
 }
@@ -185,7 +185,7 @@ export interface GameState {
 
   // Counts level-ups an XP grant produced that the upgrade-card UI hasn't
   // shown a card for yet, consumed one at a time — see systems/xp.ts and
-  // docs/KNOWN_ISSUES.md "A single XP grant crossing two levels".
+  // docs/BACKLOG.md "A single XP grant crossing two levels".
   pendingLevelUps: number;
   // Queued rather than a single slot — a tier escalation and a node spawn
   // can land in the same sim tick, and each deserves its own full

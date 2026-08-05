@@ -60,7 +60,7 @@ describe('computeFrontier / nearestFrontierPoint', () => {
   });
 
   it('can target a breach inside the safe radius', () => {
-    // Since decision 15 (docs/PROGRESS.md) lets ambient growth creep
+    // Since docs/DECISIONS.md #15 lets ambient growth creep
     // inside safeRadius, the raycast must be able to see and target a
     // breach there too — starting it at safeRadius (the old behavior)
     // would make any breach structurally unkillable, since weapons could

@@ -1,6 +1,6 @@
 // Growth-node formulas, scaled by the current difficulty tier index.
 // Kept easy to find and change — not finalized, see Balance Notes in
-// docs/PROTOTYPE_HANDOFF.md.
+// archive/PROTOTYPE_HANDOFF.md.
 export function nodeHp(tierIndex: number): number {
   return 220 * (1 + 0.35 * tierIndex);
 }

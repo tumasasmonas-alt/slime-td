@@ -17,7 +17,7 @@ describe('computeTierIndex', () => {
     expect(computeTierIndex(560)).toBe(4);
   });
 
-  it('plateaus on the last tier past its start time (see docs/KNOWN_ISSUES.md)', () => {
+  it('plateaus on the last tier past its start time (see docs/BACKLOG.md)', () => {
     expect(computeTierIndex(999_999)).toBe(TIERS_LIST.length - 1);
   });
 });

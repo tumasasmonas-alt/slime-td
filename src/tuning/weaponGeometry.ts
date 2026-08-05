@@ -2,8 +2,7 @@
 // Orbiting Blades, Frost Nova, Ward Pulse.
 //
 // Density is always lowest right around the tower — ambient growth
-// creeps in there at a heavily damped rate (see "Confirmed decisions"
-// 15 in docs/PROGRESS.md), so a tower-centered radius smaller than
+// creeps in there at a heavily damped rate (see docs/DECISIONS.md #15), so a tower-centered radius smaller than
 // safeRadius is aimed mostly at near-empty space. The prototype used
 // flat constants and Orbiting Blades (64-78px) ended up smaller than
 // even the tightest safe radius it ever reached under the *old*
@@ -20,8 +19,7 @@
 //
 // Keeping both terms independently tunable is deliberate: collapsing to
 // pure-anchored or pure-absolute behavior later is a one-line change, so
-// this doesn't corner the upgrade design. See "Confirmed decisions" in
-// docs/PROGRESS.md.
+// this doesn't corner the upgrade design. See docs/DECISIONS.md.
 //
 // NOTE: `clearAt` scales its radius by `clamp(1.25 - density, 0.4, 1.25)`
 // sampled at the hit center. Density right at the tower stays very low

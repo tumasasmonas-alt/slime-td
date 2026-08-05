@@ -7,7 +7,7 @@ const GRID_COLOR = 'rgba(109,240,255,0.035)';
 const ARENA_BOUNDS_COLOR = 'rgba(109,240,255,0.08)';
 
 // Cyan "sanctuary" framing at rest, danger red at full breach — Confirmed
-// decision 19 in docs/PROGRESS.md. The ring deliberately keeps reading
+// docs/DECISIONS.md #19. The ring deliberately keeps reading
 // as "yours to defend" rather than looking hazardous by default; the
 // tension comes from that framing being violated as contactPressure
 // rises, not from the ring looking dangerous from the start.
@@ -57,8 +57,7 @@ export function drawArenaBounds(ctx: CanvasRenderingContext2D): void {
 // infection from crossing. Shifts color, thickens, and brightens toward
 // danger red as `pressure` (state.contactPressure, 0-1) rises, so it
 // reads as a live "how badly is this being breached" signal rather than
-// a static boundary. See "Confirmed decisions" (18, 19) in
-// docs/PROGRESS.md.
+// a static boundary. See docs/DECISIONS.md #18, 19.
 export function drawSafeZone(
   ctx: CanvasRenderingContext2D,
   x: number,

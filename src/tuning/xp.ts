@@ -2,7 +2,7 @@ import { clamp } from '../util/math';
 
 // Deliberately close to linear so the ~8-tier weapon progression paces out
 // across most of a run instead of front- or back-loading. See Balance
-// Notes in docs/PROTOTYPE_HANDOFF.md.
+// Notes in archive/PROTOTYPE_HANDOFF.md.
 export function xpToNext(level: number): number {
   return Math.round(12 + level * 6.5);
 }

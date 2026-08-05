@@ -42,8 +42,7 @@ export function frostDamage(lvl: number): number {
 
 const FROST_REACH: TowerCenteredReach = { margin: 20, base: 115, perLevel: 12 };
 
-// Radius, anchored to the safe radius as a floor (Confirmed decision 16
-// in docs/PROGRESS.md) — see bladeRadius() above for why that matters.
+// Radius, anchored to the safe radius as a floor (docs/DECISIONS.md #16) — see bladeRadius() above for why that matters.
 export function frostRadius(lvl: number, safeRadius: number): number {
   return towerCenteredRadius(FROST_REACH, lvl, safeRadius);
 }
@@ -82,7 +81,7 @@ export function missileCooldown(lvl: number): number {
 const BLADE_REACH: TowerCenteredReach = { margin: 15, base: 64, perLevel: 2 };
 
 // Orbit radius, anchored to the safe radius as a floor (Confirmed
-// decision 16 in docs/PROGRESS.md) rather than the prototype's flat
+// docs/DECISIONS.md #16) rather than the prototype's flat
 // constant — see "documented prototype bugs" #5 for why that mattered:
 // the flat constant made blades unable to hit ambient infection at any
 // tier or level, in any run.
@@ -92,8 +91,7 @@ export function bladeRadius(lvl: number, safeRadius: number): number {
 
 // Single shared library for every weapon's data — upgrades, tiers, and
 // tunable variables all live here rather than one file per weapon, so
-// balance edits are one file to open. See "Confirmed decisions" in
-// docs/PROGRESS.md.
+// balance edits are one file to open. See docs/DECISIONS.md.
 export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
   bolt: {
     name: 'Bolt Turret',

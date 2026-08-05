@@ -93,7 +93,7 @@ describe('updateBladesWeapon', () => {
   it('never orbits closer than the safe radius, at any level', () => {
     // Regression guard for documented prototype bug #5: a tower-centered
     // weapon smaller than safeRadius is aimed at guaranteed-near-empty
-    // space. See docs/PROGRESS.md.
+    // space. See docs/DECISIONS.md.
     const state = freshState();
     state.grid = makeTestGrid();
     state.grid.safeRadius = 100;

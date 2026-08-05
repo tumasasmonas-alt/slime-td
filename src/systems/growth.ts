@@ -5,7 +5,7 @@ import { AMBIENT_BASE, CREEP_RAMP } from '../tuning/growth';
 import { clamp, dist } from '../util/math';
 
 // Ambient infection growth. Two independent formulas rather than one
-// continuous curve — see "Confirmed decisions" (15) in docs/PROGRESS.md:
+// continuous curve — see docs/DECISIONS.md #15:
 //
 // - OUTSIDE the safe radius: the original distance ramp, floored at
 //   CREEP_RAMP so it never drops below the inside rate at the boundary

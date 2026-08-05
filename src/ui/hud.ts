@@ -92,7 +92,7 @@ function updateWeaponTray(refs: HudRefs, state: GameState): void {
 
 // Always-visible readout of the four multiplier passives plus armor, so a
 // pick's effect is confirmable the instant it's made rather than only
-// inferable from play — see docs/KNOWN_ISSUES.md "Upgrade cards give no
+// inferable from play — see docs/BACKLOG.md "Upgrade cards give no
 // visible confirmation of what they changed".
 function updateModifiers(refs: HudRefs, state: GameState): void {
   const dmg = damageMult(state);

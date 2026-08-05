@@ -6,8 +6,7 @@ const SPIN_SPEED = 6; // independent of orbital motion — the blade's own visib
 const POINTS = 4;
 const INNER_RATIO = 0.35;
 
-// Ninja-star shaped, not a plain glowing dot (Confirmed decision 17 in
-// docs/PROGRESS.md) — a 4-pointed shuriken that spins on its own axis as
+// Ninja-star shaped, not a plain glowing dot (docs/DECISIONS.md #17) — a 4-pointed shuriken that spins on its own axis as
 // it orbits, so it reads as a blade rather than an orbiting blob.
 export function drawOrbitals(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.orbitals.forEach((o, i) => {

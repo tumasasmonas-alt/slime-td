@@ -1,7 +1,7 @@
 // Phase 2D: contact damage, growth nodes, and game over/restart — a
 // complete run with a real win/lose arc. Remaining weapons/passive
-// polish lands in 2E/2F. See docs/KNOWN_ISSUES.md and
-// docs/PROTOTYPE_HANDOFF.md.
+// polish lands in 2E/2F. See docs/BACKLOG.md and
+// archive/PROTOTYPE_HANDOFF.md.
 import { applyCameraTransform, applyScreenTransform, fitCamera, type Camera } from './core/camera';
 import { buildGrid } from './grid/grid';
 import { flushDirtyCells, initSlimeLayer } from './grid/slimeLayer';
@@ -63,8 +63,7 @@ handleResize();
 // Rebuilds the grid from scratch — the reaction-diffusion re-runs, so
 // every run gets a different vein pattern (matches the prototype, and
 // suits a roguelite better than a fixed maze). Costs a ~200ms startup
-// hitch, accepted deliberately; see "Confirmed decisions" in
-// docs/PROGRESS.md.
+// hitch, accepted deliberately; see docs/DECISIONS.md.
 function startRun(): void {
   state = freshState();
   state.grid = buildGrid();

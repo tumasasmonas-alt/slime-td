@@ -6,7 +6,7 @@ const FX_LIFE = 0.22;
 
 // A brief jagged lightning-arc visual so Chain Bolt hits read as clearly
 // distinct from the plain Bolt Turret dot they'd otherwise be confused
-// with — see docs/PROTOTYPE_HANDOFF.md "Visual/style decisions to
+// with — see archive/PROTOTYPE_HANDOFF.md "Visual/style decisions to
 // preserve".
 export function spawnChainFx(state: GameState, x1: number, y1: number, x2: number, y2: number): void {
   const mx = (x1 + x2) / 2;

@@ -8,7 +8,7 @@ export const FRONTIER_SECTORS = 48;
 // whichever sector is closest.
 //
 // The raycast starts at the tower's own radius, not `safeRadius`. Since
-// decision 15 (docs/PROGRESS.md) lets ambient growth creep inside the
+// docs/DECISIONS.md #15 lets ambient growth creep inside the
 // safe radius, a breach can now exist there — and if the raycast still
 // started at the old safe-radius boundary, weapons would be structurally
 // unable to see or target it, making any breach unkillable. Starting

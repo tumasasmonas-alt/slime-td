@@ -6,7 +6,7 @@ import type { PassiveKey, WeaponKey } from '../types';
 // Vitality, Regeneration, and Armor Plating were gated out of the card
 // pool in Phase 2C (nothing damaged the core yet, so all three would have
 // been dead, unverifiable picks) and un-gated here in 2D now that contact
-// damage exists. See "Confirmed decisions" in docs/PROGRESS.md.
+// damage exists. See docs/DECISIONS.md.
 
 type CardChoice =
   | { kind: 'weapon'; key: WeaponKey; nextLevel: number; isNew: boolean }
@@ -52,7 +52,7 @@ function pickThree(pool: CardChoice[]): CardChoice[] {
 
 // Consumes one pending level-up per call, showing exactly one card set
 // per level regardless of how many thresholds a single XP grant crossed
-// — see systems/xp.ts and docs/KNOWN_ISSUES.md "A single XP grant
+// — see systems/xp.ts and docs/BACKLOG.md "A single XP grant
 // crossing two levels ate an upgrade".
 export function syncUpgradeOverlay(refs: CardRefs, state: GameState): void {
   if (state.pendingLevelUps <= 0) return;

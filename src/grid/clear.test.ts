@@ -51,7 +51,7 @@ describe('clearAt', () => {
 
   it('lets sparse tissue clear in one chunk while mature tissue only chips down', () => {
     // Same power, same radius — density itself is what resists the hit.
-    // See docs/PROTOTYPE_HANDOFF.md "Density -> toughness".
+    // See archive/PROTOTYPE_HANDOFF.md "Density -> toughness".
     const sparse = freshState();
     sparse.grid = makeTestGrid();
     const sparseIdx = 10 * sparse.grid.cols + 10;

@@ -6,7 +6,7 @@ const GEM_HIGHLIGHT = 'rgba(255,255,255,0.55)';
 // Deliberately pastel-green diamonds, not circles — round cyan gems were
 // once mistaken for Bolt Turret projectiles "bouncing back" to the core,
 // since both were circular and both drift/travel through the same space.
-// See docs/PROTOTYPE_HANDOFF.md "Visual/style decisions to preserve".
+// See archive/PROTOTYPE_HANDOFF.md "Visual/style decisions to preserve".
 export function drawGems(ctx: CanvasRenderingContext2D, state: GameState): void {
   for (const gem of state.gems) {
     drawGemDiamond(ctx, gem.x, gem.y, gem.radius);

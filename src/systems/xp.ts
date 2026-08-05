@@ -7,7 +7,7 @@ import { xpMult } from './passives';
 // consumes one card per pending level-up. The prototype instead rebuilt
 // the upgrade overlay inline on every crossing, so a grant crossing two
 // thresholds at once silently overwrote the first card with the second.
-// Fixed at port time — see docs/KNOWN_ISSUES.md.
+// Fixed at port time — see docs/BACKLOG.md.
 export function grantXp(state: GameState, amount: number): void {
   const tower = state.tower;
   tower.xp += amount * xpMult(state);

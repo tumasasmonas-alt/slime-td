@@ -6,7 +6,7 @@ import { generateVeinField } from './veinField';
 
 // Sized to the fixed world (tuning/world.ts), not a window — every player
 // gets an identically-sized grid regardless of monitor. See
-// docs/KNOWN_ISSUES.md "Resolved" section.
+// docs/BACKLOG.md "Resolved" section.
 export function buildGrid(): Grid {
   const cols = Math.ceil(WORLD_WIDTH / CELL_SIZE) + 2;
   const rows = Math.ceil(WORLD_HEIGHT / CELL_SIZE) + 2;
@@ -49,7 +49,7 @@ export function worldToCell(grid: Grid, x: number, y: number): { cx: number; cy:
 
 // Density buckets 0-5 map to these slime colors — sparse tissue starts
 // dark maroon, mature tissue brightens toward hot pink. Preserve exactly;
-// see "Palette" in docs/PROTOTYPE_HANDOFF.md.
+// see "Palette" in archive/PROTOTYPE_HANDOFF.md.
 export const BUCKET_COLORS: readonly string[] = [
   'transparent',
   '#5c2430',

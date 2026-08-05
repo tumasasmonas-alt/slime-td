@@ -90,10 +90,10 @@ describe('applyAmbientGrowth — outside the safe radius', () => {
 });
 
 describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {
-  // Confirmed decision 15 in docs/PROGRESS.md: ambient growth used to be
-  // hard-gated to zero inside safeRadius (confirmed unintended prototype
-  // behavior — see docs/PROGRESS.md bug #2). It now creeps in at a rate
-  // damped linearly by proximity to the tower, so the core is genuinely
+  // docs/DECISIONS.md #15: ambient growth used to be hard-gated to zero
+  // inside safeRadius (confirmed unintended prototype behavior — see
+  // prototype bug #2 in the same file). It now creeps in at a rate damped
+  // linearly by proximity to the tower, so the core is genuinely
   // reachable rather than structurally safe.
 
   it('creeps in in the middle of the safe zone, unlike the old hard gate', () => {

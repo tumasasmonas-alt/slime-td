@@ -17,7 +17,7 @@ export function dropGem(state: GameState, x: number, y: number, xpValue: number)
 // activating within a fixed pickup radius — weapons routinely clear
 // tissue well outside any modest radius, so a radius gate meant XP could
 // never accumulate. Magnetism boosts drift speed, not a radius. See
-// docs/PROTOTYPE_HANDOFF.md "Known bugs found during development".
+// archive/PROTOTYPE_HANDOFF.md "Known bugs found during development".
 export function updateGems(state: GameState, dt: number): void {
   const tower = state.tower;
   const mult = pickupMult(state);

@@ -1,3 +1,29 @@
+> # ⚠️ DEPRECATED — ARCHIVED 2026-08-05
+>
+> **This document is no longer authoritative. Do not treat it as ground
+> truth, and do not "fix" the codebase to match it.**
+>
+> The port completed on 2026-08-05 (Phase 2E). An audit confirmed all 86
+> prototype functions, all 20 DOM targets, and every weapon/passive
+> formula are implemented in `src/`. The real project has since
+> **deliberately diverged** in several places — safe-zone semantics,
+> tower-centered weapon reach, and three fixed prototype bugs. Those
+> divergences are intentional.
+>
+> **Where authority lives now:** `src/` for behavior,
+> `docs/DECISIONS.md` for why, `docs/PROGRESS.md` for current state,
+> `docs/BACKLOG.md` for known bugs and TODOs.
+>
+> Kept only for historical context. See `archive/README.md`.
+>
+> ⚠️ **Specifically stale in this document:** the safe-radius tier table
+> (190/170/145/120/95 — now 100/85/70/58/45), Orbiting Blades' and Frost
+> Nova's flat radii (now anchored to the safe radius), and documented bug
+> #2's advice about contact-damage sampling (superseded — sampling near
+> the core is now correct). See `docs/DECISIONS.md` 14-20.
+
+---
+
 # Slime TD — Prototype Handoff Notes
 
 This documents the working single-file HTML prototype (`slime-td-prototype.html`)

@@ -13,7 +13,7 @@ const VISUAL_RADIUS = 10;
 // revealed tissue they sweep through, each on its own per-slot cooldown
 // (state.bladeNextHit) so a blade can't hit the same patch every single
 // frame. orbitRadius comes from bladeRadius(), which floors at the safe
-// radius (Confirmed decision 16 in docs/PROGRESS.md) so blades can never
+// radius (docs/DECISIONS.md #16) so blades can never
 // end up smaller than the zone they're meant to defend — see
 // "documented prototype bugs" #5.
 //

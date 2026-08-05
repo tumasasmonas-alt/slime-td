@@ -7,7 +7,7 @@ const BUBBLE_COLOR = '#e4ffbf';
 
 // A flat translucent disc read as nearly invisible against the busy
 // background and "broken" even though it was ticking damage correctly
-// — see docs/PROTOTYPE_HANDOFF.md. The bright rim and pulsing bubbles
+// — see archive/PROTOTYPE_HANDOFF.md. The bright rim and pulsing bubbles
 // are what make it read as a toxic pool.
 export function drawClouds(ctx: CanvasRenderingContext2D, state: GameState): void {
   for (const c of state.clouds) {

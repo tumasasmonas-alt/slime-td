@@ -1,5 +1,5 @@
 // Risk-of-Rain-style escalating difficulty tiers. Ported from the
-// prototype's TIERS_LIST. See docs/KNOWN_ISSUES.md: this plateaus after
+// prototype's TIERS_LIST. See docs/BACKLOG.md: this plateaus after
 // the last tier — an endless-scaling tail is a known TODO, not yet built.
 //
 // safeRadius deliberately deviates from the prototype (which used
@@ -7,7 +7,7 @@
 // those values left the infection stopping at a distant ring it could
 // never cross — no sense of it closing in, and every tower-centered
 // weapon stranded in a dead zone it could never shoot out of. See
-// "Confirmed decisions" in docs/PROGRESS.md.
+// docs/DECISIONS.md.
 export interface Tier {
   readonly name: string;
   readonly t: number;
