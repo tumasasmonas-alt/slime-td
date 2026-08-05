@@ -47,4 +47,38 @@ describe('updateWardPulse', () => {
     updateWardPulse(state, 0.1);
     expect(state.grid.growth[i]).toBe(afterFirstPulse);
   });
+
+  it('reaches past a large safe radius rather than staying capped at its base formula', () => {
+    // Confirmed decision 16: radius floors at safeRadius + margin, so
+    // Ward Pulse can't end up smaller than the zone it's meant to purge.
+    const size = 2500;
+    const grid: Grid = {
+      cols: 50,
+      rows: 50,
+      size,
+      cellSize: 10,
+      vein: new Float32Array(size),
+      threshold: new Float32Array(size),
+      growth: new Float32Array(size),
+      frozen: new Float32Array(size),
+      bucket: new Int8Array(size),
+      maxRange: 500,
+      safeRadius: 200, // larger than the base+perLevel formula alone would give at level 1
+    };
+    const state = freshState();
+    state.grid = grid;
+    state.passives.ward = 1;
+    state.tower.x = 250;
+    state.tower.y = 250;
+    // A cell 150px east — inside the 200px safe radius, but well outside
+    // the old flat `60 + lvl*6 = 66` formula.
+    const cx = Math.floor((state.tower.x + 150) / grid.cellSize);
+    const cy = Math.floor(state.tower.y / grid.cellSize);
+    const i = cy * grid.cols + cx;
+    grid.growth[i] = 0.5;
+
+    updateWardPulse(state, 0.1);
+
+    expect(grid.growth[i]).toBeLessThan(0.5);
+  });
 });

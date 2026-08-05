@@ -9,6 +9,7 @@ import { drawAmbientGrid, drawArenaBounds, drawSafeZone } from './render/backgro
 import { resizeCanvasToWindow, setupCanvas } from './render/canvas';
 import { drawGems } from './render/gems';
 import { drawNodes } from './render/nodes';
+import { drawOrbitals } from './render/orbitals';
 import { drawParticles } from './render/particles';
 import { drawProjectiles } from './render/projectiles';
 import { drawTower } from './render/tower';
@@ -22,6 +23,7 @@ import { updateWardPulse } from './systems/ward';
 import { initHud, updateAnnounceFade, updateHud } from './ui/hud';
 import { hideOverlays, initOverlays, showGameOver } from './ui/overlays';
 import { initUpgradeCards, syncUpgradeOverlay } from './ui/upgradeCards';
+import { updateBladesWeapon } from './weapons/blades';
 import { updateBoltWeapon } from './weapons/bolt';
 
 const canvasEl = document.querySelector<HTMLCanvasElement>('#game-canvas');
@@ -77,6 +79,7 @@ function update(dt: number): void {
   state.time += dt;
   runSimulation(state, dt); // includes node spawn/influence and contact damage
   updateBoltWeapon(state, dt);
+  updateBladesWeapon(state, dt);
   updateProjectiles(state, dt);
   updateGems(state, dt);
   updateParticles(state, dt);
@@ -116,6 +119,7 @@ function render(): void {
     drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.safeRadius, state.contactPressure);
     drawNodes(ctx, state);
     drawGems(ctx, state);
+    drawOrbitals(ctx, state);
     drawProjectiles(ctx, state);
     drawParticles(ctx, state);
     drawTower(ctx, state);

@@ -95,8 +95,17 @@ should treat the numbers as fresh rather than merely confirmed.
 
 ### `bladeNextHit` keying is fragile
 Keyed by blade index (0..count-1) and never cleared when blade count
-changes on level-up. Harmless today because indices are stable within a
-frame, but worth revisiting once blades get more per-level variation.
+changes on level-up.
+
+**Assessed during 2E-2 (Orbiting Blades), confirmed not currently
+exploitable:** `bladeCount(lvl)` is monotonic non-decreasing in level
+(`min(1 + floor((lvl-1)/2), 5)`), and level only ever increases within a
+run — so the index range only ever grows, existing slots' cooldowns stay
+meaningful, and no index is ever reused for a different physical blade.
+The fragility is real but latent: it would only bite if a future upgrade
+path let blade count *decrease*, or reassigned what a given slot index
+means (e.g. per-slot upgrade variation). No fix needed until one of
+those actually lands — tracked here so it's not forgotten when they do.
 
 ### No audio
 Web Audio is in the stack (`CLAUDE.md`) but the prototype has zero sound.
