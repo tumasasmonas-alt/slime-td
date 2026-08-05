@@ -36,6 +36,22 @@ export function chainCooldown(lvl: number): number {
   return Math.max(0.4, 1.15 - (lvl - 1) * 0.08);
 }
 
+export function frostDamage(lvl: number): number {
+  return 9 + (lvl - 1) * 3.4;
+}
+
+const FROST_REACH: TowerCenteredReach = { margin: 20, base: 115, perLevel: 12 };
+
+// Radius, anchored to the safe radius as a floor (Confirmed decision 16
+// in docs/PROGRESS.md) — see bladeRadius() above for why that matters.
+export function frostRadius(lvl: number, safeRadius: number): number {
+  return towerCenteredRadius(FROST_REACH, lvl, safeRadius);
+}
+
+export function frostCooldown(lvl: number): number {
+  return Math.max(1.5, 3.6 - (lvl - 1) * 0.24);
+}
+
 // Prototype formula was `62 + Math.min(24, lvl*2)` — linear across the
 // whole 1-8 level range the cap never actually engages (8*2=16 < 24), so
 // it's expressed directly as the equivalent base+perLevel form here.
@@ -72,5 +88,11 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '🔗',
     maxLevel: 8,
     desc: (lvl) => `Strikes the wall, then arcs to ${chainCount(lvl)} nearby clusters.`,
+  },
+  frost: {
+    name: 'Frost Nova',
+    icon: '❄️',
+    maxLevel: 8,
+    desc: () => `Pulses outward, damaging tissue and freezing growth nearby.`,
   },
 };
