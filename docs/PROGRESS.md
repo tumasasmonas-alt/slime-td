@@ -21,11 +21,12 @@ machines (per the Workflow section in `CLAUDE.md`).
 - **Phase 2B (ambient growth + simulation tick) — done.** See below.
 - **Phase 2C (first playable loop) — done.** See below.
 - **Phase 2D (danger) — done.** See below.
-- **Phase 2E (remaining arsenal) — not started.** Next up, and the
-  **final porting step** — 2F was dissolved into it (Confirmed decision
-  11). Once 2E lands, the prototype is fully ported and everything
-  remaining is new work from docs/KNOWN_ISSUES.md, starting with a
-  balance + playtesting pass (decision 13).
+- **Phase 2E (remaining arsenal) — done.** See below. **The port is
+  complete.** Every weapon and passive from
+  `reference/slime-td-prototype.html` now has a typed, tested
+  implementation. Next: a balance + playtesting pass (decision 13),
+  then moving the project's docs and workflow off "porting" and onto
+  original development — see the bottom of this file.
 
   First playtest pass (2026-08-05, before 2D) found the loop plays as
   intended; one real gap logged and then fixed as part of 2D — see the
@@ -187,7 +188,42 @@ each step only builds on things already verified.
   shared weapon library (see Confirmed decisions). Passives are already
   done — five landed in 2C, and Vitality/Regeneration/Armor Plating in
   2D — so this step is weapons only. Milestone: the prototype is fully
-  ported. **Status: next.**
+  ported. **Status: done (2026-08-05). Port complete.**
+
+  Landed as five separate commits per Confirmed decision 12, each
+  independently typechecked, tested, and verified live in-browser
+  before committing:
+  - **Orbiting Blades** — `weapons/blades.ts`, `render/orbitals.ts`
+    (ninja-star rendering, decision 17), `bladeRadius()` wired to
+    `towerCenteredRadius()`. Also closed out Ward Pulse's radius
+    (`systems/ward.ts`), the third of the three weapons decision 16
+    named. Assessed `bladeNextHit` fragility (docs/KNOWN_ISSUES.md):
+    confirmed not currently exploitable since `bladeCount` is
+    monotonic non-decreasing in level.
+  - **Chain Bolt** — `weapons/chain.ts`, `systems/targeting.ts`
+    (`findNearbyRevealedPoint`, distinct from the frontier system),
+    `systems/chainFx.ts` + `render/chainFx.ts` for the lightning arc.
+    `systems/projectiles.ts` gained its first real per-type branch.
+  - **Frost Nova** — `weapons/frost.ts`, `systems/novaFx.ts` (dt-based
+    decay per decision 4) + `render/novaFx.ts`. The freeze mechanic
+    itself was already live from 2D; this is what fires it.
+  - **Caustic Cloud** — `weapons/poison.ts`, `systems/clouds.ts` +
+    `render/clouds.ts`. Fixed the second `novaFx`-style anti-pattern:
+    `bubbleSeeds` now generated once at cloud creation
+    (`state.ts`'s `CausticCloud.bubbleSeeds` made required, not
+    optional) instead of lazily inside the draw call.
+  - **Homing Missile** — `weapons/missile.ts`, `systems/projectiles.ts`'s
+    third and final branch (lerp-based homing, splash on arrival or
+    early wall contact). Threads whether the target is a live node
+    directly rather than the prototype's `target.hp !== undefined`
+    duck-typing.
+
+  67 new tests across the five commits (153 total, up from 104 after
+  2E-1). Final live-browser pass equipped all six weapons
+  simultaneously — correct card pool with no conflicts, zero console
+  errors. `CONTACT_SCALE` and friends are still first-pass numbers;
+  the balance pass (decision 13) is next, now finally against the full
+  arsenal the prototype's own numbers were validated against.
 
   Weapons, and what's distinct about each:
   - **Orbiting Blades** — no targeting at all; blades circle the tower
