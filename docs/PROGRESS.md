@@ -20,13 +20,13 @@ machines (per the Workflow section in `CLAUDE.md`).
 - **Phase 2A (grid + reaction-diffusion) — done.** See below.
 - **Phase 2B (ambient growth + simulation tick) — done.** See below.
 - **Phase 2C (first playable loop) — done.** See below.
-- **Phase 2D and onward — not started.** Next up. Real playtesting
-  happens now, before 2D begins — see "Confirmed decisions" above.
-  First playtest pass (2026-08-05) found the loop plays as intended;
-  one real gap logged as a new "Open" item in docs/KNOWN_ISSUES.md —
-  upgrade-card picks apply correctly but give no visible on-screen
-  confirmation, especially for passives (the weapon tray only ever
-  shows weapons).
+- **Phase 2D (danger) — done.** See below.
+- **Phase 2E and onward — not started.** Next up.
+
+  First playtest pass (2026-08-05, before 2D) found the loop plays as
+  intended; one real gap logged and then fixed as part of 2D — see the
+  2D status below and "Resolved during the port" in
+  docs/KNOWN_ISSUES.md.
 
 ## Where things live
 
@@ -105,18 +105,82 @@ each step only builds on things already verified.
   - **No fail state yet.** Contact damage, growth nodes and game over
     are all 2D, so the playtest can judge carve feel, XP flow and
     upgrade cadence — but nothing about difficulty or balance.
-- **2D. Danger** — growth nodes, contact damage, difficulty tiers, game
-  over. Milestone: a complete run with a real win/lose arc.
+- **2D. Danger** — growth nodes, contact damage, game over. Milestone: a
+  complete run with a real win/lose arc. **Status: done.**
+  `systems/{nodes,contact,tower}.ts`, `tuning/nodes.ts`,
+  `render/nodes.ts`, `ui/overlays.ts` (start + game-over screens),
+  restart via a reassignable module-level `state` in `main.ts`, the
+  restored node-damage loop in `grid/clear.ts`, screen shake, and the
+  modifier readout in `ui/hud.ts` (decision 8, built alongside Armor/
+  Regen/Vitality as planned). 24 new unit tests, guarding both
+  documented contact-damage bugs as regression tests (ring sampled at
+  `safeRadius + 1.5` cells, never closer; gated on `isRevealed`, never
+  raw density).
+
+  Verified live in-browser: start screen, a full run with nodes
+  spawning/rendering/announcing, contact damage visibly draining HP,
+  all eight passives offered and their effects (including the new
+  modifier readout and Vitality's `+20 maxHp`) confirmed on pick. The
+  actual death -> game-over -> restart transition was **not** observed
+  live — the playtest build (early Armor + Regeneration + Vitality)
+  proved tanky enough to survive the whole verification session, a
+  data point in itself given the "expect too hard" prediction below.
+  That transition rests on `damageTower`'s hp-clamps-at-0 behavior
+  (unit-tested) and DOM wiring structurally identical to the
+  already-verified upgrade-card buttons — worth a real playthrough to
+  confirm rather than taking on faith.
+
+  Scope notes from the 2D review (2026-08-05) — the original one-line
+  bullet understated this step:
+  - **Node rendering ships here, not in 2F.** Same class of mistake as
+    gem diamonds nearly were in 2C. Per the handoff doc, nodes should be
+    the most visually important thing on screen since they're the
+    priority target — shipping 2D without `drawNode` (gold pulse,
+    influence tint, HP bar) means the playtest can't see the thing it's
+    meant to prioritize, or tell whether it's winning against one.
+  - **Vitality, Regeneration and Armor Plating get un-gated and built
+    here.** 2C deliberately deferred both their card-pool entries *and*
+    their numeric effects (see decision 6). That debt comes due now:
+    `armorMult` in `systems/passives.ts`, a regen tick, the `+20 maxHp`
+    case in `applyUpgrade`, and dropping the `ENABLED_PASSIVES` gate in
+    `ui/upgradeCards.ts`.
+  - **Damage feedback (`tower.shake`)** is already a field in state but
+    nothing sets, decays or renders it. Wiring spans three files
+    (`damageTower` sets it, an update pass decays it, render applies it
+    as a translate) which makes it easy to drop.
+  - **`clearAt` needs its node-damage loop restored** — deliberately
+    omitted in 2C with a comment marking it. That also brings
+    `destroyNode`, which grants XP (45 + tier*12) and increments
+    `nodesPurged`, finally making the already-wired "Purged" HUD stat
+    read something other than 0.
+  - **Restart requires restructuring `main.ts`** — `state` is currently
+    a module-level `const` with no reset path.
+  - **"Difficulty tiers" is already done**, ported in 2B. All that
+    remains is consuming the two tier fields nothing reads yet:
+    `contactMult` (contact damage) and `nodeInterval` (node spawning).
+  - **Expect 2D to feel too hard, and don't over-correct.** The
+    prototype's balance was bot-validated with all six weapons and eight
+    passives; 2D has Bolt Turret alone holding a 360-degree ring, and
+    ambient growth reaches the damage ring roughly 20-30s in. Tuning
+    `CONTACT_SCALE` down hard here would be tuning against an arsenal
+    that doesn't exist yet — 2E swings it back.
+  - **Guard the two documented contact-damage bugs with tests**, same
+    way the RD instability is guarded by a canary: sample at
+    `safeRadius + 1.5` cells (never closer), and gate on `isRevealed`
+    (never raw density). Both are listed below and both cost real
+    debugging time once already.
 - **2E. Remaining arsenal** — the other five weapons (data in the shared
   weapon library, see Confirmed decisions). Passives moved forward into
   2C, so this step is weapons only.
 - **2F. Render polish** — chain lightning arcs, caustic cloud bubbles,
-  node gold pulse, nova ring. Per the handoff doc these aren't cosmetic
-  extras: Chain Bolt without its arc reads as broken even though it
-  deals damage correctly, same for Caustic Cloud without its rim.
-  (Gem diamonds moved into 2C — see the 2C scope notes. The danger
-  pressure ring is already implemented in `render/tower.ts` from
-  Phase 1.)
+  nova ring. Per the handoff doc these aren't cosmetic extras: Chain
+  Bolt without its arc reads as broken even though it deals damage
+  correctly, same for Caustic Cloud without its rim. Note all three
+  remaining items belong to weapons that don't exist until 2E, so this
+  step is now purely 2E's visual tail.
+  (Gem diamonds moved into 2C, node gold pulse into 2D — see those
+  steps' scope notes. The danger pressure ring is already implemented
+  in `render/tower.ts` from Phase 1.)
 
 ## Confirmed decisions
 
@@ -161,6 +225,24 @@ don't drift away from them by accident.
    pool offers and which have working effects this phase.
 7. **The prototype's double-level-up bug is fixed at port time,** same
    precedent as `novaFx` above. See docs/KNOWN_ISSUES.md.
+8. **The modifier readout ships as part of 2D**, not as a later pass.
+   Confirmed 2026-08-05 after the first playtest. 2D introduces Armor
+   Plating, Regeneration and Vitality — the three least-visible
+   passives in the game — so without it the 2D playtest would hit the
+   "did my pick do anything?" blind spot three more times, on the
+   picks where it's hardest to self-verify. See the corresponding
+   entry in docs/KNOWN_ISSUES.md.
+9. **Start and game-over overlays both ship in 2D.** The prototype's
+   start overlay (title, premise blurb, Start Run button) is ported
+   alongside the game-over overlay 2D needs anyway — it gives restart
+   somewhere to land, and the blurb is the only place a first-time
+   player learns what nodes are and why carving matters.
+10. **The vein maze is regenerated on every run.** Restart re-runs the
+    reaction-diffusion, so each run gets a different pattern — matches
+    the prototype and suits a roguelite. Costs ~200ms of startup hitch
+    per run, accepted deliberately. Note this makes runs *not* directly
+    comparable for balance work; if that becomes a problem while tuning,
+    a fixed-seed debug option is the fix, not reusing the field.
 
 ## Four documented prototype bugs to guard while porting
 

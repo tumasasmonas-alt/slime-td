@@ -3,12 +3,10 @@ import { PASSIVE_DEFS } from '../tuning/passives';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import type { PassiveKey, WeaponKey } from '../types';
 
-// Vitality, Regeneration, and Armor Plating are gated out of the card
-// pool — nothing damages the core until Phase 2D, so all three would be
-// dead, unverifiable picks during the 2C playtest. See "Confirmed
-// decisions" in docs/PROGRESS.md. tuning/passives.ts still declares all
-// eight; only the pool offered here is restricted.
-const ENABLED_PASSIVES: readonly PassiveKey[] = ['atkSpeed', 'damage', 'pickup', 'xpGain', 'ward'];
+// Vitality, Regeneration, and Armor Plating were gated out of the card
+// pool in Phase 2C (nothing damaged the core yet, so all three would have
+// been dead, unverifiable picks) and un-gated here in 2D now that contact
+// damage exists. See "Confirmed decisions" in docs/PROGRESS.md.
 
 type CardChoice =
   | { kind: 'weapon'; key: WeaponKey; nextLevel: number; isNew: boolean }
@@ -38,7 +36,7 @@ function buildCardPool(state: GameState): CardChoice[] {
     const lvl = state.weapons[key] ?? 0;
     if (lvl < def.maxLevel) pool.push({ kind: 'weapon', key, nextLevel: lvl + 1, isNew: lvl === 0 });
   }
-  for (const key of ENABLED_PASSIVES) {
+  for (const key of Object.keys(PASSIVE_DEFS) as PassiveKey[]) {
     const def = PASSIVE_DEFS[key];
     const lvl = state.passives[key] ?? 0;
     if (lvl < def.maxLevel) pool.push({ kind: 'passive', key, nextLevel: lvl + 1, isNew: lvl === 0 });
@@ -104,6 +102,10 @@ function applyUpgrade(refs: CardRefs, state: GameState, choice: CardChoice): voi
     state.weapons[choice.key] = choice.nextLevel;
   } else if (choice.kind === 'passive') {
     state.passives[choice.key] = choice.nextLevel;
+    if (choice.key === 'maxHp') {
+      state.tower.maxHp += 20;
+      state.tower.hp = Math.min(state.tower.maxHp, state.tower.hp + 20);
+    }
   } else {
     state.tower.hp = state.tower.maxHp;
   }

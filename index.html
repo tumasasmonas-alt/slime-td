@@ -284,6 +284,63 @@
       #announce.show {
         opacity: 1;
       }
+
+      /* ---------- Modifier readout ---------- */
+      #modifiers {
+        position: absolute;
+        bottom: 14px;
+        left: 18px;
+        z-index: 10;
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 0.03em;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+
+      /* ---------- Start / game-over overlays ---------- */
+      h1 {
+        font-size: 26px;
+        margin: 0 0 6px;
+        letter-spacing: 0.03em;
+        color: var(--accent);
+        text-shadow: 0 0 18px var(--accent-dim);
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 20px;
+        line-height: 1.7;
+      }
+      button.primary {
+        background: linear-gradient(180deg, var(--accent), #2c9aae);
+        border: none;
+        color: #03181c;
+        font-weight: bold;
+        padding: 12px 26px;
+        border-radius: 9px;
+        font-size: 14px;
+        cursor: pointer;
+        letter-spacing: 0.03em;
+        box-shadow:
+          0 6px 0 #1c6570,
+          0 8px 18px #0006;
+      }
+      button.primary:active {
+        transform: translateY(3px);
+        box-shadow: 0 3px 0 #1c6570;
+      }
+      .kv {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        padding: 6px 0;
+        border-bottom: 1px dashed var(--line);
+        color: var(--muted);
+      }
+      .kv b {
+        color: var(--text);
+      }
     </style>
   </head>
   <body>
@@ -318,11 +375,37 @@
     </div>
 
     <div id="weapon-tray"></div>
+    <div id="modifiers"></div>
 
     <div id="upgrade-overlay" class="overlay hidden">
       <div class="panel">
         <div id="upgrade-title">Level Up — Choose an Upgrade</div>
         <div id="cards"></div>
+      </div>
+    </div>
+
+    <div id="start-overlay" class="overlay">
+      <div class="panel">
+        <h1>SLIME TD</h1>
+        <div class="subtitle">
+          A living wall of infection surrounds your core and creeps inward from every side.<br />
+          Your weapons fire automatically, carving the tissue back — but dense, matured tissue<br />
+          resists more per hit, so don't let it sit unchecked. Glowing <b>nodes</b> accelerate growth<br />
+          around themselves and must be prioritized before they thicken the wall for good.<br /><br />
+          Survive the escalating outbreak.
+        </div>
+        <button class="primary" id="start-btn">Start Run</button>
+      </div>
+    </div>
+
+    <div id="gameover-overlay" class="overlay hidden">
+      <div class="panel">
+        <h1 style="color: var(--danger); text-shadow: 0 0 18px #ff3f6855">Core Overwhelmed</h1>
+        <div class="subtitle">The infection reached the center.</div>
+        <div class="kv"><span>Time Survived</span><b id="go-time">00:00</b></div>
+        <div class="kv"><span>Level Reached</span><b id="go-level">1</b></div>
+        <div class="kv"><span>Nodes Purged</span><b id="go-kills">0</b></div>
+        <div style="margin-top: 22px"><button class="primary" id="restart-btn">Try Again</button></div>
       </div>
     </div>
 

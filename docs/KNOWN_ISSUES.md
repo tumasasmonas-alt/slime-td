@@ -19,6 +19,15 @@ fixed, not when it becomes inconvenient to look at.
   every player gets an identical arena, and resizing only changes the
   camera scale, never the simulation.
 
+- **Upgrade cards gave no visible confirmation of what they changed.**
+  Found during the first human playtest (2026-08-05): a pick applied
+  correctly but nothing on screen showed it — passive picks especially,
+  since the weapon tray only ever displayed weapons. Fixed in Phase 2D:
+  an always-visible modifier readout (`ui/hud.ts`) shows all five
+  multiplier stats live, reading `systems/passives.ts`'s existing mult
+  functions as its source of truth, so a pick's effect is confirmable
+  the instant it's made.
+
 ## Open
 
 ### Difficulty plateaus after Apocalypse (t=560s)
@@ -64,27 +73,6 @@ values or the XP curve are tuned upward, which is likely given balance is
 explicitly unfinished. Fixed at port time rather than ported — level-ups
 queue and are consumed one card at a time. Same precedent as the `novaFx`
 decision above; see "Confirmed decisions" in docs/PROGRESS.md.
-
-### Upgrade cards give no visible confirmation of what they changed
-Found during the first human playtest (2026-08-05): picking a card applies
-its effect correctly (verified in Phase 2C), but nothing on screen shows
-the player their build actually changed. Two compounding gaps:
-- Passive picks are invisible. `#weapon-tray` (`ui/hud.ts`) only ever
-  displays `state.weapons` — Amplifier, Overclock, etc. have no on-screen
-  representation at all after being picked, so a passive pick reads as if
-  it did nothing.
-- Even for weapons, the tray only shows an icon + level, not the effect
-  in numbers a player can compare before/after.
-
-Proposed direction (not built yet): a small always-visible modifier
-readout — e.g. `Damage 1.0x` — that updates live as passives are picked,
-so choosing Amplifier visibly flips it to `Damage 1.2x` at the moment of
-the pick. `systems/passives.ts` already centralizes the four multiplier
-functions (`damageMult`, `atkSpeedMult`, `pickupMult`, `xpMult`), so the
-readout has a natural, already-correct source of truth to read from —
-this is a HUD-layer addition, not a new calculation. Worth doing before
-the next playtest pass, since "did my pick do anything?" is a first-order
-feel question the current build can't answer.
 
 ### `bladeNextHit` keying is fragile
 Keyed by blade index (0..count-1) and never cleared when blade count

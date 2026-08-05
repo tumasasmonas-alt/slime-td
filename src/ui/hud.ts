@@ -3,6 +3,7 @@ import { TIERS_LIST } from '../tuning/tiers';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import type { WeaponKey } from '../types';
 import { clamp, fmtTime } from '../util/math';
+import { armorMult, atkSpeedMult, damageMult, pickupMult, xpMult } from '../systems/passives';
 
 const ANNOUNCE_DURATION = 2.6;
 
@@ -17,6 +18,7 @@ export interface HudRefs {
   diffBarFill: HTMLElement;
   weaponTray: HTMLElement;
   announce: HTMLElement;
+  modifiers: HTMLElement;
 }
 
 function requireEl(id: string): HTMLElement {
@@ -37,6 +39,7 @@ export function initHud(): HudRefs {
     diffBarFill: requireEl('diff-bar-fill'),
     weaponTray: requireEl('weapon-tray'),
     announce: requireEl('announce'),
+    modifiers: requireEl('modifiers'),
   };
 }
 
@@ -50,10 +53,14 @@ export function updateHud(refs: HudRefs, state: GameState): void {
   refs.statWave.textContent = String(state.tierIndex + 1);
   updateDifficultyHud(refs, state);
   updateWeaponTray(refs, state);
+  updateModifiers(refs, state);
 
-  if (state.pendingAnnouncement) {
-    announce(refs, state, state.pendingAnnouncement);
-    state.pendingAnnouncement = null;
+  // Only pop the next queued announcement once the current one has fully
+  // displayed — popping unconditionally would let a same-tick collision
+  // (e.g. a tier escalation and a node spawn) flash through both within a
+  // single frame instead of each getting its full ANNOUNCE_DURATION.
+  if (state.announceTimer <= 0 && state.pendingAnnouncements.length > 0) {
+    announce(refs, state, state.pendingAnnouncements.shift()!);
   }
 }
 
@@ -81,6 +88,21 @@ function updateWeaponTray(refs: HudRefs, state: GameState): void {
     chip.innerHTML = `${def.icon}<span class="lvl">${lvl}</span>`;
     refs.weaponTray.appendChild(chip);
   }
+}
+
+// Always-visible readout of the four multiplier passives plus armor, so a
+// pick's effect is confirmable the instant it's made rather than only
+// inferable from play — see docs/KNOWN_ISSUES.md "Upgrade cards give no
+// visible confirmation of what they changed".
+function updateModifiers(refs: HudRefs, state: GameState): void {
+  const dmg = damageMult(state);
+  const spd = atkSpeedMult(state);
+  const pick = pickupMult(state);
+  const xp = xpMult(state);
+  const armorPct = Math.round((1 - armorMult(state)) * 100);
+  refs.modifiers.textContent =
+    `DMG ${dmg.toFixed(2)}x   SPD ${spd.toFixed(2)}x   ARMOR ${armorPct}%   ` +
+    `PICKUP ${pick.toFixed(2)}x   XP ${xp.toFixed(2)}x`;
 }
 
 function announce(refs: HudRefs, state: GameState, msg: string): void {

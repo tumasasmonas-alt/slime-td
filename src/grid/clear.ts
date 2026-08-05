@@ -1,7 +1,8 @@
 import type { GameState } from '../state';
-import { clamp, rand } from '../util/math';
+import { clamp, dist, rand } from '../util/math';
 import { gemValueFromRemoved } from '../tuning/xp';
 import { dropGem } from '../systems/gems';
+import { destroyNode } from '../systems/nodes';
 import { spawnParticles } from '../systems/particles';
 import { cellBucket, gIdx, worldToCell } from './grid';
 
@@ -15,8 +16,7 @@ const GEM_DROP_THRESHOLD = 0.08;
 // The core damage-the-field function: density directly resists both the
 // radius and magnitude of a hit — sparse tissue clears in one satisfying
 // chunk, mature tissue only chips down a little per hit. Direct port of
-// the prototype's clearAt(). Growth-node interaction is deliberately
-// left out — nodes don't exist until Phase 2D.
+// the prototype's clearAt().
 export function clearAt(state: GameState, x: number, y: number, power: number, opts: ClearOptions = {}): number {
   const grid = state.grid;
   if (!grid) return 0;
@@ -54,6 +54,15 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
         grid.bucket[i] = nb;
         state.dirty.add(i);
       }
+    }
+  }
+
+  for (const node of state.nodes) {
+    if (node.dead) continue;
+    if (dist(x, y, node.x, node.y) <= radiusPx + node.hitRadius) {
+      node.hp -= power;
+      spawnParticles(state, node.x, node.y, '#ffcf4d', 3, 60);
+      if (node.hp <= 0 && !node.dead) destroyNode(state, node);
     }
   }
 

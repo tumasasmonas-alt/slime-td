@@ -181,7 +181,11 @@ export interface GameState {
   // shown a card for yet, consumed one at a time — see systems/xp.ts and
   // docs/KNOWN_ISSUES.md "A single XP grant crossing two levels".
   pendingLevelUps: number;
-  pendingAnnouncement: string | null;
+  // Queued rather than a single slot — a tier escalation and a node spawn
+  // can land in the same sim tick, and each deserves its own full
+  // announceTimer display instead of the second silently overwriting the
+  // first (same overwrite bug class as pendingLevelUps above).
+  pendingAnnouncements: string[];
 }
 
 export function freshState(): GameState {
@@ -234,6 +238,6 @@ export function freshState(): GameState {
     contactPressure: 0,
 
     pendingLevelUps: 0,
-    pendingAnnouncement: null,
+    pendingAnnouncements: [],
   };
 }
