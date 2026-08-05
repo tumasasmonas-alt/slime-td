@@ -13,6 +13,14 @@ Vampire-Survivors-style to carve it back.
 - `reference/slime-td-prototype.html` is a working single-file prototype of
   the full game. It is the ground truth for exact behavior — if the handoff
   doc and the prototype code ever disagree, trust the code.
+- **Ground-truth override protocol:** neither the prototype code nor the
+  handoff doc gets overridden or superseded without asking the project
+  owner first, even when the reasoning seems solid. If a piece of ground
+  truth looks wrong rather than just different from a new design
+  decision, raise it explicitly and wait for a yes before writing it
+  down as superseded. See docs/PROGRESS.md's "documented prototype bugs"
+  list for a live example (bug #2, superseded 2026-08-05 with the
+  owner's explicit go-ahead).
 
 ## Stack
 

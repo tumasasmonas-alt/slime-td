@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Grid } from '../state';
 import { freshState } from '../state';
 import { gIdx, worldToCell } from '../grid/grid';
+import { TIERS_LIST } from '../tuning/tiers';
+import { applyAmbientGrowth } from './growth';
 import { tickContactDamage } from './contact';
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
@@ -17,29 +19,42 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 20,
+    safeRadius: 100,
     ...overrides,
   };
 }
 
-// Places revealed, high-density growth all the way around the sample
-// ring (safeRadius + 1.5 cells) so tickContactDamage always finds
-// something regardless of which of the 24 angular samples land where.
-function revealContactRing(grid: Grid, towerX: number, towerY: number): void {
-  const ringR = grid.safeRadius + grid.cellSize * 1.5;
-  for (let s = 0; s < 24; s++) {
-    const a = (s / 24) * Math.PI * 2;
-    const x = towerX + Math.cos(a) * ringR;
-    const y = towerY + Math.sin(a) * ringR;
-    const { cx, cy } = worldToCell(grid, x, y);
-    const i = gIdx(grid, cx, cy);
-    grid.threshold[i] = 0.1;
-    grid.growth[i] = 0.9;
+function revealAt(grid: Grid, x: number, y: number, density: number): number {
+  const { cx, cy } = worldToCell(grid, x, y);
+  const i = gIdx(grid, cx, cy);
+  grid.threshold[i] = 0.1;
+  grid.growth[i] = density;
+  return i;
+}
+
+// Fills the entire safe-zone disc with high revealed density so
+// tickContactDamage always finds something, regardless of exactly which
+// cells its weighting favors.
+function fillSafeZoneDisc(grid: Grid, towerX: number, towerY: number, density: number): void {
+  const radiusCells = Math.ceil(grid.safeRadius / grid.cellSize);
+  const { cx: tcx, cy: tcy } = worldToCell(grid, towerX, towerY);
+  for (let oy = -radiusCells; oy <= radiusCells; oy++) {
+    for (let ox = -radiusCells; ox <= radiusCells; ox++) {
+      const cx = tcx + ox;
+      const cy = tcy + oy;
+      if (cx < 0 || cx >= grid.cols || cy < 0 || cy >= grid.rows) continue;
+      const wx = cx * grid.cellSize + grid.cellSize / 2;
+      const wy = cy * grid.cellSize + grid.cellSize / 2;
+      if (Math.hypot(wx - towerX, wy - towerY) > grid.safeRadius) continue;
+      const i = gIdx(grid, cx, cy);
+      grid.threshold[i] = 0.1;
+      grid.growth[i] = density;
+    }
   }
 }
 
 describe('tickContactDamage', () => {
-  it('does no damage when nothing at the ring is revealed', () => {
+  it('does no damage when the safe zone is entirely clear', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 300;
@@ -51,12 +66,12 @@ describe('tickContactDamage', () => {
     expect(state.tower.hp).toBe(state.tower.maxHp);
   });
 
-  it('damages the core when revealed density sits at the safe-zone ring', () => {
+  it('damages the core when revealed density sits inside the safe zone', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 300;
     state.tower.y = 300;
-    revealContactRing(state.grid, state.tower.x, state.tower.y);
+    fillSafeZoneDisc(state.grid, state.tower.x, state.tower.y, 0.9);
 
     tickContactDamage(state, 1);
 
@@ -64,42 +79,37 @@ describe('tickContactDamage', () => {
     expect(state.tower.hp).toBeLessThan(state.tower.maxHp);
   });
 
-  it('never samples closer than the safe-zone ring, even with dense growth right at the tower', () => {
-    // Regression guard for the documented prototype bug: sampling any
-    // closer than safeRadius+1.5 cells means the wall can never
-    // physically reach the sample point (ambient growth is hard-gated to
-    // zero inside the safe radius), so the core would be structurally
-    // unkillable. See docs/PROTOTYPE_HANDOFF.md "Known bugs".
-    const state = freshState();
-    state.grid = makeTestGrid();
-    state.tower.x = 300;
-    state.tower.y = 300;
-    // Reveal density immediately at the tower (well inside the safe
-    // radius) but nowhere near the actual sample ring.
-    const { cx, cy } = worldToCell(state.grid, state.tower.x, state.tower.y);
-    const i = gIdx(state.grid, cx, cy);
-    state.grid.threshold[i] = 0.1;
-    state.grid.growth[i] = 1;
+  it('weighs density near the core more heavily than density near the line (depth-aware)', () => {
+    const nearCore = freshState();
+    nearCore.grid = makeTestGrid();
+    nearCore.tower.x = 300;
+    nearCore.tower.y = 300;
+    revealAt(nearCore.grid, nearCore.tower.x + 10, nearCore.tower.y, 0.9);
+    tickContactDamage(nearCore, 1);
 
-    tickContactDamage(state, 1);
+    const nearLine = freshState();
+    nearLine.grid = makeTestGrid();
+    nearLine.tower.x = 300;
+    nearLine.tower.y = 300;
+    revealAt(nearLine.grid, nearLine.tower.x + nearLine.grid.safeRadius - 10, nearLine.tower.y, 0.9);
+    tickContactDamage(nearLine, 1);
 
-    expect(state.contactPressure).toBe(0);
-    expect(state.tower.hp).toBe(state.tower.maxHp);
+    expect(nearCore.contactPressure).toBeGreaterThan(nearLine.contactPressure);
   });
 
   it('gates on revealed density, never raw density below its threshold', () => {
-    // Regression guard for the other documented bug: raw density can
-    // cross the damage floor before a cell individually crosses its own
-    // reveal threshold, which drained hp with no visible slime on screen.
+    // Regression guard for the (unaffected) other half of documented bug
+    // #2: raw density can cross the damage floor before a cell
+    // individually crosses its own reveal threshold, which drained hp
+    // with no visible slime on screen.
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 300;
     state.tower.y = 300;
-    const ringR = state.grid.safeRadius + state.grid.cellSize * 1.5;
-    const { cx, cy } = worldToCell(state.grid, state.tower.x + ringR, state.tower.y);
+    const { cx, cy } = worldToCell(state.grid, state.tower.x + 10, state.tower.y);
     const i = gIdx(state.grid, cx, cy);
     state.grid.threshold[i] = 0.9; // high threshold — not revealed yet
-    state.grid.growth[i] = 0.5; // well above the 0.05 contact floor, but still unrevealed
+    state.grid.growth[i] = 0.5; // well above the contact floor, but still unrevealed
 
     tickContactDamage(state, 1);
 
@@ -107,12 +117,12 @@ describe('tickContactDamage', () => {
     expect(state.tower.hp).toBe(state.tower.maxHp);
   });
 
-  it('scales damage with the current tier\'s contactMult', () => {
+  it("scales damage with the current tier's contactMult", () => {
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 300;
     state.tower.y = 300;
-    revealContactRing(state.grid, state.tower.x, state.tower.y);
+    fillSafeZoneDisc(state.grid, state.tower.x, state.tower.y, 0.9);
     state.tierIndex = 4; // Apocalypse, contactMult 2.1 vs tier 0's 1.0
 
     tickContactDamage(state, 1);
@@ -122,11 +132,78 @@ describe('tickContactDamage', () => {
     baseline.grid = makeTestGrid();
     baseline.tower.x = 300;
     baseline.tower.y = 300;
-    revealContactRing(baseline.grid, baseline.tower.x, baseline.tower.y);
+    fillSafeZoneDisc(baseline.grid, baseline.tower.x, baseline.tower.y, 0.9);
 
     tickContactDamage(baseline, 1);
     const baselineDamage = baseline.tower.maxHp - baseline.tower.hp;
 
     expect(apocalypseDamage).toBeGreaterThan(baselineDamage);
+  });
+});
+
+describe('tickContactDamage — outcome guard for superseded bug #2', () => {
+  // Bug #2 originally required sampling exactly at the safe-zone ring,
+  // never closer, because growth was hard-gated to zero inside it —
+  // sampling closer meant sampling guaranteed-empty space and the core
+  // was structurally unkillable. Decision 15 removes that gate on
+  // purpose and decision 18 replaces the ring sample with the
+  // depth-weighted disc average above, so the *mechanism* bug #2
+  // guarded no longer applies. This guards the actual invariant instead,
+  // by running the real growth+damage simulation rather than asserting
+  // how/where the sample is taken: an undefended core in a dirty zone
+  // must be killable, and a core kept clean must take no damage,
+  // regardless of the exact sampling method. See decision 20 in
+  // docs/PROGRESS.md.
+  const tier = TIERS_LIST[0]!;
+
+  it('an undefended core eventually dies when the safe zone is left dirty', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.grid.threshold.fill(0); // reveals the instant any growth accumulates
+    state.tower.x = 300;
+    state.tower.y = 300;
+
+    // Current tuning kills the core in ~520 ticks; this budget keeps a
+    // ~10x margin so the test tolerates reasonable balance-pass retuning
+    // without needing recalibration.
+    const MAX_TICKS = 5000;
+    let ticks = 0;
+    while (state.tower.hp > 0 && ticks < MAX_TICKS) {
+      applyAmbientGrowth(state.grid, state.tower, tier, 0.18, state.dirty);
+      tickContactDamage(state, 0.18);
+      ticks++;
+    }
+
+    expect(state.tower.hp).toBe(0);
+    expect(ticks).toBeLessThan(MAX_TICKS);
+  });
+
+  it('a core in a permanently scrubbed-clean zone takes no damage, however long the sim runs', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.grid.threshold.fill(0);
+    state.tower.x = 300;
+    state.tower.y = 300;
+    const radiusCells = Math.ceil(state.grid.safeRadius / state.grid.cellSize) + 1;
+    const { cx: tcx, cy: tcy } = worldToCell(state.grid, state.tower.x, state.tower.y);
+
+    for (let i = 0; i < 3000; i++) {
+      // Growth genuinely ticks (so the field could fill in), but the
+      // safe zone is scrubbed clean before contact damage samples it —
+      // the scenario a working defense actually produces.
+      applyAmbientGrowth(state.grid, state.tower, tier, 0.18, state.dirty);
+      for (let oy = -radiusCells; oy <= radiusCells; oy++) {
+        const cy = tcy + oy;
+        if (cy < 0 || cy >= state.grid.rows) continue;
+        for (let ox = -radiusCells; ox <= radiusCells; ox++) {
+          const cx = tcx + ox;
+          if (cx < 0 || cx >= state.grid.cols) continue;
+          state.grid.growth[cy * state.grid.cols + cx] = 0;
+        }
+      }
+      tickContactDamage(state, 0.18);
+    }
+
+    expect(state.tower.hp).toBe(state.tower.maxHp);
   });
 });

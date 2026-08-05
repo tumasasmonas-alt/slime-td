@@ -113,7 +113,7 @@ function render(): void {
     ctx.translate(shakeX, shakeY);
 
     if (state.slimeLayer) ctx.drawImage(state.slimeLayer.canvas, 0, 0);
-    drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.safeRadius);
+    drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.safeRadius, state.contactPressure);
     drawNodes(ctx, state);
     drawGems(ctx, state);
     drawProjectiles(ctx, state);

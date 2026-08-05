@@ -1,10 +1,18 @@
+import { clamp, lerp } from '../util/math';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../tuning/world';
 
 const GRID_SIZE = 64;
 const GRID_SPEED = 4;
 const GRID_COLOR = 'rgba(109,240,255,0.035)';
 const ARENA_BOUNDS_COLOR = 'rgba(109,240,255,0.08)';
-const SAFE_ZONE_COLOR = 'rgba(109,240,255,0.15)';
+
+// Cyan "sanctuary" framing at rest, danger red at full breach — Confirmed
+// decision 19 in docs/PROGRESS.md. The ring deliberately keeps reading
+// as "yours to defend" rather than looking hazardous by default; the
+// tension comes from that framing being violated as contactPressure
+// rises, not from the ring looking dangerous from the start.
+const SAFE_ZONE_COLOR = { r: 109, g: 240, b: 255 };
+const BREACH_COLOR = { r: 255, g: 63, b: 104 }; // matches the tower's own danger-pulse ring (render/tower.ts)
 
 // Faint drifting grid, drawn in raw screen space before the camera
 // transform applies — it fills the letterbox bars too, so they read as
@@ -45,14 +53,30 @@ export function drawArenaBounds(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
-// Dashed ring at the safe radius — the boundary ambient growth is hard-gated
-// to zero within. Direct visual proof that growth "stops cleanly" there.
-export function drawSafeZone(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number): void {
+// Dashed ring at the safe radius — the line the player must keep the
+// infection from crossing. Shifts color, thickens, and brightens toward
+// danger red as `pressure` (state.contactPressure, 0-1) rises, so it
+// reads as a live "how badly is this being breached" signal rather than
+// a static boundary. See "Confirmed decisions" (18, 19) in
+// docs/PROGRESS.md.
+export function drawSafeZone(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  pressure: number,
+): void {
+  const p = clamp(pressure, 0, 1);
+  const r = lerp(SAFE_ZONE_COLOR.r, BREACH_COLOR.r, p);
+  const g = lerp(SAFE_ZONE_COLOR.g, BREACH_COLOR.g, p);
+  const b = lerp(SAFE_ZONE_COLOR.b, BREACH_COLOR.b, p);
+  const alpha = lerp(0.15, 0.75, p);
+  const lineWidth = lerp(1, 2.5, p);
   ctx.save();
   ctx.beginPath();
   ctx.setLineDash([6, 6]);
-  ctx.strokeStyle = SAFE_ZONE_COLOR;
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = `rgba(${r.toFixed(0)},${g.toFixed(0)},${b.toFixed(0)},${alpha.toFixed(3)})`;
+  ctx.lineWidth = lineWidth;
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();

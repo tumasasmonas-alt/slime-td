@@ -226,15 +226,23 @@ each step only builds on things already verified.
     particles, tower.
   - **`bladeNextHit` fragility** (see docs/KNOWN_ISSUES.md) is worth
     resolving here, since this is the step that introduces blades.
-  - **Safe-zone groundwork (decisions 14-17) partly precedes the
-    weapons.** Already applied: the shrunk tier table and the
-    `towerCenteredRadius()` helper with its invariant test. Still to
-    do: wiring that helper into Blades / Frost Nova / Ward Pulse, the
-    damped ambient creep into the safe zone (`systems/growth.ts`), and
-    ninja-star blade rendering. The creep change is the one item here
-    that is a real *mechanic* change rather than a geometry fix, and it
-    affects contact-damage pacing — worth verifying on its own rather
-    than folding silently into a weapon commit.
+  - **Safe-zone groundwork (decisions 14-20), one commit ahead of the
+    five weapons per Confirmed decision 12 — done 2026-08-05.** Shrunk
+    tier table (14), `towerCenteredRadius()` helper with its invariant
+    test (16, helper only — wiring into Blades/Frost Nova/Ward Pulse
+    still happens per-weapon), damped ambient creep with node bypass
+    (15, `systems/growth.ts`), depth-weighted contact-damage rework (18,
+    `systems/contact.ts`), reactive danger-line ring (19,
+    `render/background.ts`), bug #2's guard replaced with an outcome
+    test (20, `systems/contact.test.ts`). Also fixed in the same commit:
+    frontier targeting's raycast used to start at `safeRadius` and so
+    could not see or target a breach inside it, which would have made
+    any breach unkillable once one was possible — now starts at
+    `tower.radius` (`systems/frontier.ts`). 104/104 tests pass; verified
+    live in-browser (node breach pushing density to the core, HP
+    draining, ring tint shifting, zero console errors across the
+    session). Ninja-star blade rendering (17) is deferred to the
+    Orbiting Blades weapon commit, where it belongs.
 - **2F — dissolved into 2E.** See Confirmed decision 11. Phase 2 ends
   at 2E; the danger pressure ring it once listed was already
   implemented in `render/tower.ts` back in Phase 1.
@@ -337,7 +345,9 @@ and measured in absolute units that no weapon could reach out of.
     absolute position (measured: 0.096 → 0.091, ~5% *slower*). This buys
     tension and weapon viability, not difficulty. Difficulty is
     `CONTACT_SCALE` / `AMBIENT_BASE` / `infectionMult`, in the balance
-    pass.
+    pass. (Superseded in spirit by decision 18 below, which replaces the
+    ring sample entirely — kept here for the historical reasoning on why
+    the table itself shrank.)
 15. **Ambient growth creeps *into* the safe zone at a damped rate**
     rather than being hard-gated to zero. In the prototype
     `applyAmbientGrowth` does `if (d < safeRadius) continue`, so
@@ -346,8 +356,49 @@ and measured in absolute units that no weapon could reach out of.
     was still 100+px away. Confirmed as unintended prototype behavior,
     not a design choice. The safe zone becomes a strong *resistance*
     gradient instead of a wall, so "Core Overwhelmed" means the core is
-    actually being consumed. **Not yet implemented** — lands in
-    `systems/growth.ts`; damping curve is a balance-pass tuning target.
+    actually being consumed. **Implemented 2026-08-05** in
+    `systems/growth.ts`.
+
+    **Damping curve (decided 2026-08-05):** keep the existing outside
+    formula completely untouched and give the inside its own rate,
+    rather than scaling the outside formula down. The outside ramp is
+    `pow(clamp((d-safeRadius)/span, 0, 1), 0.6)` — this is *already*
+    exactly 0 at `d = safeRadius`, so multiplying it by any inside
+    damping factor is still 0 everywhere inside the line; the two
+    formulas cannot share a root. Concretely:
+    ```
+    proximity = clamp((d - towerRadius) / (safeRadius - towerRadius), 0, 1)  // 0 at tower, 1 at line
+    inside:  rate = AMBIENT_BASE * infectionMult * CREEP_RAMP * proximity   // linear
+    outside: rate = AMBIENT_BASE * infectionMult * max(ramp, CREEP_RAMP)    // unchanged formula, floored
+    ```
+    `CREEP_RAMP` is a new tuning constant (start ~0.09, to roughly match
+    current front-line speed) — a balance-pass knob, same status as
+    `AMBIENT_BASE`/`CONTACT_SCALE`. Proximity is **linear**, not squared:
+    a squared curve was checked and damps growth at 30px from the core to
+    a ~1900s time-to-visible, which is effectively "never" and defeats
+    the point; linear gives ~110s for an *undefended* core (survivable
+    with any working weapon, lethal if ignored). This also keeps the
+    outside pacing and the two global multipliers (`AMBIENT_BASE`,
+    per-tier `infectionMult`) completely untouched — "make the whole
+    game harder" and "make breaches specifically more punishing"
+    (`CREEP_RAMP`, the proximity exponent) stay two independent knobs,
+    not coupled through one formula. Collapsing to a single-formula
+    model later remains possible but is not the starting design.
+
+    **Node behavior inside the line (decided 2026-08-05):** growth nodes
+    **bypass this damping** (little to none) — ambient is the slow tide,
+    an uncleared node is the breach, and that distinction is what makes
+    a node near the tower a genuine emergency worth dropping everything
+    for, matching its "priority target" role in the handoff doc. No
+    *additional* lever for "nodes spawn closer at higher tiers" — that
+    already happens for free, since node spawn distance
+    (`rand(safeRadius + 70, maxRange - 30)` in `systems/nodes.ts`) is
+    derived from `safeRadius`, which the decision-14 table shrinks from
+    100 to 45 across tiers (closest possible spawn: 170px -> 115px, ~32%
+    tighter). Stacking an explicit extra multiplier on top of both the
+    free shrink and the damping-bypass was judged likely to overshoot;
+    revisit in the balance pass if the automatic effect doesn't bite
+    hard enough.
 16. **Tower-centered weapon radii use an anchor as a *floor*, never a
     lock.** `towerCenteredRadius()` in `tuning/weaponGeometry.ts` returns
     `max(safeRadius + margin, base + perLevel * (lvl - 1))`. The first
@@ -361,10 +412,67 @@ and measured in absolute units that no weapon could reach out of.
 17. **Orbiting Blades render as ninja stars**, not the prototype's plain
     cyan dots — a 4-pointed shuriken with its own spin independent of
     orbital position, so they read as blades rather than orbiting blobs.
+18. **Contact damage becomes a depth-weighted average over the disc
+    inside the line** (decided 2026-08-05), not a fixed ring sample
+    outside it:
+    ```
+    weight   = 1 - (d / safeRadius)          // 1 at the core, 0 at the line
+    pressure = sum(revealed density * weight) / sum(weight)
+    damage   = pressure * contactMult * CONTACT_SCALE * dt
+    ```
+    Zero when the zone is clear (a real grace period — clearing a breach
+    genuinely stops the bleeding), volume-aware (a wide breach hurts
+    more than a narrow finger), and depth-aware (slime touching the core
+    counts far more than slime just over the line, so a nibble is
+    survivable but being engulfed is fast and lethal). `contactPressure`
+    already drives the tower's Phase-1 danger-pulse ring, so that visual
+    starts reading true rather than reflecting a fairly meaningless
+    ring-average. `CONTACT_SCALE = 15` was tuned for the old ring-sample
+    method — treat its value as a fresh guess for the balance pass, not
+    a carried-over constant. Keep a small floor (lower than the current
+    0.05) so one revealed edge cell doesn't chip the core. Cost is
+    negligible (~237 cells/tick at 5.5 ticks/sec — measured ~237-289
+    depending on grid quantization). **Implemented 2026-08-05** in
+    `systems/contact.ts`. `CONTACT_FLOOR` landed at 0.02.
+19. **The danger-line ring keeps its cyan "sanctuary" framing and reacts
+    to breach**, rather than being restyled as a hazard color (decided
+    2026-08-05). The line meaning what it should — cross it and the core
+    is threatened — reads as more tense specifically *because* the space
+    inside still visually reads as "yours to defend," not because it
+    looks dangerous by default. Shifts color, thickens, and brightens
+    toward danger red as `contactPressure` (decision 18) rises, so the
+    ring itself becomes a live "how badly is this being breached" signal
+    rather than a static boundary. **Implemented 2026-08-05** in
+    `render/background.ts`'s `drawSafeZone`.
+20. **Documented prototype bug #2 is superseded, not merely re-guarded**
+    (decided 2026-08-05, with the project owner's explicit go-ahead per
+    the ground-truth override protocol in `CLAUDE.md`). Bug #2's rule
+    ("sample at the ring, never closer") was correct advice for the
+    *old* design, where growth was hard-gated at the line and near-core
+    space was guaranteed empty — sampling there really was sampling
+    nothing. Decision 15 removes that gate, so near-core space is no
+    longer guaranteed empty and the specific rule no longer applies; the
+    underlying invariant it protected ("the core must be actually
+    killable") still matters as much as ever. The regression test is
+    replaced with an outcome test rather than a mechanism test: run the
+    real simulation on a synthetic grid with no weapons and assert the
+    tower (a) eventually takes lethal damage when the zone is left
+    dirty, and (b) takes none when the zone is kept clear. This is
+    strictly stronger than asserting "sampled at the correct radius" —
+    it also catches a reintroduced hard gate, a wrong sample region, a
+    broken damage formula, or a bad damping constant, none of which
+    would trip the old assertion. See "documented prototype bugs" below
+    — bug #2 stays listed, marked superseded with this reasoning, so a
+    future reader doesn't "fix" the new sampling location back to the
+    old rule. **Implemented 2026-08-05**: `systems/contact.test.ts`'s
+    "outcome guard for superseded bug #2" — an undefended core dies in
+    ~520 ticks against a dirty zone (test budget 5000, ~10x margin for
+    future retuning), and takes zero damage across 3000 ticks when kept
+    scrubbed clean despite growth genuinely ticking throughout.
 
 ### Documentation
 
-18. **PROGRESS.md gets compressed once the port is complete.** The
+21. **PROGRESS.md gets compressed once the port is complete.** The
     per-phase entries carry a lot of "why we decided this" detail that
     earned its place during the work and becomes noise afterward. Phases
     0-2E collapse into a short status table; decisions that still
@@ -381,9 +489,20 @@ reintroduce them. Item 5 was found during the 2E review.
 
 1. Gems must always drift toward the (stationary) core — never gate
    drifting behind a fixed pickup radius, or XP can never accumulate.
-2. Contact damage must sample right at the visible safe-zone ring
+2. **⚠ SUPERSEDED 2026-08-05 — do not "fix" this back.** Originally:
+   contact damage must sample right at the visible safe-zone ring
    (`safeRadius + 1.5 cells`), never closer, or the core is structurally
-   unkillable.
+   unkillable. That was correct *only* because ambient growth was
+   hard-gated to zero inside `safeRadius`, making near-core space
+   guaranteed empty — sampling closer really was sampling nothing.
+   Decision 15 removes that gate on purpose (ambient growth now creeps
+   inside, damped by proximity) and decision 18 replaces the ring sample
+   with a depth-weighted average over the whole inner disc — sampling
+   near the core is now *correct*, not broken. If you're reading this
+   because contact damage looks like it samples "too close": it's
+   supposed to now. See decision 20 for the full reasoning and the
+   ground-truth override protocol in `CLAUDE.md` for why this bug entry
+   stays listed instead of being deleted.
 3. Contact damage and XP must gate on `isRevealed` (growth > threshold),
    never raw density — raw density can cross a damage/XP threshold before
    a cell is actually visible.

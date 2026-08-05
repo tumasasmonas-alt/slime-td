@@ -5,8 +5,15 @@ export const FRONTIER_SECTORS = 48;
 
 // 48 angular sectors, ray-cast each sim tick to find the nearest revealed
 // cell in each direction — no per-enemy list to search. Weapons aim at
-// whichever sector is closest. Direct port of the prototype's
-// computeFrontier().
+// whichever sector is closest.
+//
+// The raycast starts at the tower's own radius, not `safeRadius`. Since
+// decision 15 (docs/PROGRESS.md) lets ambient growth creep inside the
+// safe radius, a breach can now exist there — and if the raycast still
+// started at the old safe-radius boundary, weapons would be structurally
+// unable to see or target it, making any breach unkillable. Starting
+// from the tower's radius keeps the only excluded space the tower's own
+// footprint, not the whole zone it's meant to defend.
 export function computeFrontier(state: GameState): void {
   const grid = state.grid;
   if (!grid) return;
@@ -17,7 +24,7 @@ export function computeFrontier(state: GameState): void {
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
     let found = grid.maxRange;
-    for (let r = grid.safeRadius; r < grid.maxRange; r += grid.cellSize) {
+    for (let r = t.radius; r < grid.maxRange; r += grid.cellSize) {
       const x = t.x + dx * r;
       const y = t.y + dy * r;
       if (x < 0 || x >= grid.cols * grid.cellSize || y < 0 || y >= grid.rows * grid.cellSize) break;

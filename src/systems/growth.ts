@@ -1,12 +1,31 @@
 import type { Grid, Tower } from '../state';
 import { cellBucket } from '../grid/grid';
 import type { Tier } from '../tuning/tiers';
-import { AMBIENT_BASE } from '../tuning/growth';
+import { AMBIENT_BASE, CREEP_RAMP } from '../tuning/growth';
 import { clamp, dist } from '../util/math';
 
-// Ambient infection growth: rises with distance past the safe radius (the
-// ramp), gated to zero inside it. Direct port of the prototype's
-// applyAmbientGrowth() — see docs/PROTOTYPE_HANDOFF.md "Safe zone".
+// Ambient infection growth. Two independent formulas rather than one
+// continuous curve — see "Confirmed decisions" (15) in docs/PROGRESS.md:
+//
+// - OUTSIDE the safe radius: the original distance ramp, floored at
+//   CREEP_RAMP so it never drops below the inside rate at the boundary
+//   (continuity — no visible seam in front-line speed at the line).
+// - INSIDE the safe radius: growth creeps in at CREEP_RAMP, damped
+//   linearly by proximity to the tower (0 at the tower's own radius, 1
+//   at the line). This used to be a hard `if (d < safeRadius) continue`
+//   gate, making the core structurally unreachable by ambient growth —
+//   confirmed unintended prototype behavior, not a design choice.
+//
+// The two are deliberately independent: the outside ramp's formula is
+// already exactly 0 at d=safeRadius, so no single scaling factor could
+// produce both curves from one expression. Keeping them separate also
+// keeps "make the whole game harder" (AMBIENT_BASE, infectionMult) and
+// "make breaches specifically more punishing" (CREEP_RAMP, the
+// proximity exponent) as two independent knobs rather than coupling
+// them through one formula.
+//
+// Growth nodes (systems/nodes.ts) deliberately bypass all of this —
+// ambient is the slow tide, an uncleared node is the breach.
 export function applyAmbientGrowth(
   grid: Grid,
   tower: Tower,
@@ -14,7 +33,8 @@ export function applyAmbientGrowth(
   dt: number,
   dirty: Set<number>,
 ): void {
-  const span = Math.max(1, grid.maxRange - grid.safeRadius);
+  const outerSpan = Math.max(1, grid.maxRange - grid.safeRadius);
+  const innerSpan = Math.max(1, grid.safeRadius - tower.radius);
   for (let cy = 0; cy < grid.rows; cy++) {
     const wyBase = cy * grid.cellSize + grid.cellSize / 2;
     for (let cx = 0; cx < grid.cols; cx++) {
@@ -26,10 +46,17 @@ export function applyAmbientGrowth(
       }
       const wx = cx * grid.cellSize + grid.cellSize / 2;
       const d = dist(wx, wyBase, tower.x, tower.y);
-      if (d < grid.safeRadius) continue;
-      const ramp = Math.pow(clamp((d - grid.safeRadius) / span, 0, 1), 0.6);
-      if (ramp <= 0) continue;
-      const rate = AMBIENT_BASE * tier.infectionMult * ramp;
+
+      let rate: number;
+      if (d < grid.safeRadius) {
+        const proximity = clamp((d - tower.radius) / innerSpan, 0, 1);
+        rate = AMBIENT_BASE * tier.infectionMult * CREEP_RAMP * proximity;
+      } else {
+        const outsideRamp = Math.pow(clamp((d - grid.safeRadius) / outerSpan, 0, 1), 0.6);
+        rate = AMBIENT_BASE * tier.infectionMult * Math.max(outsideRamp, CREEP_RAMP);
+      }
+      if (rate <= 0) continue;
+
       const dens = grid.growth[i]!;
       const newDens = Math.min(1, dens + rate * dt * (1 - dens));
       if (newDens !== dens) {
