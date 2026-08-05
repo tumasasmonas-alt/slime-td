@@ -33,6 +33,18 @@ prototype. The plan is to expand each with per-variable upgrade tiers
 (e.g. Chain Bolt: more hops *or* more simultaneous bolts *or* shorter
 cooldown, as separate upgrade paths) and likely add new weapons. Don't
 treat the current weapon files as final shape — they're a parity baseline.
+Weapon data (upgrades, tiers, tunable variables) lives in one central
+library module by decision, so that expansion is one file to edit rather
+than six — see "Confirmed decisions" in docs/PROGRESS.md.
+
+### Slime layer resolution is fixed at 1x, with no user control
+The slime layer renders at world resolution (1x) regardless of display
+density, so on a 4K screen it is upscaled and soft. Deliberate for now —
+the softness may read as "organic tissue" rather than "low-res," but that
+is untested on real high-DPI hardware. If it does bother in practice, the
+preferred fix is a **user-facing resolution slider** (backing-store scale
+for the slime layer) rather than silently hardcoding a higher multiplier —
+it doubles as a performance escape hatch on weak GPUs. Not built yet.
 
 ### `novaFx` was frame-rate dependent in the prototype
 The original decremented `novaFx.life` by a hardcoded `1/60` inside

@@ -18,7 +18,8 @@ machines (per the Workflow section in `CLAUDE.md`).
   core. Camera math verified both in unit tests and via direct pixel
   reads in a live browser at 1080p and pillarboxed ultrawide.
 - **Phase 2A (grid + reaction-diffusion) — done.** See below.
-- **Phase 2B and onward — not started.** Next up.
+- **Phase 2B (ambient growth + simulation tick) — done.** See below.
+- **Phase 2C and onward — not started.** Next up.
 
 ## Where things live
 
@@ -46,7 +47,15 @@ each step only builds on things already verified.
 - **2B. Ambient growth + simulation tick** — `systems/growth.ts`,
   `systems/tick.ts`, wiring the slime layer into the real render loop.
   Milestone: infection visibly creeps inward and stops cleanly at the
-  safe radius. **Status: next.**
+  safe radius. **Status: done.** Fixed-timestep accumulator
+  (`runSimulation`) drives `applyAmbientGrowth` at the real `SIM_TICK`
+  cadence, decoupled from render framerate; dirty cells flush to the
+  slime layer once per rendered frame, not once per sim tick. A dashed
+  safe-radius ring (`drawSafeZone` in `render/background.ts`) was added
+  as visual proof the growth gate holds — verified live in-browser that
+  infection creeps inward and stays clipped at the ring. Growth nodes,
+  frontier targeting, and contact damage are still out of scope here —
+  those land in 2C/2D per the plan below.
 - **2C. First playable loop ⭐** — `grid/clear.ts` (the density-resists-
   damage core function), frontier targeting (48-sector raycast), Bolt
   Turret, projectiles, gems, XP/leveling, upgrade cards, HUD wiring.
@@ -55,33 +64,36 @@ each step only builds on things already verified.
   feel problems are far cheaper to catch here than after 2F.
 - **2D. Danger** — growth nodes, contact damage, difficulty tiers, game
   over. Milestone: a complete run with a real win/lose arc.
-- **2E. Remaining arsenal** — the other five weapons (one file each) and
-  all eight passives.
+- **2E. Remaining arsenal** — the other five weapons (data in the shared
+  weapon library, see Confirmed decisions) and all eight passives.
 - **2F. Render polish** — chain lightning arcs, caustic cloud bubbles,
   node gold pulse, gem diamonds, nova ring, danger pressure ring. Per the
   handoff doc these aren't cosmetic extras: Chain Bolt without its arc
   reads as broken even though it deals damage correctly, same for Caustic
   Cloud without its rim.
 
-## Open decisions (asked, not yet explicitly confirmed)
+## Confirmed decisions
 
-Proposed at the start of Phase 2; leaning toward these but waiting on an
-explicit yes before they're load-bearing for later steps:
+Proposed at the start of Phase 2, confirmed by the project owner on
+2026-08-05. These are load-bearing for later steps — revisit deliberately,
+don't drift away from them by accident.
 
-1. **Weapon file shape** — one file per weapon, parity-only behavior for
-   now. Explicitly *not* designing the per-variable upgrade-tier system
-   (e.g. "more hops" vs "more bolts" vs "shorter cooldown" as separate
-   upgrade paths) yet — that needs six real, working weapons to design
-   against, not a guess made now.
-2. **Slime layer render resolution** — ship at 1x (world units) even on
-   4K screens; only bump to a higher backing resolution if it visibly
-   bothers on a real 4K display. Softness may read as "organic tissue"
-   rather than "low-res," but untested.
-3. **Pause after 2C** for real playtesting before continuing to 2D-2F.
-4. **`novaFx` frame-rate-dependent decay** — a documented prototype bug
-   (see docs/KNOWN_ISSUES.md). Fix properly when Frost Nova is ported in
-   2E, rather than porting the bug and fixing it separately later. This
-   is a tiny, invisible deviation from strict parity.
+1. **Weapon data lives in one library file, not one file per weapon.**
+   A single module holds all six weapons together with their upgrades,
+   tiers, and tunable variables, so balance edits are one file to open
+   instead of six. Behavior code may still split per weapon where that
+   genuinely helps, but the *data* stays centralized. Note this is a
+   change from the original "one file per weapon" proposal.
+2. **Slime layer renders at 1x** (world units) for now, even on 4K
+   screens. Revisit only if it visibly bothers on a real 4K display —
+   likely as a user-facing resolution slider rather than a hardcoded
+   bump (logged in docs/KNOWN_ISSUES.md).
+3. **Pause after 2C** for a real playtesting pass before continuing to
+   2D-2F.
+4. **`novaFx` frame-rate-dependent decay is fixed at port time,** not
+   ported as-is and cleaned up later. Frost Nova arrives in 2E already
+   using a real `dt`-based decay in an update pass. A tiny, invisible
+   deviation from strict prototype parity, taken on purpose.
 
 ## Four documented prototype bugs to guard while porting
 

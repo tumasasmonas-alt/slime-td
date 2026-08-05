@@ -4,6 +4,7 @@ const GRID_SIZE = 64;
 const GRID_SPEED = 4;
 const GRID_COLOR = 'rgba(109,240,255,0.035)';
 const ARENA_BOUNDS_COLOR = 'rgba(109,240,255,0.08)';
+const SAFE_ZONE_COLOR = 'rgba(109,240,255,0.15)';
 
 // Faint drifting grid, drawn in raw screen space before the camera
 // transform applies — it fills the letterbox bars too, so they read as
@@ -41,5 +42,18 @@ export function drawArenaBounds(ctx: CanvasRenderingContext2D): void {
   ctx.strokeStyle = ARENA_BOUNDS_COLOR;
   ctx.lineWidth = 1;
   ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  ctx.restore();
+}
+
+// Dashed ring at the safe radius — the boundary ambient growth is hard-gated
+// to zero within. Direct visual proof that growth "stops cleanly" there.
+export function drawSafeZone(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = SAFE_ZONE_COLOR;
+  ctx.lineWidth = 1;
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
