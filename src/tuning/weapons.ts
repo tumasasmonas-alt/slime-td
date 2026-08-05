@@ -64,6 +64,18 @@ export function poisonCooldown(lvl: number): number {
   return Math.max(1.0, 2.3 - (lvl - 1) * 0.15);
 }
 
+export function missileDamage(lvl: number): number {
+  return 30 + (lvl - 1) * 10;
+}
+
+export function missileRadius(lvl: number): number {
+  return 58 + (lvl - 1) * 5;
+}
+
+export function missileCooldown(lvl: number): number {
+  return Math.max(1.2, 2.7 - (lvl - 1) * 0.18);
+}
+
 // Prototype formula was `62 + Math.min(24, lvl*2)` — linear across the
 // whole 1-8 level range the cap never actually engages (8*2=16 < 24), so
 // it's expressed directly as the equivalent base+perLevel form here.
@@ -112,5 +124,11 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '☠️',
     maxLevel: 8,
     desc: () => `Drops a lingering cloud that erodes tissue over time.`,
+  },
+  missile: {
+    name: 'Homing Missile',
+    icon: '🚀',
+    maxLevel: 8,
+    desc: () => `Homes onto growth nodes (or the nearest wall) and explodes.`,
   },
 };

@@ -33,6 +33,7 @@ import { updateBladesWeapon } from './weapons/blades';
 import { updateBoltWeapon } from './weapons/bolt';
 import { updateChainWeapon } from './weapons/chain';
 import { updateFrostWeapon } from './weapons/frost';
+import { updateMissileWeapon } from './weapons/missile';
 import { updatePoisonWeapon } from './weapons/poison';
 
 const canvasEl = document.querySelector<HTMLCanvasElement>('#game-canvas');
@@ -92,6 +93,7 @@ function update(dt: number): void {
   updateChainWeapon(state, dt);
   updateFrostWeapon(state, dt);
   updatePoisonWeapon(state, dt);
+  updateMissileWeapon(state, dt);
   updateProjectiles(state, dt);
   updateGems(state, dt);
   updateParticles(state, dt);

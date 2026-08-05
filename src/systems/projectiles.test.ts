@@ -157,3 +157,166 @@ describe('updateProjectiles — chain', () => {
     expect(state.projectiles).toHaveLength(0);
   });
 });
+
+describe('updateProjectiles — missile', () => {
+  it('steers toward its target point and keeps flying while short of it', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.projectiles.push({
+      type: 'missile',
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      speed: 300,
+      dmg: 30,
+      splashRadius: 60,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetNode: null,
+      targetPoint: { x: 500, y: 300 },
+    });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(1);
+    const p = state.projectiles[0]!;
+    expect(p.type).toBe('missile');
+    if (p.type !== 'missile') return;
+    expect(p.vx).toBeGreaterThan(0); // steering toward +x
+    expect(p.x).toBeGreaterThan(300);
+  });
+
+  it('detonates and clears density once it reaches its target point', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const idx = revealAt(state.grid, 305, 300, 0.6); // near the target, within splash
+    state.projectiles.push({
+      type: 'missile',
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      speed: 300,
+      dmg: 30,
+      splashRadius: 60,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetNode: null,
+      targetPoint: { x: 302, y: 300 }, // already within MISSILE_REACH_DIST
+    });
+
+    updateProjectiles(state, 0.001); // negligible travel — reach check dominates
+
+    expect(state.projectiles).toHaveLength(0);
+    expect(state.grid.growth[idx]).toBeLessThan(0.6);
+  });
+
+  it('detonates early on touching revealed tissue, before reaching its target', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6); // where this frame's step will land
+    state.projectiles.push({
+      type: 'missile',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      speed: 300,
+      dmg: 30,
+      splashRadius: 60,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetNode: null,
+      targetPoint: { x: 1000, y: 300 }, // far beyond the revealed wall
+    });
+
+    // A small dt so this frame's step (vx*dt = 6px) lands inside the
+    // revealed cell rather than overshooting past it — the check is
+    // "revealed at the new position," not "did it cross revealed space
+    // somewhere along the way."
+    updateProjectiles(state, 0.02);
+
+    expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('homes on a live target node in preference to its stale target point', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const node = {
+      x: 300,
+      y: 500,
+      hp: 100,
+      maxHp: 100,
+      radius: 90,
+      strength: 1,
+      hitRadius: 16,
+      dead: false,
+      pulseSeed: 0,
+    };
+    state.projectiles.push({
+      type: 'missile',
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      speed: 300,
+      dmg: 30,
+      splashRadius: 60,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetNode: node,
+      targetPoint: { x: 500, y: 300 }, // stale — should be ignored while the node is alive
+    });
+
+    updateProjectiles(state, 0.1);
+
+    const p = state.projectiles[0]!;
+    expect(p.type).toBe('missile');
+    if (p.type !== 'missile') return;
+    expect(p.vy).toBeGreaterThan(0); // steering toward the node (+y), not the stale point (+x)
+  });
+
+  it('falls back to the target point once its target node has died', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const node = {
+      x: 300,
+      y: 500,
+      hp: 0,
+      maxHp: 100,
+      radius: 90,
+      strength: 1,
+      hitRadius: 16,
+      dead: true,
+      pulseSeed: 0,
+    };
+    state.projectiles.push({
+      type: 'missile',
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      speed: 300,
+      dmg: 30,
+      splashRadius: 60,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetNode: node,
+      targetPoint: { x: 500, y: 300 },
+    });
+
+    updateProjectiles(state, 0.1);
+
+    const p = state.projectiles[0]!;
+    expect(p.type).toBe('missile');
+    if (p.type !== 'missile') return;
+    expect(p.vx).toBeGreaterThan(0); // steering toward the target point (+x), node is dead
+    expect(p.vy).toBe(0);
+  });
+});
