@@ -20,49 +20,108 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🔴 Balance + playtesting pass
-The agreed next step (Decision 13), gating all other work.
+### 🔴 Phase 3A — Teardown (blocked on one decision)
 
-The port is complete, so for the first time all six weapons and eight
-passives exist together — which is exactly the state the prototype's
-original numbers were validated against. But the safe-zone rework changed
-the geometry those numbers assumed, so **treat them as fresh guesses, not
-carried-over constants.**
+The design rework is agreed (DECISIONS.md #23–#37, full reasoning in
+`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`). First
+implementation step:
 
-Specifically unvalidated:
-- `CONTACT_SCALE = 15` (`tuning/growth.ts`) — tuned for the *old*
-  ring-outside-the-line sampling; damage is now a depth-weighted disc
-  inside it. Almost certainly wrong now.
-- `CREEP_RAMP = 0.09` (`tuning/growth.ts`) — first guess. Controls how
-  fast a breach turns lethal.
-- Safe-radius tier table `100/85/70/58/45` (`tuning/tiers.ts`) — shrunk
-  for tension and weapon viability, deliberately *not* for difficulty.
-  Does the tension actually read? Is Apocalypse's 45px too claustrophobic
-  against a 22px tower?
-- **Weapon relative power.** Six weapons have never coexisted before.
-  Orbiting Blades and Ward Pulse in particular have *never* been balanced
-  against anything — they were non-functional in the prototype (see
-  prototype bug #5 in DECISIONS.md).
-- **Whether growth nodes bite hard enough.** They bypass creep damping and
-  spawn ~32% closer across a run, but that's an automatic consequence of
-  the shrinking safe radius rather than a deliberate lever. If it's not
-  enough pressure, an explicit per-tier spawn-distance field is the next
-  knob — deliberately not added yet to avoid stacking difficulty levers.
+- Remove growth nodes entirely — `systems/nodes.ts`, `tuning/nodes.ts`,
+  node targeting in `weapons/poison.ts` and `weapons/missile.ts`, node
+  damage in `grid/clear.ts`, `nodes` on `GameState`, `render/nodes.ts`,
+  `systems/nodes.test.ts`.
+- Rename `safeRadius` → `perimeter` throughout (Decision 36).
+- Demote `TIERS_LIST` to flavour — names, announcements, colour only, no
+  mechanical weight (Decision 33).
 
-Note: every run generates a fresh maze (Decision 10), so runs are **not
-directly comparable**. If that gets in the way while tuning, add a
-fixed-seed debug option — don't reuse the field.
+**🔴 Blocked on:** *what drives the perimeter once tiers carry no
+mechanical weight?* It currently shrinks 100 → 45 via the tier table.
+Options: fixed; an independent time curve; or breach-driven (shrinks as
+hits land — fits the consequence philosophy but may spiral).
+Recommendation on file is **fixed for now, revisit in Phase 8** — the
+perimeter's job is much smaller in the new model, being the line where
+breach splatter starts bleeding the core rather than the primary
+difficulty lever. **Needs the project owner's call before 3A starts.**
+
+### The rest of the phase plan
+
+Full detail in the session record §17.
+
+| Phase | Content |
+|---|---|
+| **3B** | Infection Events framework — vein + bloom, full lifecycle |
+| **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
+| **3D** | XP economy rework → **playtest gate** |
+| **4A–4C** | Maturity field, two-axis visuals, Coagulants Wave 2 → **playtest gate** |
+| **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved |
+| **6** | Arsenal content — **own design session first**, then toward 20 weapons |
+| **7** | Meta — currency, unlocks, deck builder |
+| **8** | Terminal phase, real balance pass, leaderboard |
+| **9** | VFX and feel |
+
+**Known risks:** coagulant formation ("contiguous mass in a region" inside
+the tick budget) is the one real technical unknown — prototype it first.
+The test suite takes a hit; `nodes.test.ts` goes entirely and
+`contact.test.ts`/`growth.test.ts` need rework. **Keep
+`contact.test.ts`'s "undefended core dies" outcome test** — it survives
+this redesign intact and is the best available proof the rework didn't
+break lethality.
+
+### 🟡 Balance pass — moved to Phase 8
+
+Was Decision 13's "next step before all other work"; **superseded**. The
+playtest found the problem is not numeric: player power scales 17–21×
+across a run while the infection scales 3.1×, so no single value of
+`CONTACT_SCALE` can be right at both ends. Tuning constants against a
+threat model that is about to be replaced would be wasted work.
+
+Balance math from 2026-08-05 preserved in the session record §3, including
+the weapon DPS table (Blades 534 DPS vs Frost 17 DPS at level 8 — a 31×
+spread), the Blades/Chain count-and-damage double-dip, and the hidden XP
+distortion where gems track *hit count* rather than damage.
+
+Still true and still unvalidated when the pass happens: `CONTACT_SCALE`,
+`CREEP_RAMP`, and the fact that every run generates a fresh maze
+(Decision 10) so runs are **not directly comparable**. A fixed-seed debug
+option is the fix if that bites — don't reuse the field.
 
 ---
 
 ## Bugs and known limitations
 
+### Found in the 2026-08-05 playtest — all absorbed by the rework
+
+**None of these are worth fixing before their phase.** Every one sits
+inside a system being replaced; fixing now means fixing twice. Listed with
+the phase that absorbs each.
+
+| Bug | Absorbed by |
+|---|---|
+| **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — card system replaced |
+| **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. | Phase 5/6 — Ward becomes a gem |
+| **Frost Nova's ring is nearly invisible.** 3px stroke, 0.4s life on a 3.6s cooldown (~11% uptime), fading alpha, low-contrast `#bfe9ff`. Also an expectation gap: it reads as an "aura" but is coded as an instantaneous pulse. | Phase 9 |
+| **Frozen cells have no visual at all.** Confirmed by grep — zero references to `frozen` in `src/render/` or `grid/slimeLayer.ts`. A 2-second growth-suppression mechanic the player can never see. | Phase 4B |
+| **Density palette collapses.** 5 buckets read as ~3: `#5c2430`/`#8a2f42` are both dark maroons, `#ff3f68`/`#ff7590` both bright pinks. Matters because density drives a ~10× resistance swing — it's a tactical readout the player can't read. | Phase 4B |
+| **Screen shake fires only on contact damage.** Nothing else in the game shakes. | Phase 9 |
+| **`pickThree` uses a biased shuffle** — `sort(() => Math.random() - 0.5)` is not a uniform permutation, so card appearance rates are skewed. | Phase 5 |
+
+**Process finding:** Decision 11 established "a weapon's signature visual
+is part of the weapon, not polish." Ward Pulse slipped through because
+it's classed as a *passive*, and freeze slipped through because it's a
+*field state*. **The rule should be scoped to any mechanic with a
+world-space effect, not just weapons.**
+
 ### 🟡 Difficulty plateaus after Apocalypse (t = 560s)
 `tuning/tiers.ts` has five tiers and stops escalating at the last one. A
 strong build can coast indefinitely past ~9 minutes with no further
-pressure. Needs an endless-scaling tail — e.g. tiers 5+ generated
-procedurally from the same curve. Do this *after* base balance feels
-right, since it extrapolates from those numbers.
+pressure.
+
+**Superseded in approach, not in substance.** The rework removes the tier
+table as a difficulty mechanism entirely (Decision 33) and replaces it
+with emergent pressure plus a terminal phase (Decision 34). The plateau
+still needs solving — Decision 35's currency model depends on runs
+actually ending — it just isn't solved by extending the tier curve any
+more.
 
 ### 🟢 `.nvmrc` and the installed Node disagree
 `.nvmrc` pins 22.12.0; the work machine runs 24.19.0. `package.json`
@@ -110,21 +169,33 @@ reliable. Fix by seeding the RNG for tests if it becomes annoying.
 
 ## TODO — planned work
 
-### 🟡 Per-variable weapon upgrade tiers
-All six weapons are currently single-behavior, single-scaling-curve ports.
-The plan is to expand each with **separate upgrade paths per variable** —
-e.g. Chain Bolt: more hops *or* more simultaneous bolts *or* shorter
-cooldown, as distinct choices rather than one linear track.
+### 🟡 Per-variable weapon upgrade tiers — absorbed into Phase 5
+The original idea (separate upgrade paths per variable — Chain Bolt gets
+more hops *or* more bolts *or* shorter cooldown as distinct choices) is
+now the **extensions half of the PoE-style arsenal framework**
+(Decision 32). Weapon data already lives in one central library
+(`tuning/weapons.ts`, Decision 1) specifically so this expansion is one
+file to edit.
 
-This was deliberately deferred until six real working weapons existed to
-design against, rather than guessed at up front. That condition is now
-met. Weapon data lives in one central library (`tuning/weapons.ts`, per
-Decision 1) specifically so this expansion is one file to edit.
+`towerCenteredRadius()` (Decision 16) was built with a `base + perLevel`
+term precisely so **range can become an upgradeable variable** rather than
+being welded to the perimeter. Still the hook for a range-upgrade path —
+and note Decision 26 makes range a genuinely *double-edged* stat, since a
+wider engagement zone means a wider scar ring and more armoured spawns.
 
-Relatedly: `towerCenteredRadius()` (Decision 16) was built with a
-`base + perLevel` term precisely so **range can become an upgradeable
-variable** rather than being welded to the safe radius. That's the hook
-for a range-upgrade path when this lands.
+### 🟢 VFX and game feel — Phase 9
+Deferred deliberately; shaping the game comes first. Running list beyond
+the bug table above:
+
+- Shake on missile impact, nova pulse, coagulant death, arrival, and tier
+  escalation — currently contact damage is the only source.
+- **Level-up has no moment** — the card overlay just appears. No flash, no
+  time dilation, no sound.
+- **Tier escalation should be a dramatic beat**, not a line of HUD text.
+- Hit flash on cleared cells; gem pickup pop; low-HP vignette or
+  chromatic pulse.
+- Coagulant formation visual (tell → drain → rise → detach → crater) is
+  **not** in this list — it's the telegraph system and ships with Phase 3C.
 
 ### 🟢 Audio
 Web Audio is in the stack per `CLAUDE.md` but nothing is built — the

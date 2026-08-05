@@ -251,13 +251,20 @@ weapon's signature visual is part of the weapon, not polish.**
 review, easier to bisect if one misbehaves, and it leaves room to playtest
 partway through.
 
-**13. A balance + playtesting pass follows the port**, before any other
-backlog work. 📋
-*2026-08-05.* Before the endless-scaling tail, the weapon upgrade-tier
-system, audio, or the leaderboard. The port's completion is the first
-point balance can be judged honestly — the prototype's numbers were
-validated against exactly the six-weapon, eight-passive state that now
-exists.
+**13. ⚠️ SUPERSEDED — A balance + playtesting pass follows the port**,
+before any other backlog work. 📋
+*2026-08-05. Superseded the same day by #23–#37.* Before the
+endless-scaling tail, the weapon upgrade-tier system, audio, or the
+leaderboard. The port's completion is the first point balance can be
+judged honestly — the prototype's numbers were validated against exactly
+the six-weapon, eight-passive state that now exists.
+
+*The playtest happened and produced the opposite conclusion: the problem
+is not numeric. Player power scales 17–21× across a run while the
+infection scales 3.1×, so no value of `CONTACT_SCALE` can be right for
+both ends of a run. Balance moves behind the slime and arsenal rework
+(#23 onward) and lands in Phase 8. See
+`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` §3.*
 
 **21. PROGRESS.md is compressed once the port completes.** ✅
 *2026-08-05.* The per-phase entries carried a lot of "why we decided this"
@@ -307,6 +314,308 @@ can't yet make meaningful.
 2D needed anyway — it gives restart somewhere to land, and its blurb is
 the only place a first-time player learns what nodes are and why carving
 matters.
+
+---
+
+## The design rework — target design for the game
+
+> Decisions 23–37 came out of the design session on 2026-08-05 (evening),
+> after the first full playtest of the completed port. They describe the
+> **target** design, not the shipped one — as of writing, none of it is
+> implemented. The full reasoning, including every rejected alternative
+> and the numbers behind each call, is in
+> **`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`**. Read that
+> before revisiting any of these.
+
+**23. The game is a no-aim autoshooter, and that is a hard design
+constraint.** 📋
+*2026-08-05.* The player never aims and never moves. The reference is a
+PoE character standing still against a charging horde until overwhelmed;
+survival time is the leaderboard score. **Three decision surfaces exist in
+total:** the pre-run deck, in-run card picks, and gem socketing.
+
+The consequence that matters:
+
+> **The slime's job is not to create tactical decisions. It is to create
+> pressure that tests the build. Each distinct slime behaviour is a
+> question the build has to answer.**
+
+One behaviour = one question = one viable build, which is exactly the game
+the playtest found. The whole rework is "add questions." Any proposal
+requiring the player to choose *where* to apply force is invalid — several
+otherwise-good ideas died on this and are listed as rejected in the
+session record.
+
+Asymmetric threats still work: weapons auto-target the nearest frontier,
+so concentrated pressure pulls the turret's fire toward it. The game aims;
+the slime decides where.
+
+**24. The field is the horde's economy, not the threat itself.** 📋
+*2026-08-05.* Density accumulates, dense regions congeal into coagulants
+that charge the core, and those are the acute threat. The field still
+bleeds the core inside the perimeter, but slowly — it is the clock, not
+the executioner.
+
+**Field control sets spawn *distance*, not spawn rate.** An earlier
+framing ("clear the field to starve the horde") is wrong and was corrected
+in session: the wilderness reservoir is unreachable (#28) so it can never
+be starved. Keep the near field clean and mass can only bank far away, so
+threats spawn far and you get runway. Fall behind and mass banks close, so
+threats land before you can chew through them. Better than "fewer spawns"
+because it is visible, and because distance is the only resource a
+stationary turret has.
+
+**25. The field splits into two decoupled layers.** 📋
+*2026-08-05.* `growth` (quantity — the horde's fuel, consumed by weapons
+*and* by coagulant formation) and `maturity` (quality — terrain, consumed
+by **nobody**).
+
+This resolves a real contradiction: if coagulants eat dense regions, dense
+regions never persist, so high density tiers would never appear. **The
+horde eats mass but not maturity**, so stripped ground stays mature and
+regrows tougher.
+
+Visual consequence: density → thickness/opacity, maturity → colour and
+texture. **5 density steps × 4 maturity steps = 20 states from two axes**,
+none hand-authored. This — not more buckets — is the answer to "5 density
+levels isn't enough." The channels must stay strictly separated or 20
+states read worse than 5.
+
+Cost: one extra `Float32Array` over a 150×86 grid, ~52 KB.
+
+**26. Maturity comes from scarring, not age.** ✅ *(design)*
+*2026-08-05.* The most-worked problem of the session; the first proposal
+was wrong and the reasoning is worth preserving.
+
+Weapons target `nearestFrontierPoint` — the *nearest* revealed cell — so
+the engagement zone is pinned to the inner edge of the slime **regardless
+of weapon range**. The outer ~70% of a 1920×1080 arena is therefore
+*structurally unreachable* in any run, at any build, ever.
+
+Age-based maturity therefore produces a permanent max-calcified border by
+minute three, armoured coagulants as the default rather than the
+exception, and zero escalation (it front-loads, then sits still). The
+mechanic points the wrong way.
+
+Inverted: **the battlefield hardens, the wilderness stays soft.** Maturity
+accrues where the player actually clears, so a hardened ring grows exactly
+where they fight — rarity metered by survival duration, always under their
+guns, and thickening forever with no table.
+
+A **slow age component is retained with a low ceiling** (~⅓ of maximum,
+where scarring reaches full) so the wilderness is not visually static and
+long runs toughen globally — but it can never approach a calcified wall,
+by construction rather than by tuning.
+
+Mature ground regrows **slower to a higher ceiling** — a *durability*
+threat, not a *speed* threat. Making the kill zone grow faster would be
+unfair, since it is the one place the player is forced to fight.
+
+Emergent build tension, not designed in: **range gets you fresh mass,
+penetration gets you through your own callus.**
+
+**27. Four conservation rules govern the coagulant economy.** 📋
+*2026-08-05.* Formation and death move mass around; without rules this is
+either a runaway loop or perpetual motion.
+
+1. **Formation is a sink** — a coagulant consumes the density it forms
+   from.
+2. **Killing is a sink** — damage dealt is mass permanently destroyed;
+   death yields XP/gems plus only a small fixed splatter by size class.
+3. **Arrival is the only real source** — reaching the core delivers full
+   mass as damage *and* dumps it inside the perimeter, seeding a breach.
+4. **Size is emergent** — determined by contiguous mature density
+   available, not by a spawn table.
+
+Rule 3 inverts an earlier proposal (splatter as a penalty for killing
+close), which made success feel punishing. **Splatter is the consequence
+of failing to kill, not of killing.**
+
+Rule 4 answers "won't three behemoths appear after I kill a few motes?" —
+no, because a behemoth needs a large neglected region and motes dying does
+not create one. Coagulant size becomes an automatic readout of how badly
+the player is losing.
+
+Agreed tuning dials if this misbehaves in play: **arrival speed and
+arrival mass.**
+
+**28. The wilderness is a reservoir; events are the pumps.** 📋
+*2026-08-05.* Standing mass never spontaneously coagulates — a vein or
+bloom must initiate it.
+
+Forced by arithmetic. The wilderness is ~76% of the arena
+(2,073,600 px² total vs. a ~502,000 px² cleared disc) and saturates in
+~46 seconds (`dens(t) = 1 - e^(-0.05t)`). Under Rule 4 alone that is
+unlimited contiguous mass from minute one — behemoths on tap, forever,
+from unreachable ground. Local depletion does not save it either: ~22
+non-overlapping patches refilling in ~60–90s sustains roughly **one
+behemoth every four seconds**.
+
+Making events the trigger collapses pacing to **one lever** (event
+frequency and reach), makes unreachable ground a non-problem, and turns
+veins and blooms into load-bearing systems rather than flavour.
+
+Threats from unreachable ground are *good* — thematically the premise, and
+the only way to get a long dramatic charge — provided they are rare,
+telegraphed, slow, and answerable by build. The player's field lever
+against them is indirect but real: a clean near field means auto-targeting
+is not chewing on chaff while a behemoth closes. **Field control buys
+weapon attention.**
+
+**29. Growth nodes are deleted and replaced by Infection Events — the vein
+acts on density, the bloom acts on maturity.** 📋
+*2026-08-05.* Nodes were correctly diagnosed as feeling bad for three
+separate reasons: `state.nodes.find(n => !n.dead)` targets the *first node
+in array order* (arbitrary); picking Missile or Caustic Cloud silently
+reduced frontier DPS, making them a stealth tax; and a discrete HP-bar mob
+is a genre mismatch in a game whose identity is a continuous field.
+
+Replaced by one system with two variants and the organising principle:
+**events are sparks, and the terrain decides what burns.**
+
+- **Vein** — linear, edge→inward, injects fresh soft mass, punches through
+  the scar ring and temporarily softens it. Short-runway threats. Reaching
+  the ring is a two-part beat: fresh chaff *plus* it wakes Sclerotics from
+  the player's own callus. Reuses the existing `veinField`
+  reaction-diffusion pattern, currently pure wallpaper.
+- **Bloom** — radial, local, rapidly ages ground, creating hardened spawn
+  sites. **Does double duty by location:** deep + virgin → mass dominates
+  → Behemoth; mid-field + older → maturity dominates → Sclerotic/Bulwark.
+
+Veins also supply the thing the game has never had: **rhythm.** Pressure
+currently is a flat line. Veins make it build from a direction, peak,
+subside and move.
+
+Note that the runway shrinks over a run *not* because the front moves in —
+a stronger build pushes it outward — but because **spawn sources migrate
+inward** (wilderness → scar ring → veins/blooms).
+
+**30. Coagulant identity is derived from field state, not a spawn
+table.** 📋
+*2026-08-05.* Four readings at the spark point: contiguous mass → size;
+maturity → armour/type; mass shape (solid vs. fragmented) → whether it
+holds together; corridor density → whether it can feed en route.
+
+No spawn weights to tune, and the player can always read *where something
+came from* by looking at what it is.
+
+Seven types in two waves. **Wave 1** (Mote, Congealer, Behemoth) is pure
+density and needs no maturity — see #36. **Wave 2** (Blastoma, Carrier,
+Sclerotic, Bulwark) is where maturity pays off.
+
+Several types are **gated on player failure rather than elapsed time** — a
+Carrier literally cannot form without a dense corridor, so a player on top
+of the field never meets one. Difficulty reads as consequence, not as a
+timer.
+
+**Carrier and Bulwark should ship as a pair.** Carrier makes the Threat
+Priority gem meaningful (something that worsens when ignored); Bulwark
+makes it a genuine tradeoff (threat-first targeting sometimes feeds damage
+into a wall). Without Bulwark the gem is a flat tax rather than a
+decision.
+
+One formation visual for all types — tell → drain → rise → detach →
+crater — which makes Rule 1 visible and doubles as the entire telegraph
+system with no UI.
+
+**31. XP tracks destroyed mass, wherever that mass is.** 📋
+*2026-08-05.* One unit of slime destroyed pays the same whether destroyed
+loose in the field or packed inside a coagulant, plus a modest **risk
+premium (~25–50%)** on horde kills.
+
+The trap avoided: if horde kills paid meaningfully more per unit mass,
+*neglecting the field becomes an XP strategy.* Under this model there is
+no farming incentive — the same mass either way — but horde kills still
+feel huge because a behemoth concentrates enormous mass in one place.
+
+The intended pacing then comes free from existing mechanics: soft slime
+scales `clearAt`'s radius up (fast early XP), hardened slime scales it
+down against ~10× resistance (field XP dries up), so **the XP source
+migrates onto the horde exactly when the horde becomes the main threat.**
+
+Two existing distortions must go: the `clamp(…, 0, 10)` value cap, and
+dropping one gem per `clearAt` call regardless of area — which currently
+makes XP track *hit count* rather than damage (Blades at level 8 fires
+~18 `clearAt` calls/sec and prints gems; Frost fires ~0.7/sec). The level
+curve also goes superlinear; `12 + level * 6.5` is linear against a
+super-linear clear rate.
+
+**32. Passives are dissolved into gems, and the Core gets its own gem
+slots.** 📋
+*2026-08-05.* PoE-style: weapon slots (unlocked with currency), per-weapon
+extension slots, universal support gems. Every passive becomes a gem —
+Amplifier is a `+damage` support gem, Overclock is `+attack speed` — and
+defensive passives (Vitality, Regen, Armor, Magnetism) socket into the
+Core itself.
+
+One unified system instead of two, one card category instead of two, the
+Core becomes part of the build rather than a stat block, and an entire
+axis of card-pool dilution disappears.
+
+**Deliberately more extensions than slots**, so the choice is contested —
+that is what makes the inventory screen earn its existence.
+
+**The pre-run deck defines the card pool.** This is the main defence
+against the real risk of a 20-weapon arsenal: naively pooled, level-ups
+stop being choices and become lottery draws. It also makes
+meta-progression a deckbuilding system rather than a grind gate.
+
+**Targeting becomes a gem** (Threat Priority / Field Priority), which
+permanently retires the "it takes away my weapons" problem — targeting
+moves from hardcoded per-weapon behaviour to a build decision.
+
+**33. `TIERS_LIST` is demoted to pure flavour.** 📋
+*2026-08-05.* Difficulty becomes emergent from field state, maturity and
+event frequency. Tiers survive as naming and presentation — announcements,
+colour themes on a time curve — with **zero mechanical weight**. A real
+change to how `tick.ts` works, made deliberately rather than by drift.
+
+**34. The endgame is a terminal phase, not an unkillable boss.** 📋
+*2026-08-05.* An unkillable boss is a timer wearing a costume and it
+flattens the leaderboard — everyone dies at roughly the same minute
+regardless of build. Instead, at some deep time a permanent escalating
+condition begins (arena calcifying inward, perimeter contracting, veins
+ceasing to expire). Death is guaranteed, but *how long you last inside it*
+still differentiates builds.
+
+Built from levers the design already has. Specifics deferred to Phase 8;
+the levers must exist by then rather than being bolted on.
+
+**35. Meta-currency scales with survival time, superlinearly.** 📋
+*2026-08-05.* Spends on weapon unlocks, turret weapon slots, and gem
+types. Early runs earn little, so the interesting material gates behind
+progressively deeper runs.
+
+Rejected: currency from *slime killed* — rich-get-richer (it rewards the
+DPS a strong build already has), and unbounded under a plateau, making
+farming a safe tier optimal over pushing.
+
+**Dependency worth naming:** this only works if there is no plateau (#34).
+The currency design and the difficulty design are the same problem solved
+once.
+
+**36. `safeRadius` is renamed, and maturity ships *after* Wave 1
+coagulants.** 📋
+*2026-08-05.* Two sequencing calls.
+
+`safeRadius` is a misnomer — it is a breach threshold, not a sanctuary,
+and the name has been quietly steering the design language. Renamed to
+`perimeter` during the teardown.
+
+Maturity was originally planned as the *first* step of the rework. Working
+through coagulant formation showed **Wave 1 needs no maturity at all** —
+Mote, Congealer and Behemoth are pure density readings. Putting maturity
+first would block the single most important playtest behind the largest
+visual system. So: identity change on screen early, conservation rules
+tuned against something playable, terrain layered on afterwards.
+
+**37. Long-form session records live in `docs/sessions/`.** 📋
+*2026-08-05.* `PROGRESS.md` becomes a heartbeat file — what changed, what
+was decided, what is planned, which commit — pointing into dated session
+files that hold the full reasoning. Design discussions produce far more
+context than a status document should carry, and cramming it in makes
+`PROGRESS.md` unreadable on a cold start, which defeats its whole purpose
+as the two-machine handoff mechanism.
 
 ---
 

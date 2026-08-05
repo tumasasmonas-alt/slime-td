@@ -11,6 +11,10 @@ Companion documents:
   decision, with its reasoning. Check it before changing anything that
   looks odd; a lot of "odd" is deliberate.
 - **`docs/BACKLOG.md`** — bugs, TODOs, and ideas. One unified list.
+- **`docs/sessions/`** — long-form records of individual sessions. Where
+  the *reasoning* lives when a discussion produces more context than a
+  status file should carry, including options considered and rejected.
+  This file points into them; it does not duplicate them (Decision 37).
 - **`archive/`** — the original prototype and its handoff doc. **Deprecated
   and non-authoritative** since the port completed.
 
@@ -44,34 +48,53 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-05 (evening — design session)
 
-**The prototype port is complete.** Phase 2E finished on 2026-08-05. The
-project has moved out of "porting" and into original development.
+**The port is complete and the game has been playtested. A full design
+rework is agreed and not yet started.** No game code has changed since
+`ebc58ab`; the last session was design only.
 
 | | |
 |---|---|
-| Tests | 153 passing (29 test files) |
+| Tests | 153 passing (29 test files) — one known flake, see BACKLOG |
 | Source | 56 modules under `src/` |
 | Typecheck | clean |
 | Branch | `main`, everything pushed |
-| Build target | GitHub Pages (workflow wired but dormant — repo is private, see BACKLOG) |
+| Code state | **Unchanged since the port.** The rework is documented, not built. |
 
-**What works:** a complete, playable roguelite loop. Infection grows as a
-reaction-diffusion density field and creeps toward a stationary core. Six
-auto-firing weapons (Bolt Turret, Orbiting Blades, Chain Bolt, Frost Nova,
-Caustic Cloud, Homing Missile) and eight passives, chosen via
-Vampire-Survivors-style level-up cards. Growth nodes spawn as priority
-targets. Contact damage, escalating difficulty tiers, game over, and
-restart with a freshly generated maze each run.
+**What works today:** a complete, playable roguelite loop. Infection grows
+as a reaction-diffusion density field and creeps toward a stationary core.
+Six auto-firing weapons and eight passives via level-up cards. Growth
+nodes, contact damage, escalating tiers, game over, restart with a fresh
+maze.
 
-**What's next:** a **balance + playtesting pass** (Decision 13). This is
-the first point balance can be judged honestly — the prototype's numbers
-were validated against exactly the six-weapon, eight-passive state that
-now exists. Treat `CONTACT_SCALE`, `AMBIENT_BASE`, `CREEP_RAMP`, and the
-tier table as fresh, unvalidated guesses rather than carried-over
-constants; the safe-zone rework changed the geometry they were tuned
-against.
+**What the playtest found:** the game is too easy and structurally so, not
+numerically. **Player power scales 17–21× across a run; the infection
+scales 3.1×.** No value of `CONTACT_SCALE` is right at both ends. Nodes
+felt bad. XP arrives far too fast. The full findings and math are in the
+session record below.
+
+### ⚠️ Read this before writing any code
+
+The next work is **not** the balance pass. Decision 13 is superseded.
+
+The agreed direction is a **slime and arsenal rework** — the field becomes
+the horde's economy, growth nodes are deleted and replaced by infection
+events, coagulants become the threat, passives dissolve into a PoE-style
+gem system, and the tier table is demoted to flavour.
+
+**Start here, in order:**
+
+1. **`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`** — the full
+   design, the reasoning, the numbers, and §16 *"Ideas considered and
+   rejected"*, which will save re-proposing something already tested and
+   found broken.
+2. **`docs/DECISIONS.md` #23–#37** — the load-bearing calls in short form.
+3. **`docs/BACKLOG.md`** *Now* section — the concrete first step.
+
+**Everything currently on the bug list is absorbed by the rework.** Don't
+fix any of it now; each sits inside a system being replaced. BACKLOG lists
+the absorbing phase for each.
 
 **Environment note:** `.nvmrc` pins Node 22.12.0, but the work machine is
 running 24.19.0. `package.json` engines (`^20.19.0 || >=22.12.0`) permits
@@ -132,6 +155,71 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-05 (evening) — First playtest, and the design rework
+
+**Design session. No game code written.** Full record:
+**`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`**.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Docs only — session record, Decisions 23–37, backlog restructure |
+
+**Discussed**
+
+- **The playtest redirected the project.** The owner reached the tier
+  before Apocalypse untroubled and was expanding the cleared circle by the
+  end. Formula-level analysis found why, and it isn't a tuning problem:
+  **player power scales 17–21× over a run against the infection's 3.1×**,
+  and the composition is worse than the ratio — the player's axes multiply
+  (level × count × Amplifier × Overclock × six weapons stacking) while the
+  infection's add and then stop. Balance moved to Phase 8.
+- **The framing correction that reshaped everything: the player cannot
+  aim.** This is an autoshooter — a PoE character standing still against a
+  charging horde. Several ideas from the first brainstorm died on it. The
+  useful consequence: in a no-aim game the slime's job isn't to create
+  tactical decisions but to *test the build*, so **each distinct slime
+  behaviour is a question the build has to answer.** One behaviour, one
+  question, one viable build — which is exactly the game that was
+  playtested.
+- **The field becomes the horde's economy** rather than the threat itself.
+  Refined mid-session from "clear the field to starve the horde" (wrong —
+  the wilderness reservoir is unreachable) to **"field control sets spawn
+  *distance*, not spawn rate."**
+- **Maturity was worked hardest and the first proposal was wrong.**
+  Age-based hardening breaks because weapons target `nearestFrontierPoint`,
+  so ~70% of the arena is *structurally* unreachable and would calcify
+  permanently by minute three. Inverted to scar-based: **the battlefield
+  hardens, the wilderness stays soft.** A capped slow-age term was added
+  back at the owner's request.
+- **The wilderness reservoir problem**, raised by the owner, forced the
+  events-as-trigger rule. Arithmetic: the wilderness is 76% of the arena
+  and saturates in ~46s, so mass-triggered coagulation gives infinite
+  behemoths from minute one. Local depletion alone still permits roughly
+  one behemoth every four seconds.
+- **Nodes are deleted.** Diagnosed as feeling bad for three separate
+  reasons — arbitrary targeting (`find()` picks the first node in array
+  order), a stealth DPS tax on two specific cards, and a discrete HP-bar
+  mob in a game whose identity is a continuous field.
+- **Rejected ideas are catalogued** in the session record §16 so they
+  aren't re-proposed: player-authored scar terrain, splatter-as-penalty-
+  for-killing, unkillable-boss endgame, currency from slime killed, more
+  density buckets as the legibility fix, and several more.
+
+**Decided** — Decisions 23–37, and Decision 13 marked superseded.
+
+**Playtest bug findings** — card descriptions that read as "this does
+nothing" (not the pool filter, which works; static `desc` strings plus
+count formulas that plateau below their caps), Ward Pulse with no visual
+at all, frozen cells with no visual at all, the density palette collapsing
+5 buckets into ~3. All absorbed by the rework; see BACKLOG for the
+phase that owns each.
+
+**Planned** — Phase 3A teardown, **blocked on one open question**: what
+drives the perimeter once tiers carry no mechanical weight? See *Active
+plan* below.
 
 ### 2026-08-05 — Phase 2B through port completion
 
@@ -255,32 +343,50 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: balance + playtesting pass.**
+**Next: Phase 3A — teardown.** Blocked on one decision (below).
 
-Everything else in `docs/BACKLOG.md` waits behind it (Decision 13),
-because balance is the thing that most affects whether the game is worth
-building further, and it's now finally measurable against the full
-arsenal.
+The design is settled end to end. What remains is implementation, in the
+order below. Full detail in the session record §17; the concrete first
+step is in `docs/BACKLOG.md`'s *Now* section.
 
-Specific things to look at, in rough priority order:
+| Phase | Content |
+|---|---|
+| **3A** | Delete nodes · rename `safeRadius` → `perimeter` · demote `TIERS_LIST` to flavour |
+| **3B** | Infection Events — vein (acts on density) + bloom (acts on maturity), full lifecycle |
+| **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
+| **3D** | XP economy — mass-based, cap removed, superlinear curve → **playtest gate** |
+| **4A–4C** | Maturity field · two-axis visuals · Coagulants Wave 2 → **playtest gate** |
+| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
+| **6** | Arsenal content — **own design session first**, then toward 20 weapons |
+| **7** | Meta — currency, unlocks, deck builder |
+| **8** | Terminal phase · real balance pass · leaderboard |
+| **9** | VFX and feel |
 
-1. **Difficulty pacing.** `CONTACT_SCALE = 15` was tuned for a completely
-   different damage-sampling method (a ring outside the line; it's now a
-   depth-weighted disc inside it). Treat it as unvalidated.
-2. **Safe-zone feel.** The tier table shrank to 100/85/70/58/45 for
-   tension and weapon viability, deliberately *not* for difficulty. Check
-   whether the tension actually reads, and whether Apocalypse's 45px is
-   too claustrophobic against a 22px tower.
-3. **Creep rate.** `CREEP_RAMP = 0.09` is a first guess; it controls how
-   fast a breach becomes lethal.
-4. **Weapon relative power.** Six weapons now exist together for the
-   first time. Blades and Ward Pulse in particular have never been
-   balanced against anything, since they were non-functional in the
-   prototype.
-5. **Whether nodes bite hard enough.** They bypass creep damping and
-   spawn ~32% closer across a run (an automatic consequence of the
-   shrinking safe radius, not an explicit lever). If that's not enough
-   pressure, an explicit per-tier spawn-distance field is the next knob —
-   deliberately not added yet to avoid stacking difficulty levers.
+**Why maturity comes after the horde and not before it:** Wave 1
+coagulants are pure density readings and need no maturity at all. Building
+the terrain layer first would block the single most important playtest
+behind the largest visual system (Decision 36).
 
-**Open questions for the project owner:** none currently blocking.
+### Open questions for the project owner
+
+**🔴 1. What drives the perimeter now? — blocks 3A.**
+It currently shrinks 100 → 45 via `TIERS_LIST`, which Decision 33 strips
+of mechanical weight. Options: **fixed**; an independent time curve; or
+breach-driven (shrinks as hits land — fits the consequence philosophy but
+may spiral). *Recommendation on file: fixed for now, revisit in Phase 8 —
+the perimeter's job is much smaller in the new model, being the line where
+breach splatter starts bleeding the core rather than the primary
+difficulty lever.* **Not decided.**
+
+**2. Does meta-currency buy permanent stat upgrades, or unlocks only?**
+Recommendation: unlocks only — permanent stats compound the very scaling
+problem this rework exists to fix. Not blocking until Phase 7.
+
+**3. What happens to `frozen`?** Frost's growth-suppression probably
+becomes a gem effect rather than a weapon-specific mechanic. Phase 5.
+
+**4. Does calcified tissue block projectiles?** High impact — it would
+differentiate whole weapon families and revive the parked Scalpel/Lance —
+but the riskiest item in the design, since a crust that neutralises your
+main weapon could feel awful. Recommendation: prototype in Phase 4 and
+decide from feel.
