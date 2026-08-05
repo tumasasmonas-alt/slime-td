@@ -21,7 +21,11 @@ machines (per the Workflow section in `CLAUDE.md`).
 - **Phase 2B (ambient growth + simulation tick) — done.** See below.
 - **Phase 2C (first playable loop) — done.** See below.
 - **Phase 2D (danger) — done.** See below.
-- **Phase 2E and onward — not started.** Next up.
+- **Phase 2E (remaining arsenal) — not started.** Next up, and the
+  **final porting step** — 2F was dissolved into it (Confirmed decision
+  11). Once 2E lands, the prototype is fully ported and everything
+  remaining is new work from docs/KNOWN_ISSUES.md, starting with a
+  balance + playtesting pass (decision 13).
 
   First playtest pass (2026-08-05, before 2D) found the loop plays as
   intended; one real gap logged and then fixed as part of 2D — see the
@@ -69,7 +73,7 @@ each step only builds on things already verified.
   upgrade cards, HUD wiring. Milestone: an actually playable game. Plan
   is to **pause here** for real playtesting before building the
   remaining systems on top of it — feel problems are far cheaper to
-  catch here than after 2F.
+  catch here than at the end of the port.
 
   **Status: done.** `grid/clear.ts`, `systems/frontier.ts`,
   `systems/xp.ts`, `systems/gems.ts`, `systems/particles.ts`,
@@ -120,15 +124,24 @@ each step only builds on things already verified.
   Verified live in-browser: start screen, a full run with nodes
   spawning/rendering/announcing, contact damage visibly draining HP,
   all eight passives offered and their effects (including the new
-  modifier readout and Vitality's `+20 maxHp`) confirmed on pick. The
-  actual death -> game-over -> restart transition was **not** observed
-  live — the playtest build (early Armor + Regeneration + Vitality)
-  proved tanky enough to survive the whole verification session, a
-  data point in itself given the "expect too hard" prediction below.
-  That transition rests on `damageTower`'s hp-clamps-at-0 behavior
-  (unit-tested) and DOM wiring structurally identical to the
-  already-verified upgrade-card buttons — worth a real playthrough to
-  confirm rather than taking on faith.
+  modifier readout and Vitality's `+20 maxHp`) confirmed on pick.
+
+  The initial playtest build (early Armor + Regeneration + Vitality)
+  proved tanky enough to survive that whole session without dying, so
+  the death -> game-over -> restart transition went unobserved at the
+  time — flagged explicitly rather than assumed. **Closed in a follow-up
+  pass (2026-08-05):** weapon temporarily disabled and
+  `AMBIENT_BASE`/`CONTACT_SCALE` temporarily cranked ~20x/13x to force
+  fast overwhelm (never committed; typecheck/tests/`git status` clean
+  after reverting). Four full death cycles observed — both "Start Run"
+  and "Try Again" correctly reset hp/level/xp/timer/passives each time,
+  game-over stats were independently correct per run (never carried
+  over), and three visibly distinct vein-field mazes confirmed the grid
+  truly regenerates (re-runs the reaction-diffusion) on every restart,
+  not a cached/reused field. Zero console errors across all four
+  cycles. One unrelated dev-server hiccup observed (an unprompted Vite
+  full-page reload mid-session, visible as a duplicate connect/reconnect
+  pair in the console) — a tooling artifact, not a game bug.
 
   Scope notes from the 2D review (2026-08-05) — the original one-line
   bullet understated this step:
@@ -169,18 +182,62 @@ each step only builds on things already verified.
     `safeRadius + 1.5` cells (never closer), and gate on `isRevealed`
     (never raw density). Both are listed below and both cost real
     debugging time once already.
-- **2E. Remaining arsenal** — the other five weapons (data in the shared
-  weapon library, see Confirmed decisions). Passives moved forward into
-  2C, so this step is weapons only.
-- **2F. Render polish** — chain lightning arcs, caustic cloud bubbles,
-  nova ring. Per the handoff doc these aren't cosmetic extras: Chain
-  Bolt without its arc reads as broken even though it deals damage
-  correctly, same for Caustic Cloud without its rim. Note all three
-  remaining items belong to weapons that don't exist until 2E, so this
-  step is now purely 2E's visual tail.
-  (Gem diamonds moved into 2C, node gold pulse into 2D — see those
-  steps' scope notes. The danger pressure ring is already implemented
-  in `render/tower.ts` from Phase 1.)
+- **2E. Remaining arsenal ⭐ (final porting step)** — the other five
+  weapons, each shipping complete with its signature visual, data in the
+  shared weapon library (see Confirmed decisions). Passives are already
+  done — five landed in 2C, and Vitality/Regeneration/Armor Plating in
+  2D — so this step is weapons only. Milestone: the prototype is fully
+  ported. **Status: next.**
+
+  Weapons, and what's distinct about each:
+  - **Orbiting Blades** — no targeting at all; blades circle the tower
+    and damage revealed tissue they pass through. Needs an orbital draw
+    pass (which was listed in neither 2E nor 2F — it fell through the
+    cracks entirely).
+  - **Chain Bolt** — hits the wall, then arcs to nearby clusters at 82%
+    damage per hop. Needs `findNearbyRevealedPoint` ported (a separate
+    search function, distinct from the frontier system) *and* the
+    jagged lightning arc, without which it is indistinguishable from
+    Bolt Turret.
+  - **Frost Nova** — untargeted pulse centered on the core that also
+    freezes growth for 2s. The freeze mechanic is **already fully
+    plumbed and tested** (`clearAt`'s `freezeDuration`, respected by
+    both `applyAmbientGrowth` and `applyNodeInfluence`), so this is
+    mostly the nova ring plus the `dt`-based decay fix from decision 4.
+  - **Caustic Cloud** — lingering pool ticking damage every 0.4s;
+    prefers live nodes over the frontier. Needs `systems/clouds.ts`.
+  - **Homing Missile** — steers to a target and explodes with splash;
+    also prefers nodes.
+
+  Scope notes from the 2E review (2026-08-05):
+  - **`systems/projectiles.ts` is bolt-only** and needs real branching
+    for chain (hop / visited-set / damage decay) and missile (lerp
+    steering, node tracking, splash). Its header comment already marks
+    this as 2E work.
+  - **`bubbleSeeds` is a second instance of the `novaFx` anti-pattern** —
+    the prototype lazily creates cloud bubble seeds *inside the draw
+    call*, mutating state during render. Generated at cloud-creation
+    time instead, same precedent as decision 4.
+  - **Missile target typing** — the prototype detects "is this a node?"
+    via `target.hp !== undefined` duck-typing; ported properly against
+    the existing discriminated unions rather than reproducing the hack.
+  - **Render layer order** (from the prototype): slime layer, clouds,
+    novaFx, safe-zone ring, nodes, gems, orbitals, projectiles, chainFx,
+    particles, tower.
+  - **`bladeNextHit` fragility** (see docs/KNOWN_ISSUES.md) is worth
+    resolving here, since this is the step that introduces blades.
+  - **Safe-zone groundwork (decisions 14-17) partly precedes the
+    weapons.** Already applied: the shrunk tier table and the
+    `towerCenteredRadius()` helper with its invariant test. Still to
+    do: wiring that helper into Blades / Frost Nova / Ward Pulse, the
+    damped ambient creep into the safe zone (`systems/growth.ts`), and
+    ninja-star blade rendering. The creep change is the one item here
+    that is a real *mechanic* change rather than a geometry fix, and it
+    affects contact-damage pacing — worth verifying on its own rather
+    than folding silently into a weapon commit.
+- **2F — dissolved into 2E.** See Confirmed decision 11. Phase 2 ends
+  at 2E; the danger pressure ring it once listed was already
+  implemented in `render/tower.ts` back in Phase 1.
 
 ## Confirmed decisions
 
@@ -199,7 +256,7 @@ don't drift away from them by accident.
    likely as a user-facing resolution slider rather than a hardcoded
    bump (logged in docs/KNOWN_ISSUES.md).
 3. **Pause after 2C** for a real playtesting pass before continuing to
-   2D-2F.
+   the remaining steps (2D-2E; 2F was later dissolved, see decision 11).
 4. **`novaFx` frame-rate-dependent decay is fixed at port time,** not
    ported as-is and cleaned up later. Frost Nova arrives in 2E already
    using a real `dt`-based decay in an update pass. A tiny, invisible
@@ -243,11 +300,84 @@ don't drift away from them by accident.
     per run, accepted deliberately. Note this makes runs *not* directly
     comparable for balance work; if that becomes a problem while tuning,
     a fixed-seed debug option is the fix, not reusing the field.
+11. **Phase 2F is dissolved into 2E** (confirmed 2026-08-05). Every
+    item it held — chain lightning arcs, caustic cloud bubbles, nova
+    ring — is the signature visual of a weapon that ships in 2E, and
+    the handoff doc is explicit that these aren't cosmetic: Chain Bolt
+    and Caustic Cloud both "read as broken" without them, and Frost
+    Nova is an invisible untargeted pulse without its ring. Each weapon
+    now ships complete (behavior + visual + tests). This is the third
+    application of the same principle, after gem diamonds moved 2F->2C
+    and node gold pulse moved 2F->2D. **Phase 2 now ends at 2E.**
+12. **2E is committed one weapon per commit**, each independently
+    verifiable in the browser — easier to review and to bisect if a
+    single weapon misbehaves, and it leaves room to playtest partway
+    through.
+13. **A balance + playtesting pass follows 2E**, before any other
+    backlog work (endless-scaling tail, weapon upgrade-tier system,
+    audio, leaderboard). 2E is the first point balance can be judged
+    honestly — the prototype's numbers were bot-validated against all
+    six weapons and eight passives, which is exactly the state 2E
+    reaches. See "Balance is bot-validated only" in
+    docs/KNOWN_ISSUES.md.
 
-## Four documented prototype bugs to guard while porting
+### Safe-zone semantics (decided 2026-08-05, ahead of 2E)
 
-From `docs/PROTOTYPE_HANDOFF.md` "Known bugs found during development" —
-each cost real debugging time once already, don't reintroduce them:
+These four came out of reviewing 2E and are grouped because they're one
+connected problem: the prototype's safe zone was too large, impassable,
+and measured in absolute units that no weapon could reach out of.
+
+14. **The safe-radius tier table shrinks to 100 → 85 → 70 → 58 → 45**
+    (from the prototype's 190 → 170 → 145 → 120 → 95). The infection now
+    sits visibly close from the start and genuinely crowds the core at
+    Apocalypse. *Applied in `tuning/tiers.ts`.* **Note this does not make
+    the game harder** — contact damage samples at `safeRadius + 1.5`
+    cells, so the damage ring moves inward with the zone, and the growth
+    ramp at that ring is a function of distance-past-boundary, not
+    absolute position (measured: 0.096 → 0.091, ~5% *slower*). This buys
+    tension and weapon viability, not difficulty. Difficulty is
+    `CONTACT_SCALE` / `AMBIENT_BASE` / `infectionMult`, in the balance
+    pass.
+15. **Ambient growth creeps *into* the safe zone at a damped rate**
+    rather than being hard-gated to zero. In the prototype
+    `applyAmbientGrowth` does `if (d < safeRadius) continue`, so
+    infection could never physically reach the tower — only growth nodes
+    could push density inside, and a lost run meant dying to slime that
+    was still 100+px away. Confirmed as unintended prototype behavior,
+    not a design choice. The safe zone becomes a strong *resistance*
+    gradient instead of a wall, so "Core Overwhelmed" means the core is
+    actually being consumed. **Not yet implemented** — lands in
+    `systems/growth.ts`; damping curve is a balance-pass tuning target.
+16. **Tower-centered weapon radii use an anchor as a *floor*, never a
+    lock.** `towerCenteredRadius()` in `tuning/weaponGeometry.ts` returns
+    `max(safeRadius + margin, base + perLevel * (lvl - 1))`. The first
+    term guarantees a weapon can always at least reach the infection
+    boundary at any tier, however the table is later retuned; the second
+    keeps reach as something levels and future range-upgrade paths can
+    push outward. Deliberately *not* welded to `safeRadius` — that would
+    corner the upgrade design. Collapsing to either pure behavior later
+    is a one-line change. *Applied for the helper; wiring into the three
+    affected weapons happens in 2E.*
+17. **Orbiting Blades render as ninja stars**, not the prototype's plain
+    cyan dots — a 4-pointed shuriken with its own spin independent of
+    orbital position, so they read as blades rather than orbiting blobs.
+
+### Documentation
+
+18. **PROGRESS.md gets compressed once the port is complete.** The
+    per-phase entries carry a lot of "why we decided this" detail that
+    earned its place during the work and becomes noise afterward. Phases
+    0-2E collapse into a short status table; decisions that still
+    constrain future work stay; historical reasoning moves out. This is
+    the project's main status document and is meant to stay useful
+    long past the port — it shouldn't grow without bound. Then playtest
+    and a planning brainstorm.
+
+## Five documented prototype bugs to guard while porting
+
+Items 1-4 are from `docs/PROTOTYPE_HANDOFF.md` "Known bugs found during
+development" — each cost real debugging time once already, don't
+reintroduce them. Item 5 was found during the 2E review.
 
 1. Gems must always drift toward the (stationary) core — never gate
    drifting behind a fixed pickup radius, or XP can never accumulate.
@@ -259,6 +389,18 @@ each cost real debugging time once already, don't reintroduce them:
    a cell is actually visible.
 4. Reaction-diffusion must respect `D * step <= ~0.25` or it silently
    diverges to NaN. Guarded by a canary test in `grid/veinField.test.ts`.
+5. **Tower-centered weapons must never have a radius smaller than
+   `safeRadius`** — nothing grows in there, so such a weapon is aimed at
+   guaranteed-empty space. In the prototype, Orbiting Blades orbited at
+   64-78px while the *smallest* safe radius ever reached was 95, and
+   blades only fire when the blade's own cell is revealed. Result:
+   Orbiting Blades could not hit ambient infection at any tier, at any
+   level, in any run — they only ever connected with density a growth
+   node happened to push inside. Ward Pulse and Frost Nova were degraded
+   the same way, less severely. Guarded structurally by
+   `towerCenteredRadius()` (decision 16) plus a test asserting the
+   invariant across every tier and level, rather than by remembering to
+   check the numbers.
 
 ## Resuming on a new machine
 

@@ -74,6 +74,25 @@ explicitly unfinished. Fixed at port time rather than ported — level-ups
 queue and are consumed one card at a time. Same precedent as the `novaFx`
 decision above; see "Confirmed decisions" in docs/PROGRESS.md.
 
+### Safe-zone semantics deliberately deviate from the prototype
+The port is parity-first (see `CLAUDE.md`), so the three deviations
+decided on 2026-08-05 are recorded here as intentional, not drift. All
+three are detailed as Confirmed decisions 14-16 in docs/PROGRESS.md:
+- **Safe-radius tier table shrunk** to 100/85/70/58/45 from the
+  prototype's 190/170/145/120/95.
+- **Ambient growth creeps into the safe zone** at a damped rate instead
+  of the prototype's hard `if (d < safeRadius) continue` gate, which
+  made the infection physically unable to reach the tower. Confirmed as
+  unintended prototype behavior. *Not yet implemented.*
+- **Tower-centered weapon radii anchor to `safeRadius` as a floor**,
+  fixing a prototype bug where Orbiting Blades could never hit ambient
+  infection at all (see prototype bug 5 in docs/PROGRESS.md).
+
+Consequence worth remembering: the prototype's tuning numbers were
+validated against the *old* geometry, so the bot-validation result cited
+below is now a weaker signal than it was. The balance pass after 2E
+should treat the numbers as fresh rather than merely confirmed.
+
 ### `bladeNextHit` keying is fragile
 Keyed by blade index (0..count-1) and never cleared when blade count
 changes on level-up. Harmless today because indices are stable within a
