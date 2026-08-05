@@ -24,6 +24,18 @@ export function bladeDamage(lvl: number): number {
   return 7 + (lvl - 1) * 3.2;
 }
 
+export function chainCount(lvl: number): number {
+  return Math.min(1 + Math.floor((lvl - 1) / 1.6), 6);
+}
+
+export function chainDamage(lvl: number): number {
+  return 11 + (lvl - 1) * 4;
+}
+
+export function chainCooldown(lvl: number): number {
+  return Math.max(0.4, 1.15 - (lvl - 1) * 0.08);
+}
+
 // Prototype formula was `62 + Math.min(24, lvl*2)` — linear across the
 // whole 1-8 level range the cap never actually engages (8*2=16 < 24), so
 // it's expressed directly as the equivalent base+perLevel form here.
@@ -54,5 +66,11 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '🗡️',
     maxLevel: 8,
     desc: (lvl) => `Spinning blades shred any tissue they touch. Lv${lvl}: ${bladeCount(lvl)} blade(s)`,
+  },
+  chain: {
+    name: 'Chain Bolt',
+    icon: '🔗',
+    maxLevel: 8,
+    desc: (lvl) => `Strikes the wall, then arcs to ${chainCount(lvl)} nearby clusters.`,
   },
 };

@@ -7,6 +7,7 @@ import { buildGrid } from './grid/grid';
 import { flushDirtyCells, initSlimeLayer } from './grid/slimeLayer';
 import { drawAmbientGrid, drawArenaBounds, drawSafeZone } from './render/background';
 import { resizeCanvasToWindow, setupCanvas } from './render/canvas';
+import { drawChainFx } from './render/chainFx';
 import { drawGems } from './render/gems';
 import { drawNodes } from './render/nodes';
 import { drawOrbitals } from './render/orbitals';
@@ -14,6 +15,7 @@ import { drawParticles } from './render/particles';
 import { drawProjectiles } from './render/projectiles';
 import { drawTower } from './render/tower';
 import { freshState, type GameState } from './state';
+import { updateChainFx } from './systems/chainFx';
 import { updateGems } from './systems/gems';
 import { updateParticles } from './systems/particles';
 import { updateProjectiles } from './systems/projectiles';
@@ -25,6 +27,7 @@ import { hideOverlays, initOverlays, showGameOver } from './ui/overlays';
 import { initUpgradeCards, syncUpgradeOverlay } from './ui/upgradeCards';
 import { updateBladesWeapon } from './weapons/blades';
 import { updateBoltWeapon } from './weapons/bolt';
+import { updateChainWeapon } from './weapons/chain';
 
 const canvasEl = document.querySelector<HTMLCanvasElement>('#game-canvas');
 if (!canvasEl) throw new Error('#game-canvas not found');
@@ -80,9 +83,11 @@ function update(dt: number): void {
   runSimulation(state, dt); // includes node spawn/influence and contact damage
   updateBoltWeapon(state, dt);
   updateBladesWeapon(state, dt);
+  updateChainWeapon(state, dt);
   updateProjectiles(state, dt);
   updateGems(state, dt);
   updateParticles(state, dt);
+  updateChainFx(state, dt);
   updateWardPulse(state, dt);
   updateTowerTick(state, dt); // regen + shake decay
   updateAnnounceFade(hudRefs, state, dt);
@@ -121,6 +126,7 @@ function render(): void {
     drawGems(ctx, state);
     drawOrbitals(ctx, state);
     drawProjectiles(ctx, state);
+    drawChainFx(ctx, state);
     drawParticles(ctx, state);
     drawTower(ctx, state);
 
