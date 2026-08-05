@@ -53,6 +53,39 @@ project's update/draw separation. Port with a real `dt`-based decay in an
 update pass instead; the visible effect is the same ring animation, just
 correct at any framerate.
 
+### A single XP grant crossing two levels ate an upgrade
+In the prototype, `grantXp()` loops `while(xp >= xpToNext)` and calls
+`onLevelUp()` each pass, which rebuilds the upgrade-card overlay from
+scratch — so crossing two thresholds in one grant showed the cards twice
+and the second render replaced the first. The player silently got one
+pick for two levels. Not reachable at the prototype's numbers (you'd need
+~35 XP from a single 10-XP gem), but it becomes reachable the moment gem
+values or the XP curve are tuned upward, which is likely given balance is
+explicitly unfinished. Fixed at port time rather than ported — level-ups
+queue and are consumed one card at a time. Same precedent as the `novaFx`
+decision above; see "Confirmed decisions" in docs/PROGRESS.md.
+
+### Upgrade cards give no visible confirmation of what they changed
+Found during the first human playtest (2026-08-05): picking a card applies
+its effect correctly (verified in Phase 2C), but nothing on screen shows
+the player their build actually changed. Two compounding gaps:
+- Passive picks are invisible. `#weapon-tray` (`ui/hud.ts`) only ever
+  displays `state.weapons` — Amplifier, Overclock, etc. have no on-screen
+  representation at all after being picked, so a passive pick reads as if
+  it did nothing.
+- Even for weapons, the tray only shows an icon + level, not the effect
+  in numbers a player can compare before/after.
+
+Proposed direction (not built yet): a small always-visible modifier
+readout — e.g. `Damage 1.0x` — that updates live as passives are picked,
+so choosing Amplifier visibly flips it to `Damage 1.2x` at the moment of
+the pick. `systems/passives.ts` already centralizes the four multiplier
+functions (`damageMult`, `atkSpeedMult`, `pickupMult`, `xpMult`), so the
+readout has a natural, already-correct source of truth to read from —
+this is a HUD-layer addition, not a new calculation. Worth doing before
+the next playtest pass, since "did my pick do anything?" is a first-order
+feel question the current build can't answer.
+
 ### `bladeNextHit` keying is fragile
 Keyed by blade index (0..count-1) and never cleared when blade count
 changes on level-up. Harmless today because indices are stable within a

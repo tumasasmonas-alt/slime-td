@@ -19,7 +19,14 @@ machines (per the Workflow section in `CLAUDE.md`).
   reads in a live browser at 1080p and pillarboxed ultrawide.
 - **Phase 2A (grid + reaction-diffusion) — done.** See below.
 - **Phase 2B (ambient growth + simulation tick) — done.** See below.
-- **Phase 2C and onward — not started.** Next up.
+- **Phase 2C (first playable loop) — done.** See below.
+- **Phase 2D and onward — not started.** Next up. Real playtesting
+  happens now, before 2D begins — see "Confirmed decisions" above.
+  First playtest pass (2026-08-05) found the loop plays as intended;
+  one real gap logged as a new "Open" item in docs/KNOWN_ISSUES.md —
+  upgrade-card picks apply correctly but give no visible on-screen
+  confirmation, especially for passives (the weapon tray only ever
+  shows weapons).
 
 ## Where things live
 
@@ -58,19 +65,58 @@ each step only builds on things already verified.
   those land in 2C/2D per the plan below.
 - **2C. First playable loop ⭐** — `grid/clear.ts` (the density-resists-
   damage core function), frontier targeting (48-sector raycast), Bolt
-  Turret, projectiles, gems, XP/leveling, upgrade cards, HUD wiring.
-  Milestone: an actually playable game. Plan is to **pause here** for
-  real playtesting before building the remaining systems on top of it —
-  feel problems are far cheaper to catch here than after 2F.
+  Turret, projectiles, particles, gems, XP/leveling, all eight passives,
+  upgrade cards, HUD wiring. Milestone: an actually playable game. Plan
+  is to **pause here** for real playtesting before building the
+  remaining systems on top of it — feel problems are far cheaper to
+  catch here than after 2F.
+
+  **Status: done.** `grid/clear.ts`, `systems/frontier.ts`,
+  `systems/xp.ts`, `systems/gems.ts`, `systems/particles.ts`,
+  `systems/passives.ts`, `systems/ward.ts`, `systems/projectiles.ts`,
+  `weapons/bolt.ts`, `tuning/weapons.ts` (the shared weapon-data library —
+  bolt only for now, per Confirmed decisions), `render/gems.ts`,
+  `render/particles.ts`, `render/projectiles.ts`, `ui/hud.ts`,
+  `ui/upgradeCards.ts`. Verified live in-browser: Bolt Turret fires at
+  the nearest revealed wall, clears density with the documented
+  density-resists-damage falloff, drops a gem, the gem drifts in and
+  grants XP, and leveling up correctly pauses and shows a 3-card
+  upgrade overlay drawn only from what's actually implemented (Bolt
+  Turret + the five enabled passives — Vitality/Regeneration/Armor
+  correctly absent). 26 new unit tests across the pure-logic modules
+  (grid/clear, systems/frontier, xp, gems, passives, ward,
+  weapons/bolt); `ui/hud.ts` and `ui/upgradeCards.ts` touch `document`
+  directly (no jsdom configured) so they're covered by the in-browser
+  verification instead.
+
+  Scope notes from the 2C review (2026-08-05):
+  - **Particles** were missing from the original list but are a real
+    dependency — `clearAt()`, projectile impacts and gem pickup all
+    spawn them, and they carry most of the hit feedback.
+  - **Gems ship as pastel-green diamonds here, not in 2F.** The handoff
+    doc records that round cyan gems were mistaken for "bullets bouncing
+    back to the core" because they looked identical to the Bolt Turret
+    projectile — and 2C is the step that ships both together. Shipping
+    placeholder circles would walk the one feel-focused playtest
+    straight into that documented confusion.
+  - **The upgrade card pool must be filtered to what's implemented.**
+    With all eight passives in scope this is mostly moot, but the pool
+    still must never offer the five unbuilt weapons.
+  - **No fail state yet.** Contact damage, growth nodes and game over
+    are all 2D, so the playtest can judge carve feel, XP flow and
+    upgrade cadence — but nothing about difficulty or balance.
 - **2D. Danger** — growth nodes, contact damage, difficulty tiers, game
   over. Milestone: a complete run with a real win/lose arc.
 - **2E. Remaining arsenal** — the other five weapons (data in the shared
-  weapon library, see Confirmed decisions) and all eight passives.
+  weapon library, see Confirmed decisions). Passives moved forward into
+  2C, so this step is weapons only.
 - **2F. Render polish** — chain lightning arcs, caustic cloud bubbles,
-  node gold pulse, gem diamonds, nova ring, danger pressure ring. Per the
-  handoff doc these aren't cosmetic extras: Chain Bolt without its arc
-  reads as broken even though it deals damage correctly, same for Caustic
-  Cloud without its rim.
+  node gold pulse, nova ring. Per the handoff doc these aren't cosmetic
+  extras: Chain Bolt without its arc reads as broken even though it
+  deals damage correctly, same for Caustic Cloud without its rim.
+  (Gem diamonds moved into 2C — see the 2C scope notes. The danger
+  pressure ring is already implemented in `render/tower.ts` from
+  Phase 1.)
 
 ## Confirmed decisions
 
@@ -94,6 +140,27 @@ don't drift away from them by accident.
    ported as-is and cleaned up later. Frost Nova arrives in 2E already
    using a real `dt`-based decay in an update pass. A tiny, invisible
    deviation from strict prototype parity, taken on purpose.
+5. **HUD and upgrade cards are DOM/CSS overlaid on the canvas**, ported
+   from the prototype's markup rather than drawn as canvas calls. Note
+   the consequence: the HUD lives in *screen* space, so it does not
+   scale with the letterboxed 1920x1080 arena and will sit over the
+   letterbox bars on non-16:9 windows. That's intended — HUD text stays
+   crisp and readable at any window size.
+6. **2C's upgrade-card pool offers five passives, not eight.** Vitality
+   (`maxHp`), Regeneration (`regen`), and Armor Plating (`armor`) are
+   gated out — nothing damages the core until 2D, so all three would be
+   dead, unverifiable picks during the playtest. Since they're
+   unreachable through play, their numeric effects aren't built in 2C
+   either (would be untestable dead code); they land properly in 2D
+   alongside contact damage, when HP loss makes them meaningful.
+   Overclock, Amplifier, Magnetism, Insight, and Ward Pulse stay in the
+   pool and get real numeric effects now — Ward Pulse purges a ring
+   around the core regardless of whether the core takes damage, so it's
+   testable today. `tuning/passives.ts` already declares display data
+   for all eight (unchanged); this only affects which ones the card
+   pool offers and which have working effects this phase.
+7. **The prototype's double-level-up bug is fixed at port time,** same
+   precedent as `novaFx` above. See docs/KNOWN_ISSUES.md.
 
 ## Four documented prototype bugs to guard while porting
 

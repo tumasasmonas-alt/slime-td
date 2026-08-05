@@ -1,6 +1,7 @@
 import type { GameState } from '../state';
 import { SIM_TICK } from '../tuning/growth';
 import { computeTierIndex, TIERS_LIST } from '../tuning/tiers';
+import { computeFrontier } from './frontier';
 import { applyAmbientGrowth } from './growth';
 
 function updateTier(state: GameState): void {
@@ -9,7 +10,10 @@ function updateTier(state: GameState): void {
   if (newIdx !== state.tierIndex) {
     state.tierIndex = newIdx;
     const tier = TIERS_LIST[newIdx];
-    if (tier) state.grid.safeRadius = tier.safeRadius;
+    if (tier) {
+      state.grid.safeRadius = tier.safeRadius;
+      state.pendingAnnouncement = `OUTBREAK ESCALATING: ${tier.name}`;
+    }
   }
 }
 
@@ -19,6 +23,7 @@ function simulateTick(state: GameState, dt: number): void {
   const tier = TIERS_LIST[state.tierIndex];
   if (!tier) return;
   applyAmbientGrowth(state.grid, state.tower, tier, dt, state.dirty);
+  computeFrontier(state);
 }
 
 // Fixed-timestep simulation via an accumulator, decoupled from render

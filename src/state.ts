@@ -176,6 +176,12 @@ export interface GameState {
   simAcc: number;
   announceTimer: number;
   contactPressure: number;
+
+  // Counts level-ups an XP grant produced that the upgrade-card UI hasn't
+  // shown a card for yet, consumed one at a time — see systems/xp.ts and
+  // docs/KNOWN_ISSUES.md "A single XP grant crossing two levels".
+  pendingLevelUps: number;
+  pendingAnnouncement: string | null;
 }
 
 export function freshState(): GameState {
@@ -226,5 +232,8 @@ export function freshState(): GameState {
     simAcc: 0,
     announceTimer: 0,
     contactPressure: 0,
+
+    pendingLevelUps: 0,
+    pendingAnnouncement: null,
   };
 }

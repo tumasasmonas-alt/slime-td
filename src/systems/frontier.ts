@@ -1,0 +1,58 @@
+import type { GameState } from '../state';
+import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
+
+export const FRONTIER_SECTORS = 48;
+
+// 48 angular sectors, ray-cast each sim tick to find the nearest revealed
+// cell in each direction — no per-enemy list to search. Weapons aim at
+// whichever sector is closest. Direct port of the prototype's
+// computeFrontier().
+export function computeFrontier(state: GameState): void {
+  const grid = state.grid;
+  if (!grid) return;
+  const t = state.tower;
+  const arr = state.frontier ?? new Float32Array(FRONTIER_SECTORS);
+  for (let s = 0; s < FRONTIER_SECTORS; s++) {
+    const angle = (s / FRONTIER_SECTORS) * Math.PI * 2;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    let found = grid.maxRange;
+    for (let r = grid.safeRadius; r < grid.maxRange; r += grid.cellSize) {
+      const x = t.x + dx * r;
+      const y = t.y + dy * r;
+      if (x < 0 || x >= grid.cols * grid.cellSize || y < 0 || y >= grid.rows * grid.cellSize) break;
+      const { cx, cy } = worldToCell(grid, x, y);
+      if (isRevealedIdx(grid, gIdx(grid, cx, cy))) {
+        found = r;
+        break;
+      }
+    }
+    arr[s] = found;
+  }
+  state.frontier = arr;
+}
+
+export interface FrontierPoint {
+  x: number;
+  y: number;
+  dist: number;
+}
+
+export function nearestFrontierPoint(state: GameState): FrontierPoint | null {
+  const grid = state.grid;
+  const frontier = state.frontier;
+  if (!grid || !frontier) return null;
+  const t = state.tower;
+  let bestS = -1;
+  let bestD = Infinity;
+  for (let s = 0; s < frontier.length; s++) {
+    const d = frontier[s]!;
+    if (d < bestD) {
+      bestD = d;
+      bestS = s;
+    }
+  }
+  if (bestS < 0 || bestD >= grid.maxRange - 1) return null;
+  const angle = (bestS / frontier.length) * Math.PI * 2;
+  return { x: t.x + Math.cos(angle) * bestD, y: t.y + Math.sin(angle) * bestD, dist: bestD };
+}

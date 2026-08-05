@@ -8,8 +8,14 @@
       :root {
         --bg: #0b060a;
         --bg2: #150a10;
+        --panel: #161019e6;
+        --line: #3a1f2c;
+        --text: #f2e9ee;
+        --muted: #9c8391;
         --accent: #6df0ff;
         --accent-dim: #2c6b74;
+        --gold: #ffcf4d;
+        --danger: #ff3f68;
       }
       * {
         box-sizing: border-box;
@@ -24,7 +30,7 @@
         overflow: hidden;
         background: radial-gradient(ellipse at center, var(--bg2) 0%, var(--bg) 75%);
         font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
-        color: #f2e9ee;
+        color: var(--text);
         user-select: none;
       }
       #game-canvas {
@@ -33,10 +39,293 @@
         left: 0;
         display: block;
       }
+
+      /* ---------- HUD ---------- */
+      #hud {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 14px 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .hud-block {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 220px;
+      }
+      .hp-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .bar-wrap {
+        width: 220px;
+        height: 14px;
+        background: #0006;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        overflow: hidden;
+        position: relative;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 7px;
+        transition: width 0.15s ease;
+      }
+      #hp-fill {
+        background: linear-gradient(90deg, #ff3f68, #ff8a3d);
+      }
+      #xp-fill {
+        background: linear-gradient(90deg, #6df0ff, #a8ffb0);
+      }
+      .bar-label {
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      #level-badge {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 14px;
+        background: #0008;
+        flex-shrink: 0;
+        color: var(--accent);
+      }
+      .stat-row {
+        display: flex;
+        gap: 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .stat-row b {
+        color: var(--text);
+      }
+      #weapon-tray {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .weapon-chip {
+        width: 40px;
+        height: 40px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: #0008;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        position: relative;
+      }
+      .weapon-chip .lvl {
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        background: var(--accent);
+        color: #04121a;
+        font-size: 9px;
+        font-weight: bold;
+        border-radius: 5px;
+        padding: 1px 3px;
+        line-height: 1;
+      }
+
+      /* ---------- Difficulty (Risk-of-Rain style) HUD ---------- */
+      #difficulty-hud {
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        pointer-events: none;
+        min-width: 260px;
+      }
+      #difficulty-name {
+        font-size: 13px;
+        font-weight: bold;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        text-shadow: 0 0 14px #000;
+        transition: color 0.4s ease;
+      }
+      .diff-bar-wrap {
+        width: 260px;
+        height: 6px;
+        background: #0007;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      #diff-bar-fill {
+        height: 100%;
+        width: 0%;
+        transition:
+          width 0.3s linear,
+          background 0.4s ease;
+      }
+
+      /* ---------- Upgrade overlay ---------- */
+      .overlay {
+        position: absolute;
+        inset: 0;
+        background: #040305cc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        backdrop-filter: blur(2px);
+      }
+      .hidden {
+        display: none !important;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 28px 32px;
+        max-width: 640px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 20px 60px #000a;
+      }
+      #upgrade-title {
+        font-size: 13px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin-bottom: 16px;
+      }
+      #cards {
+        display: flex;
+        gap: 14px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .card {
+        width: 150px;
+        background: #150c13;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 12px;
+        cursor: pointer;
+        transition:
+          transform 0.12s ease,
+          border-color 0.12s ease,
+          box-shadow 0.12s ease;
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: var(--accent);
+        box-shadow: 0 10px 24px #0007;
+      }
+      .card .icon {
+        font-size: 30px;
+        margin-bottom: 8px;
+      }
+      .card .name {
+        font-size: 13px;
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+      .card .rank {
+        font-size: 10px;
+        color: var(--gold);
+        margin-bottom: 8px;
+        letter-spacing: 0.05em;
+      }
+      .card .desc {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .card.new .rank {
+        color: #a8ffb0;
+      }
+
+      #announce {
+        position: absolute;
+        top: 68px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 20;
+        font-size: 14px;
+        font-weight: bold;
+        letter-spacing: 0.08em;
+        color: var(--danger);
+        text-shadow: 0 0 12px #000;
+        opacity: 0;
+        transition: opacity 0.4s ease;
+        pointer-events: none;
+        text-transform: uppercase;
+        text-align: center;
+      }
+      #announce.show {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
     <canvas id="game-canvas"></canvas>
+
+    <div id="announce"></div>
+
+    <div id="difficulty-hud">
+      <div id="difficulty-name">Simple Infection</div>
+      <div class="diff-bar-wrap"><div id="diff-bar-fill"></div></div>
+    </div>
+
+    <div id="hud">
+      <div class="hud-block">
+        <div class="hp-row">
+          <div id="level-badge">1</div>
+          <div>
+            <div class="bar-label">Core Integrity</div>
+            <div class="bar-wrap"><div id="hp-fill" class="bar-fill" style="width: 100%"></div></div>
+          </div>
+        </div>
+        <div>
+          <div class="bar-label">Experience</div>
+          <div class="bar-wrap" style="width: 220px"><div id="xp-fill" class="bar-fill" style="width: 0%"></div></div>
+        </div>
+      </div>
+      <div class="hud-block" style="align-items: flex-end">
+        <div class="stat-row"><span>Time <b id="stat-time">00:00</b></span></div>
+        <div class="stat-row"><span>Purged <b id="stat-kills">0</b></span></div>
+        <div class="stat-row"><span>Tier <b id="stat-wave">1</b></span></div>
+      </div>
+    </div>
+
+    <div id="weapon-tray"></div>
+
+    <div id="upgrade-overlay" class="overlay hidden">
+      <div class="panel">
+        <div id="upgrade-title">Level Up — Choose an Upgrade</div>
+        <div id="cards"></div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
