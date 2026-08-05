@@ -114,7 +114,13 @@ export interface CausticCloud {
   dmgPerSec: number;
   color: string;
   tickTimer: number;
-  bubbleSeeds?: BubbleSeed[];
+  // Generated once at cloud creation (weapons/poison.ts), not lazily
+  // inside the draw call — the prototype's `if (!c.bubbleSeeds)` in its
+  // render function mutated state during a draw call, the same
+  // anti-pattern novaFx's frame-rate-dependent decay was (Confirmed
+  // decision 4 in docs/PROGRESS.md). Required, not optional, since it's
+  // always populated up front.
+  bubbleSeeds: BubbleSeed[];
 }
 
 export interface Particle {

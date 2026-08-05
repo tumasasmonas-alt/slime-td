@@ -52,6 +52,18 @@ export function frostCooldown(lvl: number): number {
   return Math.max(1.5, 3.6 - (lvl - 1) * 0.24);
 }
 
+export function poisonDamage(lvl: number): number {
+  return 6 + (lvl - 1) * 2.4;
+}
+
+export function poisonRadius(lvl: number): number {
+  return 58 + (lvl - 1) * 5;
+}
+
+export function poisonCooldown(lvl: number): number {
+  return Math.max(1.0, 2.3 - (lvl - 1) * 0.15);
+}
+
 // Prototype formula was `62 + Math.min(24, lvl*2)` — linear across the
 // whole 1-8 level range the cap never actually engages (8*2=16 < 24), so
 // it's expressed directly as the equivalent base+perLevel form here.
@@ -94,5 +106,11 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '❄️',
     maxLevel: 8,
     desc: () => `Pulses outward, damaging tissue and freezing growth nearby.`,
+  },
+  poison: {
+    name: 'Caustic Cloud',
+    icon: '☠️',
+    maxLevel: 8,
+    desc: () => `Drops a lingering cloud that erodes tissue over time.`,
   },
 };

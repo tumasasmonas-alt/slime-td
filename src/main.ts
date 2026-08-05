@@ -8,6 +8,7 @@ import { flushDirtyCells, initSlimeLayer } from './grid/slimeLayer';
 import { drawAmbientGrid, drawArenaBounds, drawSafeZone } from './render/background';
 import { resizeCanvasToWindow, setupCanvas } from './render/canvas';
 import { drawChainFx } from './render/chainFx';
+import { drawClouds } from './render/clouds';
 import { drawGems } from './render/gems';
 import { drawNodes } from './render/nodes';
 import { drawNovaFx } from './render/novaFx';
@@ -17,6 +18,7 @@ import { drawProjectiles } from './render/projectiles';
 import { drawTower } from './render/tower';
 import { freshState, type GameState } from './state';
 import { updateChainFx } from './systems/chainFx';
+import { updateClouds } from './systems/clouds';
 import { updateGems } from './systems/gems';
 import { updateNovaFx } from './systems/novaFx';
 import { updateParticles } from './systems/particles';
@@ -31,6 +33,7 @@ import { updateBladesWeapon } from './weapons/blades';
 import { updateBoltWeapon } from './weapons/bolt';
 import { updateChainWeapon } from './weapons/chain';
 import { updateFrostWeapon } from './weapons/frost';
+import { updatePoisonWeapon } from './weapons/poison';
 
 const canvasEl = document.querySelector<HTMLCanvasElement>('#game-canvas');
 if (!canvasEl) throw new Error('#game-canvas not found');
@@ -88,11 +91,13 @@ function update(dt: number): void {
   updateBladesWeapon(state, dt);
   updateChainWeapon(state, dt);
   updateFrostWeapon(state, dt);
+  updatePoisonWeapon(state, dt);
   updateProjectiles(state, dt);
   updateGems(state, dt);
   updateParticles(state, dt);
   updateChainFx(state, dt);
   updateNovaFx(state, dt);
+  updateClouds(state, dt);
   updateWardPulse(state, dt);
   updateTowerTick(state, dt); // regen + shake decay
   updateAnnounceFade(hudRefs, state, dt);
@@ -126,6 +131,7 @@ function render(): void {
     ctx.translate(shakeX, shakeY);
 
     if (state.slimeLayer) ctx.drawImage(state.slimeLayer.canvas, 0, 0);
+    drawClouds(ctx, state);
     drawNovaFx(ctx, state);
     drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.safeRadius, state.contactPressure);
     drawNodes(ctx, state);
