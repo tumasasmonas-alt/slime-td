@@ -8,6 +8,7 @@ import { drawAmbientGrid, drawArenaBounds, drawSafeZone } from './render/backgro
 import { resizeCanvasToWindow, setupCanvas } from './render/canvas';
 import { drawChainFx } from './render/chainFx';
 import { drawClouds } from './render/clouds';
+import { drawCoagulants } from './render/coagulants';
 import { drawInfectionEvents } from './render/events';
 import { drawGems } from './render/gems';
 import { drawNovaFx } from './render/novaFx';
@@ -131,6 +132,7 @@ function render(): void {
     ctx.translate(shakeX, shakeY);
 
     if (state.slimeLayer) ctx.drawImage(state.slimeLayer.canvas, 0, 0);
+    drawCoagulants(ctx, state);
     drawClouds(ctx, state);
     drawNovaFx(ctx, state);
     drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.perimeter, state.contactPressure);

@@ -6,6 +6,14 @@ export interface WeaponDef {
   readonly icon: string;
   readonly maxLevel: number;
   readonly desc: (lvl: number) => string;
+  // Per-weapon multiplier on damage dealt to coagulants, on top of the
+  // overlap-area scaling in grid/clear.ts and the global
+  // COAGULANT_DAMAGE_SCALE dial. Defaults to 1 for every weapon here —
+  // this is deliberately a hook, not tuned content yet: a natural home
+  // for a future Penetration-style support gem, or the enhancement-point
+  // "base stat you can level up" the project owner asked to keep room
+  // for (2026-08-06 follow-up session).
+  readonly coagulantMult: number;
 }
 
 export function boltDamage(lvl: number): number {
@@ -98,35 +106,41 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '⚡',
     maxLevel: 8,
     desc: (lvl) => `Fires at the nearest wall of infection. Lv${lvl}: ${boltDamage(lvl).toFixed(0)} pwr`,
+    coagulantMult: 1,
   },
   blades: {
     name: 'Orbiting Blades',
     icon: '🗡️',
     maxLevel: 8,
     desc: (lvl) => `Spinning blades shred any tissue they touch. Lv${lvl}: ${bladeCount(lvl)} blade(s)`,
+    coagulantMult: 1,
   },
   chain: {
     name: 'Chain Bolt',
     icon: '🔗',
     maxLevel: 8,
     desc: (lvl) => `Strikes the wall, then arcs to ${chainCount(lvl)} nearby clusters.`,
+    coagulantMult: 1,
   },
   frost: {
     name: 'Frost Nova',
     icon: '❄️',
     maxLevel: 8,
     desc: () => `Pulses outward, damaging tissue and freezing growth nearby.`,
+    coagulantMult: 1,
   },
   poison: {
     name: 'Caustic Cloud',
     icon: '☠️',
     maxLevel: 8,
     desc: () => `Drops a lingering cloud that erodes tissue over time.`,
+    coagulantMult: 1,
   },
   missile: {
     name: 'Homing Missile',
     icon: '🚀',
     maxLevel: 8,
     desc: () => `Homes onto the nearest wall and explodes.`,
+    coagulantMult: 1,
   },
 };

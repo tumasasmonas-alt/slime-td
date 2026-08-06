@@ -13,12 +13,18 @@ describe('xpToNext', () => {
 });
 
 describe('gemValueFromRemoved', () => {
-  it('clamps to a 0-10 range', () => {
+  it('floors at 0, never negative', () => {
     expect(gemValueFromRemoved(0)).toBe(0);
-    expect(gemValueFromRemoved(100)).toBe(10);
   });
 
   it('rounds removed * 1.3', () => {
     expect(gemValueFromRemoved(2)).toBe(3);
+  });
+
+  it('is uncapped — a big coagulant kill pays proportionally, not a flat 10', () => {
+    // Decision 31, pulled forward into Phase 3C: a behemoth kill should
+    // not pay the same XP as a routine bolt hit. See tuning/xp.ts.
+    expect(gemValueFromRemoved(100)).toBe(130);
+    expect(gemValueFromRemoved(400)).toBe(520);
   });
 });

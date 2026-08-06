@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import type { Grid } from '../state';
+import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { bladeCount, bladeRadius } from '../tuning/weapons';
 import { updateBladesWeapon } from './blades';
+
+function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
+  return {
+    x: 0,
+    y: 0,
+    mass: 50,
+    armor: 0,
+    kind: 'congealer',
+    radius: 12,
+    speed: 45,
+    seeds: [],
+    ...overrides,
+  };
+}
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
   const size = 3600;
@@ -88,6 +102,26 @@ describe('updateBladesWeapon', () => {
     updateBladesWeapon(state, 0.016);
     expect(state.bladeNextHit[0]).toBeCloseTo(5.22, 5);
     expect(state.bladeNextHit[1]).toBeUndefined();
+  });
+
+  it('damages a coagulant sitting in already-cleared space, not just revealed grid cells', () => {
+    // A blade currently gates its hit on isRevealedIdx alone, which can't
+    // see a coagulant — an entity, not a grid cell — sitting in ground
+    // the blade has already scrubbed clean.
+    const state = freshState();
+    state.grid = makeTestGrid(); // stays empty on purpose
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.blades = 1;
+    state.time = 0;
+
+    const radius = bladeRadius(1, state.grid.perimeter);
+    const c = makeCoagulant({ x: state.tower.x + radius, y: state.tower.y, mass: 50 });
+    state.coagulants = [c];
+
+    updateBladesWeapon(state, 0.016);
+
+    expect(c.mass).toBeLessThan(50);
   });
 
   it('never orbits closer than the safe radius, at any level', () => {

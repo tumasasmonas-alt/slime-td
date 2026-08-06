@@ -164,6 +164,10 @@ interface InfectionEventBase {
   phase: InfectionEventPhase;
   phaseTimer: number;
   age: number;
+  // Countdown to the next coagulant-formation attempt — only meaningful
+  // during the peak phase (Decision 43/50: events are sparks, coagulants
+  // are Phase 3C). Set to Infinity outside peak so it never fires early.
+  formationTimer: number;
 }
 
 export interface VeinInfectionEvent extends InfectionEventBase {
@@ -183,6 +187,34 @@ export interface BloomInfectionEvent extends InfectionEventBase {
 }
 
 export type InfectionEvent = VeinInfectionEvent | BloomInfectionEvent;
+
+// Coagulants: Phase 3C, Decision 42. No HP — `mass` IS the hit points,
+// the arrival damage, and the XP value, all at once. See
+// docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md §7.
+export type CoagulantKind = 'mote' | 'congealer' | 'behemoth';
+
+export interface CoagulantSeed {
+  a: number;
+  r: number;
+  speed: number;
+  phase: number;
+}
+
+export interface Coagulant {
+  x: number;
+  y: number;
+  mass: number;
+  // Ships at ~0 for every Wave 1 kind — maturity, which picks a nonzero
+  // value, doesn't exist until Phase 4A (Decision 44).
+  armor: number;
+  kind: CoagulantKind;
+  radius: number;
+  speed: number;
+  // Generated once at formation (systems/formation.ts), never lazily
+  // inside a draw call — the bubbleSeeds/novaFx bug class again
+  // (docs/DECISIONS.md #4, #7).
+  seeds: CoagulantSeed[];
+}
 
 export interface GameState {
   running: boolean;
@@ -211,6 +243,7 @@ export interface GameState {
 
   events: InfectionEvent[];
   eventSpawnTimer: number;
+  coagulants: Coagulant[];
 
   weaponTimers: Record<WeaponKey, number>;
   bladeNextHit: Record<number, number>;
@@ -274,6 +307,7 @@ export function freshState(): GameState {
     // A little breathing room before the first event, matching the
     // node system's old start-of-run grace period.
     eventSpawnTimer: EVENT_INITIAL_DELAY,
+    coagulants: [],
 
     weaponTimers: { bolt: 0, blades: 0, chain: 0, frost: 0, poison: 0, missile: 0 },
     bladeNextHit: {},

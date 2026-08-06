@@ -20,14 +20,24 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🔴 Phase 3C — Coagulants Wave 1 (next up)
+### 🔴 Playtest gate — Phase 3C is built, awaiting the project owner's verdict
 
-Phase 3B (Infection Events) shipped 2026-08-06 — see BACKLOG's Done
-section and `docs/PROGRESS.md`'s session log for what landed. The design
-rework is agreed (DECISIONS.md #23–#49). Reasoning lives in two session
-records: `docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the
-game is) and `docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md`
-(how it works).
+Phase 3C (Coagulants Wave 1) shipped 2026-08-06 — see BACKLOG's Done
+section and `docs/PROGRESS.md`'s session log for what landed. This is the
+first playtest gate in the rework (2026-08-05 record §17): the point
+where the game becomes "the new game" and the first honest feedback on
+whether the horde reads as intended actually happens. Not a decision
+Claude can make solo — needs the owner playing it.
+
+**What to watch for at the gate**, since every number is a first guess:
+arrival speed and mass (the agreed tuning dials, Decision 27), whether a
+behemoth crossing the arena reads as dramatic or tedious, whether the
+conservation rules feel right in practice (motes shouldn't chain into
+behemoths — Rule 4). The design rework is agreed end to end (DECISIONS.md
+#23–#53). Reasoning lives in two session records:
+`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is)
+and `docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
+works).
 
 ### The rest of the phase plan
 
@@ -36,22 +46,14 @@ Full detail in the session record §17.
 | Phase | Content |
 |---|---|
 | **3B** | ✅ Infection Events framework — vein + bloom, full lifecycle |
-| **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
-| **3D** | XP economy rework → **playtest gate** |
+| **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate, awaiting the owner** |
+| **3D** | XP economy rework (the value-cap removal already landed in 3C — see BACKLOG Done) → **playtest gate** |
 | **4A–4C** | Maturity field, two-axis visuals, Coagulants Wave 2 → **playtest gate** |
 | **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |
 | **9** | VFX and feel |
-
-**Known risks:** coagulant formation ("contiguous mass in a region" inside
-the tick budget) is the one real technical unknown — prototype it first.
-The test suite takes a hit; `nodes.test.ts` goes entirely and
-`contact.test.ts`/`growth.test.ts` need rework. **Keep
-`contact.test.ts`'s "undefended core dies" outcome test** — it survives
-this redesign intact and is the best available proof the rework didn't
-break lethality.
 
 ### 🟡 Balance pass — moved to Phase 8
 
@@ -360,17 +362,13 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
   Missile's now-fixed description all confirmed working with no console
   errors).
 
-  **Left deliberately incomplete, both by explicit instruction:**
-  - **Homing Missile no longer homes onto anything** — it flies at a fixed
-    frontier point since nodes were its only moving target. Restoring real
-    homing is a small follow-up once Phase 3C gives it a coagulant to
-    chase; the projectile's steering already tracks whatever `targetPoint`
-    holds, so no rewrite is needed, just a new target source.
-  - **The kill counter (`nodesPurged`, HUD "Purged" stat) is dormant** —
-    nothing increments it now that nodes are gone. Stays at 0 until Phase
-    3C wires it to coagulant kills. Worth a more interesting stat than a
-    raw count once that lands (kept as a placeholder rather than renamed,
-    per the project owner).
+  **Left deliberately incomplete, both by explicit instruction — both
+  closed out by Phase 3C, below:**
+  - ~~Homing Missile no longer homes onto anything~~ — resolved for free
+    once `nearestFrontierPoint` gained a coagulant surface pass (Decision
+    45); missiles now home on coagulants without any missile-specific code.
+  - ~~The kill counter (`nodesPurged`) is dormant~~ — wired to coagulant
+    kills in `splatterOnDeath`.
 
 - **Phase 3B — Infection Events.** *(2026-08-06)* One system, two variants
   (Decision 29), sharing a lifecycle: telegraph -> active -> peak -> decay
@@ -386,6 +384,73 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
   reuses the existing "read density, converge toward 1, update
   bucket/dirty" shape from `applyAmbientGrowth`/the old node influence —
   events are just another source writing into the same grid.
+
+- **Phase 3C — Coagulants Wave 1.** *(2026-08-06)* The identity change
+  lands: coagulants (`state.coagulants`) form from infection events at
+  peak, walk a straight line to the core, and either get killed or arrive.
+  New modules: `systems/formation.ts` (bounded flood-fill),
+  `systems/coagulants.ts` (movement/arrival/death/collision),
+  `render/coagulants.ts` (seed-circle blob rendering), `tuning/coagulants.ts`.
+
+  **Mass is one currency in two containers, exactly as Decision 42
+  specified.** Coagulants carry `mass` and nothing else as HP — `clearAt`
+  (`grid/clear.ts`) gained a second loop damaging coagulants via
+  hit/body overlap area (`circleOverlapArea`, `util/math.ts`) rather than a
+  flat per-weapon constant, so a wide splash weapon genuinely excels
+  against big targets and a precise weapon isn't wasted on a mote inside
+  its blast (Decision 50). Two damage dials: `COAGULANT_DAMAGE_SCALE`
+  (global, the requested support-gem hook) and `WeaponDef.coagulantMult`
+  (per-weapon, defaulting to 1 but actually *read* by every weapon's
+  `clearAt` call — not just some of them, so a future edit to the field
+  can't silently do nothing).
+
+  **Collision needed its own pass beyond damage math.** Coagulants are
+  entities, not grid cells, so `isRevealedIdx`-gated collision (bolt,
+  chain, missile, blades) couldn't see them at all — each gained an
+  explicit coagulant check alongside its grid check
+  (`findCoagulantHit`/`systems/coagulants.ts`). This is also what restored
+  Homing Missile's homing, for free, once `nearestFrontierPoint` started
+  returning coagulant surfaces too (Decision 45).
+
+  **Arrival deposits mass by growing outward until it all fits** (Decision
+  51), not a fixed disc — grid cells cap at 1, so a large arrival needs
+  real area or it evaporates. Verified as an exact invariant: total mass
+  (grid + entities) returns to where it started across a full
+  formation → transit → arrival cycle with no combat involved
+  (`systems/coagulants.test.ts`).
+
+  **The XP value cap was pulled forward from Phase 3D**, per the project
+  owner's agreement during planning — `gemValueFromRemoved`'s
+  `clamp(…, 0, 10)` is gone, so a 20-second behemoth kill doesn't pay the
+  same as a routine bolt hit. The rest of Decision 31 (superlinear curve,
+  gem showers, risk premium) stays in 3D.
+
+  **Two bugs caught during the live verification pass, not by the test
+  suite** — recorded because the class matters as much as the fix:
+  - The flood-fill's radius cap used a Chebyshev (square) bound; against
+    a saturated field it produced a crisp square crater on screen, which
+    no mass-summing unit test could have caught. Fixed to true Euclidean
+    distance (Decision 52).
+  - Folded in per the project owner's request: 3B's vein rendering put a
+    round cap on every segment joint (a string of beads, not a bolt) —
+    fixed to one continuous stroked path for the trunk and tapered
+    per-segment strokes for branches, so branches end in genuine points
+    (Decision 53).
+
+  217/217 tests passing (up from 165 across `formation.test.ts`,
+  `coagulants.test.ts`, and extensions to `clear.test.ts`,
+  `frontier.test.ts`, `projectiles.test.ts`, `blades.test.ts`,
+  `math.test.ts`, `xp.test.ts`), typecheck and build clean. Verified live
+  in-browser across several runs: watched coagulants form out of both vein
+  and bloom peaks, walk toward the core, take damage from Bolt/Chain/
+  Missile, and a core death from an early arrival — a legitimate first-pass
+  balance outcome, not a bug, and exactly what the playtest gate exists to
+  surface. No console errors in any run beyond the documented Vite
+  self-reload quirk.
+
+  **Left for the playtest gate, not this phase:** every number
+  (thresholds, radii, speeds, arrival damage, splatter). Agreed dials:
+  arrival speed and arrival mass (Decision 27).
 
   164/164 tests passing (up from 136 — 28 new: 6 pure-geometry tests for
   the vein polyline, 22 for lifecycle/injection/spawning), typecheck and

@@ -1,7 +1,7 @@
 import type { GameState } from '../state';
 import { clearAt } from '../grid/clear';
 import { atkSpeedMult, damageMult } from '../systems/passives';
-import { frostCooldown, frostDamage, frostRadius } from '../tuning/weapons';
+import { WEAPON_DEFS, frostCooldown, frostDamage, frostRadius } from '../tuning/weapons';
 
 const FREEZE_DURATION = 2.0;
 const FX_LIFE = 0.4;
@@ -24,6 +24,7 @@ export function updateFrostWeapon(state: GameState, dt: number): void {
   clearAt(state, t.x, t.y, frostDamage(lvl) * damageMult(state), {
     radiusPx: radius,
     freezeDuration: FREEZE_DURATION,
+    coagulantMult: WEAPON_DEFS.frost?.coagulantMult ?? 1,
   });
   state.novaFx = { x: t.x, y: t.y, radius, life: FX_LIFE, maxLife: FX_LIFE };
 }

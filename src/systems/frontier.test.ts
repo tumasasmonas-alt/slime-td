@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { Grid } from '../state';
+import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { computeFrontier, nearestFrontierPoint } from './frontier';
+
+function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
+  return {
+    x: 0,
+    y: 0,
+    mass: 50,
+    armor: 0,
+    kind: 'congealer',
+    radius: 15,
+    speed: 45,
+    seeds: [],
+    ...overrides,
+  };
+}
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
   const size = 900;
@@ -82,5 +96,87 @@ describe('computeFrontier / nearestFrontierPoint', () => {
     const nearest = nearestFrontierPoint(state);
     expect(nearest).not.toBeNull();
     expect(nearest!.dist).toBeLessThan(state.grid.perimeter);
+  });
+
+  describe('coagulant targeting (Decision 45 — nearest-thing-wins, unchanged)', () => {
+    it('targets a coagulant when nothing in the field is revealed', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.coagulants = [makeCoagulant({ x: 250, y: 150, radius: 15 })];
+      computeFrontier(state);
+
+      const nearest = nearestFrontierPoint(state);
+
+      expect(nearest).not.toBeNull();
+      expect(nearest!.x).toBe(250);
+      expect(nearest!.y).toBe(150);
+    });
+
+    it('prefers a closer coagulant over a farther revealed frontier cell', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.tower.radius = 20;
+      const cx = Math.floor(190 / state.grid.cellSize);
+      const cy = Math.floor(150 / state.grid.cellSize);
+      state.grid.threshold[cy * state.grid.cols + cx] = 0.1;
+      state.grid.growth[cy * state.grid.cols + cx] = 0.9; // frontier ~40px out
+      computeFrontier(state);
+      state.coagulants = [makeCoagulant({ x: 155, y: 150, radius: 2 })]; // surface ~3px out — much closer
+
+      const nearest = nearestFrontierPoint(state);
+
+      expect(nearest).not.toBeNull();
+      expect(nearest!.x).toBe(155);
+      expect(nearest!.y).toBe(150);
+    });
+
+    it('prefers a closer revealed frontier cell over a farther coagulant', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.tower.radius = 20;
+      const cx = Math.floor(170 / state.grid.cellSize);
+      const cy = Math.floor(150 / state.grid.cellSize);
+      state.grid.threshold[cy * state.grid.cols + cx] = 0.1;
+      state.grid.growth[cy * state.grid.cols + cx] = 0.9; // frontier ~20px out
+      computeFrontier(state);
+      state.coagulants = [makeCoagulant({ x: 400, y: 150, radius: 15 })]; // surface ~235px out
+
+      const nearest = nearestFrontierPoint(state);
+
+      expect(nearest).not.toBeNull();
+      expect(nearest!.x).toBeCloseTo(170, 5);
+    });
+
+    it('compares by surface distance, not center distance — a big body counts as closer', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      // Center is far, but the body is huge, so its surface is near.
+      state.coagulants = [makeCoagulant({ x: 250, y: 150, radius: 90 })];
+      computeFrontier(state);
+
+      const nearest = nearestFrontierPoint(state);
+
+      expect(nearest).not.toBeNull();
+      expect(nearest!.dist).toBeCloseTo(10, 5); // 100px center distance - 90px radius
+    });
+
+    it('ignores a coagulant already reduced to 0 mass', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.coagulants = [makeCoagulant({ x: 250, y: 150, mass: 0 })];
+      computeFrontier(state); // vacuous otherwise — frontier defaults to null, which alone returns null
+
+      expect(nearestFrontierPoint(state)).toBeNull();
+    });
   });
 });

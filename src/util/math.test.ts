@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clamp, dist, fmtTime, lerp, pick, randInt } from './math';
+import { circleOverlapArea, clamp, dist, fmtTime, lerp, pick, randInt } from './math';
 
 describe('clamp', () => {
   it('clamps below range', () => {
@@ -48,6 +48,43 @@ describe('randInt', () => {
       expect(n).toBeGreaterThanOrEqual(2);
       expect(n).toBeLessThanOrEqual(5);
     }
+  });
+});
+
+describe('circleOverlapArea', () => {
+  it('is 0 when the circles are separate', () => {
+    expect(circleOverlapArea(0, 0, 5, 20, 0, 5)).toBe(0);
+  });
+
+  it('is 0 when the circles are exactly touching (edge case, not overlapping)', () => {
+    expect(circleOverlapArea(0, 0, 5, 10, 0, 5)).toBe(0);
+  });
+
+  it('is the smaller circle\'s full area when one fully contains the other', () => {
+    // A tiny circle centered inside a big one: the overlap is capped at
+    // the small one's own area, not larger.
+    const area = circleOverlapArea(0, 0, 20, 2, 0, 3);
+    expect(area).toBeCloseTo(Math.PI * 3 * 3, 5);
+  });
+
+  it('is exactly half of each circle when identical circles are perfectly overlapping', () => {
+    const r = 10;
+    const area = circleOverlapArea(0, 0, r, 0, 0, r);
+    expect(area).toBeCloseTo(Math.PI * r * r, 5);
+  });
+
+  it('grows monotonically as circles move closer together', () => {
+    const far = circleOverlapArea(0, 0, 10, 15, 0, 10);
+    const mid = circleOverlapArea(0, 0, 10, 10, 0, 10);
+    const near = circleOverlapArea(0, 0, 10, 5, 0, 10);
+    expect(mid).toBeGreaterThan(far);
+    expect(near).toBeGreaterThan(mid);
+  });
+
+  it('is symmetric — order of the two circles does not matter', () => {
+    const a = circleOverlapArea(0, 0, 8, 6, 4, 5);
+    const b = circleOverlapArea(6, 4, 5, 0, 0, 8);
+    expect(a).toBeCloseTo(b, 10);
   });
 });
 

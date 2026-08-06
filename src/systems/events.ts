@@ -18,12 +18,14 @@ import {
   EVENT_TELEGRAPH_DURATION,
   MAX_CONCURRENT_EVENTS,
   VEIN_ACTIVE_RATE,
+  VEIN_FORMATION_INTERVAL,
   VEIN_PEAK_RATE,
   VEIN_WEIGHT,
   VEIN_WIDTH,
   eventSpawnInterval,
 } from '../tuning/events';
-import { clamp, dist, rand } from '../util/math';
+import { clamp, dist, lerp, pick, rand } from '../util/math';
+import { attemptFormation } from './formation';
 import { generateVeinPath } from './veinPath';
 
 // --- growth injection -------------------------------------------------
@@ -182,6 +184,8 @@ function nextPhase(phase: InfectionEventPhase): InfectionEventPhase | null {
 // the density it already injected stays on the grid ("the slime it
 // created remains" — §11 — is true by construction, since injection
 // writes straight into grid.growth rather than tracking its own pool).
+// Arms formationTimer the instant peak begins, so the first attempt
+// fires promptly rather than waiting out a full VEIN_FORMATION_INTERVAL.
 function advancePhase(event: InfectionEvent, dt: number): boolean {
   event.age += dt;
   event.phaseTimer -= dt;
@@ -190,7 +194,38 @@ function advancePhase(event: InfectionEvent, dt: number): boolean {
   if (next === null) return false;
   event.phase = next;
   event.phaseTimer = phaseDuration(next);
+  if (next === 'peak') event.formationTimer = 0;
   return true;
+}
+
+// Picks a random point along a fully-revealed trunk (peak-only, so this
+// is always safe) — occasionally off a branch instead, so buds show up
+// on the lattice too, not just the spine.
+function randomVeinPoint(event: VeinInfectionEvent): { x: number; y: number } {
+  const useBranch = event.branches.length > 0 && Math.random() < 0.3;
+  const segments = useBranch ? pick(event.branches).segments : event.trunk;
+  const seg = pick(segments);
+  const t = Math.random();
+  return { x: lerp(seg.x1, seg.x2, t), y: lerp(seg.y1, seg.y2, t) };
+}
+
+// Phase 3C: coagulant formation is triggered here, and only here — events
+// are sparks, standing mass never spontaneously coagulates (Decision 28).
+// A vein sheds repeatedly across peak ("coagulants bud off along its
+// length," §10); a bloom is one discrete spark, so formationTimer is set
+// to Infinity after its single attempt rather than repeating.
+function updateFormation(state: GameState, event: InfectionEvent, dt: number): void {
+  if (event.phase !== 'peak') return;
+  event.formationTimer -= dt;
+  if (event.formationTimer > 0) return;
+  if (event.kind === 'vein') {
+    event.formationTimer = VEIN_FORMATION_INTERVAL * rand(0.7, 1.3);
+    const point = randomVeinPoint(event);
+    attemptFormation(state, point.x, point.y);
+  } else {
+    event.formationTimer = Infinity;
+    attemptFormation(state, event.x, event.y);
+  }
 }
 
 export function updateEvents(state: GameState, dt: number): void {
@@ -202,6 +237,7 @@ export function updateEvents(state: GameState, dt: number): void {
     if (!alive) continue;
     if (event.kind === 'vein') applyVeinGrowth(grid, event, dt, state.dirty);
     else applyBloomGrowth(grid, event, dt, state.dirty);
+    updateFormation(state, event, dt);
     remaining.push(event);
   }
   state.events = remaining;
@@ -237,6 +273,7 @@ function spawnVein(state: GameState): void {
     phase: 'telegraph',
     phaseTimer: EVENT_TELEGRAPH_DURATION,
     age: 0,
+    formationTimer: Infinity, // armed when peak begins — see advancePhase
     trunk,
     branches,
   });
@@ -251,6 +288,7 @@ function spawnBloom(state: GameState): void {
     phase: 'telegraph',
     phaseTimer: EVENT_TELEGRAPH_DURATION,
     age: 0,
+    formationTimer: Infinity, // armed when peak begins — see advancePhase
     x: site.x,
     y: site.y,
     radius: BLOOM_RADIUS,

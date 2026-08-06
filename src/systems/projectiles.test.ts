@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import type { Grid } from '../state';
+import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { gIdx, worldToCell } from '../grid/grid';
 import { updateProjectiles } from './projectiles';
+
+function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
+  return {
+    x: 305,
+    y: 300,
+    mass: 50,
+    armor: 0,
+    kind: 'congealer',
+    radius: 10,
+    speed: 45,
+    seeds: [],
+    ...overrides,
+  };
+}
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
   const size = 3600;
@@ -72,6 +86,22 @@ describe('updateProjectiles — bolt', () => {
 
     expect(state.projectiles).toHaveLength(1);
     expect(state.projectiles[0]!.x).toBeCloseTo(301, 5);
+  });
+
+  it('detonates on a coagulant sitting in already-cleared space — not just on revealed grid cells', () => {
+    // A blob is an entity, not a grid cell, so isRevealedIdx alone can't
+    // see it (docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md
+    // §"finding 2"). Grid stays empty here on purpose.
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const c = makeCoagulant({ x: 305, y: 300, radius: 10, mass: 50 });
+    state.coagulants = [c];
+    state.projectiles.push({ type: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 30, radius: 4, color: '#fff', life: 5 });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(0);
+    expect(c.mass).toBeLessThan(50);
   });
 });
 
@@ -156,6 +186,40 @@ describe('updateProjectiles — chain', () => {
 
     expect(state.projectiles).toHaveLength(0);
   });
+
+  it('hops to a nearby coagulant when it is closer than any revealed grid cluster', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6); // first hit, triggers the hop
+    revealAt(state.grid, 400, 300, 0.6); // a distant grid cluster (due east, ~99px from the hit)
+    // Due north of the hit point and much closer (~40px) — a different
+    // bearing from the grid cluster, so the resulting steering direction
+    // unambiguously reveals which target the hop actually picked.
+    state.coagulants = [makeCoagulant({ x: 301, y: 260, radius: 10 })];
+    state.projectiles.push({
+      type: 'chain',
+      x: 300,
+      y: 300,
+      vx: 10,
+      vy: 0,
+      dmg: 20,
+      radius: 5,
+      color: '#e6c8ff',
+      life: 5,
+      hopsLeft: 2,
+      visited: new Set(),
+      legStart: { x: 300, y: 300 },
+    });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(1);
+    const p = state.projectiles[0]!;
+    expect(p.type).toBe('chain');
+    if (p.type !== 'chain') return;
+    expect(p.vy).toBeLessThan(0); // steering north, toward the coagulant
+    expect(Math.abs(p.vx)).toBeLessThan(Math.abs(p.vy)); // not toward the due-east grid cluster
+  });
 });
 
 describe('updateProjectiles — missile', () => {
@@ -238,5 +302,31 @@ describe('updateProjectiles — missile', () => {
     updateProjectiles(state, 0.02);
 
     expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('detonates on touching a coagulant, even over unrevealed ground', () => {
+    const state = freshState();
+    state.grid = makeTestGrid(); // empty — no revealed tissue anywhere
+    const c = makeCoagulant({ x: 306, y: 300, radius: 10, mass: 50 });
+    state.coagulants = [c];
+    state.projectiles.push({
+      type: 'missile',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      speed: 300,
+      dmg: 30,
+      splashRadius: 60,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetPoint: { x: 1000, y: 300 }, // far beyond the coagulant
+    });
+
+    updateProjectiles(state, 0.02);
+
+    expect(state.projectiles).toHaveLength(0);
+    expect(c.mass).toBeLessThan(50);
   });
 });

@@ -629,11 +629,11 @@ as the two-machine handoff mechanism.
 > These close every open question the previous session left. **Phase 3A is
 > unblocked.**
 >
-> **47–49 are later additions**, not from that design session — findings
-> and calls made during the Phase 3A and 3B implementations themselves.
-> Kept in this section because they're still "how it works," not "what it
-> is." No session record covers them individually; the reasoning lives
-> here and in `docs/PROGRESS.md`'s session log.
+> **47–53 are later additions**, not from that design session — findings
+> and calls made during the Phase 3A, 3B, and 3C implementations
+> themselves. Kept in this section because they're still "how it works,"
+> not "what it is." No session record covers them individually; the
+> reasoning lives here and in `docs/PROGRESS.md`'s session log.
 
 **38. The perimeter is a fixed radius. 📋**
 *2026-08-06.* It shrank 100 → 45 via `TIERS_LIST`, which #33 strips of
@@ -957,6 +957,98 @@ built now because the coral pattern offers no guarantee a route exists at
 every possible spawn angle, whereas the polyline construction can never
 fail to reach the core. See BACKLOG for the compromise considered (biasing
 displacement toward the coral pattern rather than true pathfinding).
+
+**50. Coagulant damage scales by hit/body overlap area, not a flat
+per-hit constant.** 📋 ✅
+*2026-08-06, during the 3C planning pass.* The original Decision 42 sketch
+implied one damage number could stand in for "how much grid an equivalent
+hit would have covered." The project owner pushed back: a missile splash
+and a Chain Bolt's first hit shouldn't land the same on a blob, and that
+information already exists per-weapon as each weapon's own `radiusPx`.
+
+```
+overlapArea = circleOverlapArea(hitDisc, blobDisc)   // util/math.ts
+cellsEquivalent = overlapArea / cellSize²
+effectivePower = max(power - armor, power * COAGULANT_ARMOR_FLOOR)
+removed = effectivePower * DAMAGE_COEFF * cellsEquivalent
+        * COAGULANT_RESISTANCE * coagulantMult * COAGULANT_DAMAGE_SCALE
+```
+
+`DAMAGE_COEFF` and `COAGULANT_RESISTANCE` are the same constants the grid
+loop uses (`COAGULANT_RESISTANCE` = `clamp(1.3 - 1, 0.12, 1.3)`, since a
+coagulant's local density is always 1 — it *is* the densest slime in the
+game, per #46). This self-limits in both directions without a table: a
+small mote inside a huge Frost Nova only takes mote-sized damage (overlap
+caps at the mote's own area), while a Bolt clipping a huge Behemoth only
+does Bolt-sized damage — and a wide-splash weapon genuinely excels against
+big targets, which a flat constant could never express.
+
+Two dials, not one: `COAGULANT_DAMAGE_SCALE` (`tuning/coagulants.ts`) is
+the master knob — the project owner's requested hook for a future support
+gem. `WeaponDef.coagulantMult` (`tuning/weapons.ts`), defaulting to 1 on
+every weapon, is the per-weapon hook — the requested "base stat you could
+later level with enhancement points." Every weapon's `clearAt` call site
+was updated to actually read its own `coagulantMult` rather than relying
+on the default, specifically so a future edit to that field isn't silently
+ignored by weapons that never look at it.
+
+**51. Arrival deposit grows outward until all mass is placed, rather than
+clipping to a fixed disc.** 📋 ✅
+*2026-08-06.* Grid cells cap at `growth = 1`, and the perimeter disc holds
+only ~150 cells — nowhere near enough for a large arrival (or even a
+max-size splatter) to fit without evaporating some of it. The project
+owner's proposed fix, converging independently with the mechanism the
+session had been reaching for: `depositMass()` fills outward ring by ring
+from the arrival point until the full amount is placed.
+
+This makes total mass (grid + entities) **exactly** conserved on arrival —
+not merely "never destroyed" as an earlier draft of this decision assumed
+— and it's a better outcome dramatically too: a behemoth's ~600 mass
+needs real area to land in, so arrival reads as a large, arena-visible
+mess rather than politely fitting inside the ring. Verified directly:
+`systems/coagulants.test.ts`'s formation → transit → arrival cycle test
+asserts the grid's total mass returns to within floating-point tolerance
+of where it started.
+
+**52. The formation flood-fill's radius cap is a true circle, not a
+Chebyshev box.** ✅
+*2026-08-06, found live during the 3C browser verification pass, not by a
+unit test.* The first implementation bounded the flood-fill with
+`max(|dx|, |dy|) > radiusCells` — cheap, and the mass-sum tests all
+passed, because a test asserting a mass *number* can't see the *shape* of
+what produced it. In the browser, a coagulant that formed against an
+already-saturated field left a crisp square crater — the box bound had
+become the binding constraint on every side at once, which a unit test
+checking only the summed mass could never have caught.
+
+Fixed to real Euclidean distance (`dx² + dy² > radiusCap²`, compared once
+per visited cell — negligible added cost on a ≤700-cell bounded search).
+Restores what #43 actually promised: a crater "shaped exactly like the
+flood-fill's reach... following whatever pattern the field was already
+in," not a shape imposed by the bounding check's own geometry. **Recorded
+as a reminder that shape/visual bugs need eyes on the running game, not
+just an assertion on a derived number** — the same lesson #11 drew from
+the playtest, applied to a bug the test suite structurally could not
+catch.
+
+**53. Vein rendering strokes the trunk as one continuous path, and tapers
+each branch to a genuine point.** ✅
+*2026-08-06, folded into the 3C commit at the project owner's request
+after flagging the visual in the 3B follow-up ("veins are very round at
+the points... should all end in small points like lightning").* 3B's
+`drawVein` stroked every segment as its own `moveTo`/`lineTo` subpath, so
+`lineCap: 'round'` put a rounded cap at *every* joint — with 32 trunk
+segments that reads as a string of beads, not a single bolt.
+
+The trunk is contiguous end-to-end by construction (proven in
+`veinPath.test.ts`), so it now strokes as a single path — one `moveTo`,
+then `lineTo` through every segment's endpoint — with `lineCap: 'butt'`
+and `lineJoin: 'round'` for smooth interior joints and no caps at all.
+Branches are also individually contiguous but stroked as separate
+per-segment subpaths on purpose, so `lineWidth` can taper toward zero
+across the branch — a single `stroke()` call only has one width, so
+tapering requires the per-segment form the trunk deliberately avoids.
+`'butt'` caps on a narrowing line read as a genuine point.
 
 ---
 

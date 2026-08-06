@@ -63,3 +63,10 @@ export const VEIN_PEAK_RATE = 0.85;
 export const BLOOM_RADIUS = 110;
 export const BLOOM_ACTIVE_RATE = 0.5;
 export const BLOOM_PEAK_RATE = 0.8;
+
+// Coagulant formation triggers, Phase 3C (Decision 28: events are the
+// only spark; standing mass never spontaneously coagulates). A vein
+// sheds along its length throughout peak — "coagulants bud off along
+// its length," §10 — so it gets a repeating interval. A bloom is one
+// discrete spark, not a stream, so it fires once per peak phase.
+export const VEIN_FORMATION_INTERVAL = 0.9;

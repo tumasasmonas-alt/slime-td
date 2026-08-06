@@ -48,34 +48,37 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-06 (Phase 3B shipped)
+**Last updated:** 2026-08-06 (Phase 3C shipped — playtest gate)
 
-**The rework is underway.** Phases 3A (teardown) and 3B (Infection Events)
-are both built, tested, and verified live: growth nodes are gone, replaced
-by veins and blooms with a full telegraph→active→peak→decay lifecycle; the
-perimeter is fixed; `TIERS_LIST` carries no mechanical weight.
+**The rework's identity change is built.** Phases 3A (teardown), 3B
+(Infection Events), and 3C (Coagulants Wave 1) are all built, tested, and
+verified live: growth nodes are gone, replaced by veins and blooms that
+spark coagulants — Mote, Congealer, Behemoth — which walk to the core, get
+damaged through the existing weapon formulas, and either die or breach.
+**This is the first playtest gate.** Code is done; the verdict is not —
+that needs the project owner playing it, not another verification pass.
 
 | | |
 |---|---|
-| Tests | 164 passing (30 test files) — one known flake, see BACKLOG |
-| Source | 59 modules under `src/` |
+| Tests | 217 passing (32 test files) — one known flake, see BACKLOG |
+| Source | 61 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
-| Branch | `main` — 3B not yet pushed, see below |
-| Code state | **Phases 3A and 3B complete.** Everything else in the rework is still design-only. |
-| Blockers | **None.** Phase 3C (Coagulants Wave 1) is next. |
+| Branch | `main` — 3C not yet pushed, see below |
+| Code state | **Phases 3A–3C complete.** Everything past this gate (4A onward) is still design-only. |
+| Blockers | **The 3C playtest gate.** Numbers are first-pass by design — see BACKLOG. |
 
-**What works today:** a playable loop with the horde-economy teardown and
-its first live event system. Infection grows as a reaction-diffusion
-density field, creeps toward a stationary core across a **fixed
-perimeter**, and now also gets punctuated by **Infection Events** —
-branching veins telegraphing from the arena edge and extending inward,
-radial blooms telegraphing and pulsing in the field, both injecting growth
-while active and leaving their mass behind once they decay. Six
-auto-firing weapons and eight passives via level-up cards. Contact damage,
-flavour-only tiers, game over, restart with a fresh maze. **Growth nodes
-are gone** — Missile and Caustic Cloud fire at the frontier only until
-Phase 3C gives them coagulants to chase.
+**What works today:** the horde-economy loop, end to end, for the first
+time. Infection grows as a density field across a **fixed perimeter**,
+punctuated by **Infection Events** (branching veins, radial blooms) that
+inject growth and, at their peak, spark **coagulants** out of whatever
+contiguous mass a bounded flood-fill finds. A coagulant is pure mass with
+no separate HP — every weapon damages it through the same formula that
+clears grid tissue, scaled by how much of the hit actually overlaps its
+body. Kill one and it's gone, converted to XP; let one reach the core and
+it dumps its full remaining mass as tower damage and a field breach. Six
+auto-firing weapons, eight passives via level-up cards, contact damage,
+flavour-only tiers, game over, restart with a fresh maze.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -85,16 +88,17 @@ and math are in the 2026-08-05 session record.
 
 ### ⚠️ Read this before writing any code
 
-The next work is **Phase 3C — Coagulants Wave 1.** Not the balance pass
-(Decision 13, superseded).
+**Nothing should be built past this point until the 3C playtest gate
+closes.** The next phase (3D, XP economy — mostly already pulled forward
+into 3C, see below) is small; 4A (maturity) is not, and building terrain
+on top of an unverified horde is exactly the ordering mistake Decision 36
+already argued against once.
 
 The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
-gem system, and the tier table is demoted to flavour. **Phases 3A and 3B
-are done;** 3C is the next unbuilt piece, and it's the phase carrying the
-project's one real technical unknown (bounded flood-fill formation,
-Decision 43) — read the mechanism session before starting it.
+gem system, and the tier table is demoted to flavour. **Phases 3A, 3B, and
+3C are done.**
 
 **Start here, in order:**
 
@@ -106,13 +110,14 @@ Decision 43) — read the mechanism session before starting it.
    *how it works.* The layer below: what a coagulant is in code, how
    formation is computed, how armor and the card pool are structured. Also
    has a rejected-ideas table.
-3. **`docs/DECISIONS.md` #23–#49** — the load-bearing calls in short form.
-   23–37 are the design; 38–49 are the mechanism. #47–49 are
-   implementation-time findings from 3A/3B, not from either design
+3. **`docs/DECISIONS.md` #23–#53** — the load-bearing calls in short form.
+   23–37 are the design; 38–53 are the mechanism. #47–53 are
+   implementation-time findings from 3A/3B/3C, not from either design
    session — see the note at the top of that section.
-4. **`docs/BACKLOG.md`** *Now* section — 3C is the concrete next step; 3A's
-   and 3B's own follow-ups (missile targeting, the dormant kill counter,
-   coral-biased vein geometry) are noted in *Done* and *Ideas*.
+4. **`docs/BACKLOG.md`** *Now* section — the playtest gate is the concrete
+   next step, not new code. 3A/3B/3C's own follow-ups (coral-biased vein
+   geometry, spontaneous coagulation, the orbital trade ship) are noted in
+   *Done* and *Ideas*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -154,11 +159,14 @@ src/
   grid/       density field, reaction-diffusion vein pattern, clearAt (the
               damage-the-field core function), slime layer canvas
   systems/    simulation: growth, infection events (vein/bloom lifecycle +
-              geometry), contact damage, frontier targeting, projectiles,
-              gems, xp, particles, passives, tower, fx lifetimes
+              geometry), coagulant formation (bounded flood-fill) and
+              lifecycle (movement/arrival/death/collision), contact damage,
+              frontier targeting, projectiles, gems, xp, particles,
+              passives, tower, fx lifetimes
   weapons/    one module per weapon (behavior only — data lives in tuning/)
   render/     canvas draw calls, strictly separated from update logic
-  tuning/     all numeric knobs: weapons, tiers, growth, events, xp, geometry
+  tuning/     all numeric knobs: weapons, tiers, growth, events, coagulants,
+              xp, geometry
   ui/         DOM/CSS HUD, upgrade cards, start/game-over overlays
   state.ts    the single central GameState + freshState()
   main.ts     game loop, run lifecycle, render order
@@ -168,9 +176,9 @@ src/
 - One system per module; update logic and draw calls never mix.
 - All game state lives in the one central object — no scattered mutable
   state.
-- The simulation tick (growth, infection events, frontier, contact damage)
-  runs on a fixed timestep via an accumulator, decoupled from render
-  framerate.
+- The simulation tick (growth, infection events, coagulants, frontier,
+  contact damage) runs on a fixed timestep via an accumulator, decoupled
+  from render framerate.
 - Numeric tuning constants stay in `tuning/` so balance work is one
   directory, not a hunt through logic.
 
@@ -179,6 +187,102 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-06 (yet later) — Phase 3C: Coagulants Wave 1
+
+**Implementation. The horde's identity change lands.** Owner asked for a
+review-and-plan pass first ("reread docs... think about what we are about
+to do, plan it out and if anything is unclear talk to me"); the review
+surfaced four real gaps the written design hadn't covered, each resolved
+with the owner before writing code; built the same session once greenlit.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Phase 3C — `systems/formation.ts`, `systems/coagulants.ts`, `render/coagulants.ts`, `tuning/coagulants.ts`; coagulant damage/collision wired into `grid/clear.ts`, `systems/projectiles.ts`, `weapons/blades.ts`, `systems/frontier.ts`; XP value cap removed; vein rendering fixed |
+
+**Discussed**
+
+- **Decision 42's "no new mechanic, just the same formula" claim held only
+  up to a scale factor the design never named.** Tracing the actual
+  magnitudes: a level-1 bolt against a saturated-wilderness behemoth
+  (~400–600 mass) would take *thousands* of hits. Claude's first proposal
+  was a flat `COAGULANT_HIT_CELLS` constant. **The owner's counter was
+  better:** different weapons already carry different hit radii
+  (`radiusPx`), so scaling by actual **hit/body overlap area**
+  (`circleOverlapArea`, `util/math.ts`) captures per-weapon character for
+  free — a missile splash and a chain bolt's first hit land differently
+  without a hand-tuned table, and it self-limits both directions (a huge
+  AoE can't over-damage a tiny mote; a precise hit does precise damage to
+  a huge target). The owner also asked for the multiplier to be
+  per-weapon, not global, specifically so it could later become a support
+  gem *or* an enhancement-point base stat — both hooks now exist
+  (`COAGULANT_DAMAGE_SCALE` global, `WeaponDef.coagulantMult` per-weapon).
+  See Decision 50.
+- **Collision needed a pass the plan hadn't named at all.** Coagulants are
+  entities, not grid cells, and four collision paths (bolt, chain, chain's
+  hop search, blades) gate on `isRevealedIdx` — a coagulant sitting in
+  already-cleared ground would be structurally untouchable by them.
+  Caustic Cloud/Frost/Ward were free (they already route unconditionally
+  through `clearAt`). Fixed with an explicit coagulant check alongside
+  each grid check, and a side effect worth naming: Homing Missile's homing
+  — degraded to a fixed point back in 3A when nodes were removed — came
+  back for free once `nearestFrontierPoint` started returning coagulant
+  surfaces (Decision 45), with zero missile-specific code.
+- **The owner's fix for arrival's mass-evaporation problem was better than
+  Claude's.** Claude had planned to weaken the conservation invariant to
+  "mass is never *created*" because the perimeter disc (~150 cells) can't
+  hold a large arrival at `growth` capped at 1. The owner's proposal —
+  spill the deposit outward ring by ring until it all fits — keeps the
+  invariant *exact* instead, and reads better besides: a behemoth's
+  arrival becomes a genuinely large, arena-visible mess rather than
+  politely fitting inside the ring. See Decision 51.
+- **Pulling 3D's XP cap removal forward was agreed in the same planning
+  pass** — reading the 3C playtest gate through the still-capped
+  `gemValueFromRemoved` (`clamp(…, 0, 10)`) would have made a 20-second
+  behemoth kill pay the same as a routine bolt hit, actively misleading
+  the gate it exists to inform. The rest of Decision 31 (superlinear
+  curve, showers, risk premium) stayed in 3D as originally planned.
+- **Two bugs surfaced only by playing the running game, not by the test
+  suite** — worth recording as a reminder of the category, not just the
+  fixes. The formation flood-fill's radius cap used a cheap Chebyshev
+  (square) bound; every mass-summing unit test passed, because a test
+  asserting a number can't see the *shape* of what produced it. In the
+  browser, a coagulant forming against a saturated field left a crisp
+  square crater on screen. Fixed to true circular distance (Decision 52).
+  Separately, folded in per the owner's request from the 3B follow-up
+  ("veins are very round at the points... should end in small points like
+  lightning"): 3B's vein stroked every segment as its own subpath, so
+  `lineCap: 'round'` beaded every joint. Fixed to one continuous path for
+  the trunk plus tapered per-segment strokes for branches (Decision 53).
+- **The kill counter and Homing Missile's targeting**, both left dormant
+  in 3A with an explicit promise to close them out here, both closed:
+  `nodesPurged` now increments in `splatterOnDeath`; missile targeting
+  fixed itself via the frontier change above.
+
+**Decided** — Decisions 50 (overlap-area coagulant damage, two dials), 51
+(arrival deposit spills outward, exact conservation), 52 (circular flood-
+fill bound), 53 (vein rendering: continuous trunk, tapered branches).
+
+**Verified**: 217/217 tests passing (up from 165 — new `formation.test.ts`
+and `coagulants.test.ts`, extensions to six existing files), typecheck and
+build clean (63 modules bundled). Verified live in-browser across several
+runs: watched coagulants form out of both vein and bloom peaks with an
+organically-shaped crater (post-fix), walk toward the core, and take
+damage from Bolt/Chain/Missile; one run ended in a core death from an
+early arrival at 00:35 — a legitimate first-pass balance outcome given
+these are placeholder numbers, not a bug, and confirmed via a clean
+"Core Overwhelmed" flow with no console errors. No errors in any run
+beyond the documented Vite self-reload quirk.
+
+**Planned** — **The Phase 3C playtest gate.** This is not Claude's call to
+clear — it needs the project owner actually playing the game. Per
+BACKLOG: watch whether a behemoth crossing the arena reads as dramatic or
+tedious, whether the conservation rules feel right (motes shouldn't chain
+into behemoths), and tune arrival speed/mass by feel — the two agreed
+dials. Nothing past this gate (3D's remainder, 4A) should start before it
+closes.
 
 ### 2026-08-06 (still later) — Phase 3B: Infection Events
 
@@ -574,20 +678,20 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 3C — Coagulants Wave 1. Phases 3A and 3B shipped
-2026-08-06.**
+**Next: the Phase 3C playtest gate — the project owner playing the game,
+not more code. Phases 3A, 3B, and 3C shipped 2026-08-06.**
 
 The design is settled end to end, and as of 2026-08-06 so is the
-mechanism. What remains is implementation, in the order below. Full detail
-in the 2026-08-05 record §17; the concrete next step is in
+mechanism — all the way through the horde's first playable form. Full
+detail in the 2026-08-05 record §17; the concrete next step is in
 `docs/BACKLOG.md`'s *Now* section.
 
 | Phase | Content |
 |---|---|
 | **3A** | ✅ Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
 | **3B** | ✅ Infection Events — vein (acts on density) + bloom (acts on maturity — payload deferred to 4A), full lifecycle |
-| **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
-| **3D** | XP economy — mass-based, cap removed, superlinear curve → **playtest gate** |
+| **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate, awaiting the owner** |
+| **3D** | XP economy — mass-based (value cap removal already pulled into 3C), superlinear curve, gem showers, risk premium → **playtest gate** |
 | **4A–4C** | Maturity field · two-axis visuals · Coagulants Wave 2 → **playtest gate** |
 | **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |

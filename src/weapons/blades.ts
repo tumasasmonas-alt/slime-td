@@ -1,8 +1,9 @@
 import type { GameState } from '../state';
 import { clearAt } from '../grid/clear';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
+import { findCoagulantHit } from '../systems/coagulants';
 import { damageMult } from '../systems/passives';
-import { bladeCount, bladeDamage, bladeRadius } from '../tuning/weapons';
+import { WEAPON_DEFS, bladeCount, bladeDamage, bladeRadius } from '../tuning/weapons';
 
 const SPIN_SPEED = 2.4;
 const HIT_RADIUS = 16;
@@ -44,8 +45,12 @@ export function updateBladesWeapon(state: GameState, _dt: number): void {
     const { cx, cy } = worldToCell(grid, bx, by);
     const ci = gIdx(grid, cx, cy);
     const nextAllowed = state.bladeNextHit[i] ?? 0;
-    if (isRevealedIdx(grid, ci) && state.time >= nextAllowed) {
-      clearAt(state, bx, by, dmg, { radiusPx: HIT_RADIUS });
+    // Coagulants are entities, not grid cells — a blade sweeping through
+    // already-cleared space still needs to connect with a blob sitting
+    // there, which isRevealedIdx alone can't see.
+    const onTarget = isRevealedIdx(grid, ci) || findCoagulantHit(state, bx, by, HIT_RADIUS) !== null;
+    if (onTarget && state.time >= nextAllowed) {
+      clearAt(state, bx, by, dmg, { radiusPx: HIT_RADIUS, coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1 });
       state.bladeNextHit[i] = state.time + HIT_COOLDOWN;
     }
   }

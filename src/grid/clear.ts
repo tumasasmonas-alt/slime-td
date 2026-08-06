@@ -1,16 +1,31 @@
 import type { GameState } from '../state';
-import { clamp, rand } from '../util/math';
+import { circleOverlapArea, clamp, dist, rand } from '../util/math';
+import {
+  COAGULANT_ARMOR_FLOOR,
+  COAGULANT_DAMAGE_SCALE,
+  COAGULANT_RESISTANCE,
+} from '../tuning/coagulants';
 import { gemValueFromRemoved } from '../tuning/xp';
 import { dropGem } from '../systems/gems';
+import { splatterOnDeath } from '../systems/coagulants';
 import { spawnParticles } from '../systems/particles';
 import { cellBucket, gIdx, worldToCell } from './grid';
 
 export interface ClearOptions {
   radiusPx?: number;
   freezeDuration?: number;
+  // Per-weapon multiplier on damage dealt to coagulants — see
+  // tuning/weapons.ts's WeaponDef.coagulantMult. Weapons that don't pass
+  // one (tests, ad-hoc calls) get the neutral default.
+  coagulantMult?: number;
 }
 
 const GEM_DROP_THRESHOLD = 0.08;
+// Shared by both the grid loop and the coagulant loop below, so a future
+// balance-pass retune of one automatically keeps the other consistent —
+// see docs/DECISIONS.md #50, "no new mechanic, just the same formula
+// applied to an entity instead of a cell."
+const DAMAGE_COEFF = 0.022;
 
 // The core damage-the-field function: density directly resists both the
 // radius and magnitude of a hit — sparse tissue clears in one satisfying
@@ -43,7 +58,7 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       if (dens <= 0.001) continue;
       const falloff = 1 - d / radiusPx;
       const resistance = clamp(1.3 - dens, 0.12, 1.3);
-      const removeAmt = clamp(power * 0.022 * falloff * resistance, 0, dens);
+      const removeAmt = clamp(power * DAMAGE_COEFF * falloff * resistance, 0, dens);
       if (removeAmt <= 0) continue;
       const newDens = Math.max(0, dens - removeAmt);
       totalRemoved += dens - newDens;
@@ -54,6 +69,33 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
         state.dirty.add(i);
       }
     }
+  }
+
+  // Coagulants aren't in the grid (Decision 42's one hard constraint —
+  // putting them there would let them scar terrain as they walk, once
+  // Phase 4A adds maturity). So they get their own loop here rather than
+  // falling out of the cell loop above: same falloff/resistance shape,
+  // scaled by how much of the hit disc actually overlaps the blob
+  // instead of by a flat per-weapon constant. A coagulant's local
+  // "density" is fixed at 1 — it IS the densest slime in the game
+  // (Decision 46) — so resistance is a constant, not sampled.
+  const weaponMult = opts.coagulantMult ?? 1;
+  for (const c of state.coagulants) {
+    if (c.mass <= 0) continue;
+    if (dist(x, y, c.x, c.y) > radiusPx + c.radius) continue; // cheap reject before the trig
+    const overlap = circleOverlapArea(x, y, radiusPx, c.x, c.y, c.radius);
+    if (overlap <= 0) continue;
+    const cellsEquivalent = overlap / (grid.cellSize * grid.cellSize);
+    const effectivePower = Math.max(power - c.armor, power * COAGULANT_ARMOR_FLOOR);
+    const removeAmt = clamp(
+      effectivePower * DAMAGE_COEFF * cellsEquivalent * COAGULANT_RESISTANCE * weaponMult * COAGULANT_DAMAGE_SCALE,
+      0,
+      c.mass,
+    );
+    if (removeAmt <= 0) continue;
+    c.mass -= removeAmt;
+    totalRemoved += removeAmt;
+    if (c.mass <= 0) splatterOnDeath(state, c);
   }
 
   if (totalRemoved > GEM_DROP_THRESHOLD) {

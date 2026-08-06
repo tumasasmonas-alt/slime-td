@@ -36,3 +36,20 @@ export function fmtTime(seconds: number): string {
   const sec = s % 60;
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
+
+// Area of the lens where two circles overlap — used to scale weapon
+// damage against coagulants by how much of the hit disc actually
+// intersects the blob, rather than a flat per-weapon constant (see
+// grid/clear.ts's coagulant damage loop, docs/DECISIONS.md #42/#50).
+export function circleOverlapArea(x1: number, y1: number, r1: number, x2: number, y2: number, r2: number): number {
+  const d = dist(x1, y1, x2, y2);
+  if (d >= r1 + r2) return 0;
+  if (d <= Math.abs(r1 - r2)) return Math.PI * Math.min(r1, r2) ** 2;
+  const r1sq = r1 * r1;
+  const r2sq = r2 * r2;
+  const alpha = Math.acos(clamp((d * d + r1sq - r2sq) / (2 * d * r1), -1, 1)) * 2;
+  const beta = Math.acos(clamp((d * d + r2sq - r1sq) / (2 * d * r2), -1, 1)) * 2;
+  const area1 = 0.5 * r1sq * (alpha - Math.sin(alpha));
+  const area2 = 0.5 * r2sq * (beta - Math.sin(beta));
+  return area1 + area2;
+}

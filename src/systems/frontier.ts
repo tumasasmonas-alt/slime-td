@@ -1,5 +1,6 @@
 import type { GameState } from '../state';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
+import { dist } from '../util/math';
 
 export const FRONTIER_SECTORS = 48;
 
@@ -45,11 +46,18 @@ export interface FrontierPoint {
   dist: number;
 }
 
+// Nearest-thing-wins, unchanged as a default (Decision 45) — coagulants
+// just become another candidate compared by distance, same as any
+// frontier sector. Compares against the *surface* of a coagulant
+// (distance to center minus its radius), not its center, so a huge
+// behemoth is treated as being exactly as close as it visibly is.
 export function nearestFrontierPoint(state: GameState): FrontierPoint | null {
   const grid = state.grid;
   const frontier = state.frontier;
   if (!grid || !frontier) return null;
   const t = state.tower;
+
+  let best: FrontierPoint | null = null;
   let bestS = -1;
   let bestD = Infinity;
   for (let s = 0; s < frontier.length; s++) {
@@ -59,7 +67,18 @@ export function nearestFrontierPoint(state: GameState): FrontierPoint | null {
       bestS = s;
     }
   }
-  if (bestS < 0 || bestD >= grid.maxRange - 1) return null;
-  const angle = (bestS / frontier.length) * Math.PI * 2;
-  return { x: t.x + Math.cos(angle) * bestD, y: t.y + Math.sin(angle) * bestD, dist: bestD };
+  if (bestS >= 0 && bestD < grid.maxRange - 1) {
+    const angle = (bestS / frontier.length) * Math.PI * 2;
+    best = { x: t.x + Math.cos(angle) * bestD, y: t.y + Math.sin(angle) * bestD, dist: bestD };
+  }
+
+  for (const c of state.coagulants) {
+    if (c.mass <= 0) continue;
+    const surfaceDist = Math.max(0, dist(t.x, t.y, c.x, c.y) - c.radius);
+    if (best === null || surfaceDist < best.dist) {
+      best = { x: c.x, y: c.y, dist: surfaceDist };
+    }
+  }
+
+  return best;
 }

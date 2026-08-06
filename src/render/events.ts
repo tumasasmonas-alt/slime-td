@@ -1,4 +1,4 @@
-import type { BloomInfectionEvent, GameState, VeinInfectionEvent } from '../state';
+import type { BloomInfectionEvent, GameState, VeinInfectionEvent, VeinSegment } from '../state';
 import { veinRevealCount } from '../systems/events';
 import { EVENT_ACTIVE_DURATION, EVENT_DECAY_DURATION } from '../tuning/events';
 import { clamp } from '../util/math';
@@ -18,11 +18,80 @@ export function drawInfectionEvents(ctx: CanvasRenderingContext2D, state: GameSt
   }
 }
 
+// The trunk is contiguous end-to-end (each segment starts where the last
+// one ended — see systems/veinPath.test.ts), so it strokes as ONE
+// continuous path: a single moveTo, then lineTo through every segment's
+// end point. Stroking each segment as its own subpath (moveTo/lineTo per
+// segment) put a lineCap at every joint, which with 'round' caps read as
+// a string of beads rather than a single line — fixed here rather than
+// carried forward from 3B.
+function strokeTrunk(
+  ctx: CanvasRenderingContext2D,
+  segments: VeinSegment[],
+  color: string,
+  alpha: number,
+  width: number,
+  glow: number,
+): void {
+  if (segments.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'round';
+  if (glow > 0) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = glow;
+  }
+  ctx.beginPath();
+  ctx.moveTo(segments[0]!.x1, segments[0]!.y1);
+  for (const seg of segments) ctx.lineTo(seg.x2, seg.y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Branches are also individually contiguous (systems/veinPath.test.ts),
+// but stroked as *separate* per-segment subpaths so the width can taper
+// toward the tip — a single stroke() call can only have one lineWidth.
+// 'butt' caps on a narrowing line read as a genuine point, which is what
+// "ends in small points like lightning" (the project owner's note on
+// 3B's visual) actually needs, not a rounded-off branch.
+function strokeBranch(
+  ctx: CanvasRenderingContext2D,
+  segments: VeinSegment[],
+  color: string,
+  alpha: number,
+  baseWidth: number,
+  glow: number,
+): void {
+  if (segments.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = 'butt';
+  if (glow > 0) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = glow;
+  }
+  for (let i = 0; i < segments.length; i++) {
+    const t = i / segments.length; // 0 at the fork, ~1 at the tip
+    ctx.lineWidth = Math.max(0.6, baseWidth * (1 - t * 0.75));
+    const seg = segments[i]!;
+    ctx.beginPath();
+    ctx.moveTo(seg.x1, seg.y1);
+    ctx.lineTo(seg.x2, seg.y2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawVein(ctx: CanvasRenderingContext2D, event: VeinInfectionEvent, time: number): void {
   let alpha: number;
   let width: number;
   let glow: number;
-  let segments: { x1: number; y1: number; x2: number; y2: number }[];
+  let trunk: VeinSegment[];
+  let branches: VeinSegment[][];
 
   if (event.phase === 'telegraph') {
     // The full path lights up dimly — the warning is showing the whole
@@ -30,7 +99,8 @@ function drawVein(ctx: CanvasRenderingContext2D, event: VeinInfectionEvent, time
     alpha = 0.18 + Math.sin(time * 3) * 0.05;
     width = 1.5;
     glow = 0;
-    segments = [...event.trunk, ...event.branches.flatMap((b) => b.segments)];
+    trunk = event.trunk;
+    branches = event.branches.map((b) => b.segments);
   } else if (event.phase === 'active') {
     // Only the revealed prefix draws — the vein visibly extends inward,
     // in step with where it's actually injecting growth (veinRevealCount
@@ -39,15 +109,14 @@ function drawVein(ctx: CanvasRenderingContext2D, event: VeinInfectionEvent, time
     width = 3;
     glow = 14;
     const revealed = veinRevealCount(event);
-    segments = event.trunk.slice(0, revealed);
-    for (const b of event.branches) {
-      if (b.parentIndex < revealed) segments.push(...b.segments);
-    }
+    trunk = event.trunk.slice(0, revealed);
+    branches = event.branches.filter((b) => b.parentIndex < revealed).map((b) => b.segments);
   } else if (event.phase === 'peak') {
     alpha = 1;
     width = 4;
     glow = 20;
-    segments = [...event.trunk, ...event.branches.flatMap((b) => b.segments)];
+    trunk = event.trunk;
+    branches = event.branches.map((b) => b.segments);
   } else {
     // decay — full shape, fading out. The density it created stays on
     // the grid; only the vein's own glow disappears.
@@ -55,27 +124,14 @@ function drawVein(ctx: CanvasRenderingContext2D, event: VeinInfectionEvent, time
     alpha = t;
     width = 2 + 2 * t;
     glow = 20 * t;
-    segments = [...event.trunk, ...event.branches.flatMap((b) => b.segments)];
+    trunk = event.trunk;
+    branches = event.branches.map((b) => b.segments);
   }
 
-  if (segments.length === 0) return;
-
-  ctx.save();
-  ctx.strokeStyle = VEIN_COLOR;
-  ctx.globalAlpha = alpha;
-  ctx.lineWidth = width;
-  ctx.lineCap = 'round';
-  if (glow > 0) {
-    ctx.shadowColor = VEIN_COLOR;
-    ctx.shadowBlur = glow;
+  strokeTrunk(ctx, trunk, VEIN_COLOR, alpha, width, glow);
+  for (const branch of branches) {
+    strokeBranch(ctx, branch, VEIN_COLOR, alpha, width * 0.7, glow);
   }
-  ctx.beginPath();
-  for (const seg of segments) {
-    ctx.moveTo(seg.x1, seg.y1);
-    ctx.lineTo(seg.x2, seg.y2);
-  }
-  ctx.stroke();
-  ctx.restore();
 }
 
 function drawBloom(ctx: CanvasRenderingContext2D, event: BloomInfectionEvent, time: number): void {

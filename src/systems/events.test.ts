@@ -46,6 +46,7 @@ describe('veinRevealCount', () => {
       phase: 'telegraph',
       phaseTimer: EVENT_TELEGRAPH_DURATION,
       age: 0,
+      formationTimer: Infinity,
       trunk: [
         { x1: 0, y1: 0, x2: 1, y2: 0 },
         { x1: 1, y1: 0, x2: 2, y2: 0 },
@@ -86,6 +87,7 @@ describe('updateEvents — lifecycle', () => {
       phase: 'telegraph',
       phaseTimer: EVENT_TELEGRAPH_DURATION,
       age: 0,
+      formationTimer: Infinity,
       trunk: [{ x1: 300, y1: 300, x2: 310, y2: 300 }],
       branches: [],
       ...overrides,
@@ -145,6 +147,7 @@ describe('updateEvents — vein growth injection', () => {
       phase: 'active',
       phaseTimer: EVENT_ACTIVE_DURATION,
       age: 0,
+      formationTimer: Infinity,
       trunk: [
         { x1: 100, y1: 100, x2: 100, y2: 100 },
         { x1: 500, y1: 500, x2: 500, y2: 500 },
@@ -230,6 +233,7 @@ describe('updateEvents — bloom growth injection', () => {
       phase: 'active',
       phaseTimer: EVENT_ACTIVE_DURATION,
       age: 0,
+      formationTimer: Infinity,
       x: 300,
       y: 300,
       radius: BLOOM_RADIUS,
