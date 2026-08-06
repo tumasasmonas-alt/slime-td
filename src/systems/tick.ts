@@ -2,6 +2,7 @@ import type { GameState } from '../state';
 import { ambientInfectionMult, SIM_TICK } from '../tuning/growth';
 import { computeTierIndex, TIERS_LIST } from '../tuning/tiers';
 import { tickContactDamage } from './contact';
+import { updateEvents, updateEventSpawn } from './events';
 import { computeFrontier } from './frontier';
 import { applyAmbientGrowth } from './growth';
 
@@ -23,6 +24,8 @@ function updateTier(state: GameState): void {
 function simulateTick(state: GameState, dt: number): void {
   if (!state.grid) return;
   updateTier(state);
+  updateEventSpawn(state, dt);
+  updateEvents(state, dt);
   applyAmbientGrowth(state.grid, state.tower, ambientInfectionMult(state.time), dt, state.dirty);
   computeFrontier(state);
   tickContactDamage(state, dt);

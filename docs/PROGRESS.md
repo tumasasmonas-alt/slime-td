@@ -48,29 +48,34 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-06 (Phase 3A shipped)
+**Last updated:** 2026-08-06 (Phase 3B shipped)
 
-**The rework has started.** Phase 3A (teardown) is built, tested, and
-verified live: growth nodes are gone, `safeRadius` is renamed to
-`perimeter` and fixed, and `TIERS_LIST` carries no mechanical weight.
+**The rework is underway.** Phases 3A (teardown) and 3B (Infection Events)
+are both built, tested, and verified live: growth nodes are gone, replaced
+by veins and blooms with a full telegraph→active→peak→decay lifecycle; the
+perimeter is fixed; `TIERS_LIST` carries no mechanical weight.
 
 | | |
 |---|---|
-| Tests | 136 passing (28 test files) — one known flake, see BACKLOG |
-| Source | 53 modules under `src/` |
+| Tests | 164 passing (30 test files) — one known flake, see BACKLOG |
+| Source | 59 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
-| Branch | `main` — 3A not yet pushed, see below |
-| Code state | **Phase 3A complete.** Everything else in the rework is still design-only. |
-| Blockers | **None.** Phase 3B (Infection Events) is next. |
+| Branch | `main` — 3B not yet pushed, see below |
+| Code state | **Phases 3A and 3B complete.** Everything else in the rework is still design-only. |
+| Blockers | **None.** Phase 3C (Coagulants Wave 1) is next. |
 
-**What works today:** a playable loop with the horde-economy teardown
-applied. Infection grows as a reaction-diffusion density field and creeps
-toward a stationary core across a **fixed perimeter** (no longer
-tier-driven). Six auto-firing weapons and eight passives via level-up
-cards. Contact damage, flavour-only tiers, game over, restart with a fresh
-maze. **Growth nodes are gone** — Missile and Caustic Cloud fire at the
-frontier only until Phase 3C gives them coagulants to chase.
+**What works today:** a playable loop with the horde-economy teardown and
+its first live event system. Infection grows as a reaction-diffusion
+density field, creeps toward a stationary core across a **fixed
+perimeter**, and now also gets punctuated by **Infection Events** —
+branching veins telegraphing from the arena edge and extending inward,
+radial blooms telegraphing and pulsing in the field, both injecting growth
+while active and leaving their mass behind once they decay. Six
+auto-firing weapons and eight passives via level-up cards. Contact damage,
+flavour-only tiers, game over, restart with a fresh maze. **Growth nodes
+are gone** — Missile and Caustic Cloud fire at the frontier only until
+Phase 3C gives them coagulants to chase.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -80,14 +85,16 @@ and math are in the 2026-08-05 session record.
 
 ### ⚠️ Read this before writing any code
 
-The next work is **Phase 3B — Infection Events.** Not the balance pass
+The next work is **Phase 3C — Coagulants Wave 1.** Not the balance pass
 (Decision 13, superseded).
 
 The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
-gem system, and the tier table is demoted to flavour. **Phase 3A (the
-teardown) is done;** 3B is the next unbuilt piece.
+gem system, and the tier table is demoted to flavour. **Phases 3A and 3B
+are done;** 3C is the next unbuilt piece, and it's the phase carrying the
+project's one real technical unknown (bounded flood-fill formation,
+Decision 43) — read the mechanism session before starting it.
 
 **Start here, in order:**
 
@@ -99,12 +106,13 @@ teardown) is done;** 3B is the next unbuilt piece.
    *how it works.* The layer below: what a coagulant is in code, how
    formation is computed, how armor and the card pool are structured. Also
    has a rejected-ideas table.
-3. **`docs/DECISIONS.md` #23–#47** — the load-bearing calls in short form.
-   23–37 are the design; 38–47 are the mechanism, including #47's
-   mid-implementation finding about `infectionMult`/`contactMult`.
-4. **`docs/BACKLOG.md`** *Now* section — 3B is the concrete next step; 3A's
-   own follow-ups (missile targeting, the dormant kill counter) are noted
-   in *Done*.
+3. **`docs/DECISIONS.md` #23–#49** — the load-bearing calls in short form.
+   23–37 are the design; 38–49 are the mechanism. #47–49 are
+   implementation-time findings from 3A/3B, not from either design
+   session — see the note at the top of that section.
+4. **`docs/BACKLOG.md`** *Now* section — 3C is the concrete next step; 3A's
+   and 3B's own follow-ups (missile targeting, the dormant kill counter,
+   coral-biased vein geometry) are noted in *Done* and *Ideas*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -145,11 +153,12 @@ src/
   core/       camera + coordinate types (fixed 1920x1080 world, fit-to-window)
   grid/       density field, reaction-diffusion vein pattern, clearAt (the
               damage-the-field core function), slime layer canvas
-  systems/    simulation: growth, nodes, contact damage, frontier targeting,
-              projectiles, gems, xp, particles, passives, tower, fx lifetimes
+  systems/    simulation: growth, infection events (vein/bloom lifecycle +
+              geometry), contact damage, frontier targeting, projectiles,
+              gems, xp, particles, passives, tower, fx lifetimes
   weapons/    one module per weapon (behavior only — data lives in tuning/)
   render/     canvas draw calls, strictly separated from update logic
-  tuning/     all numeric knobs: weapons, tiers, growth, nodes, xp, geometry
+  tuning/     all numeric knobs: weapons, tiers, growth, events, xp, geometry
   ui/         DOM/CSS HUD, upgrade cards, start/game-over overlays
   state.ts    the single central GameState + freshState()
   main.ts     game loop, run lifecycle, render order
@@ -159,8 +168,9 @@ src/
 - One system per module; update logic and draw calls never mix.
 - All game state lives in the one central object — no scattered mutable
   state.
-- The simulation tick (growth, nodes, frontier, contact damage) runs on a
-  fixed timestep via an accumulator, decoupled from render framerate.
+- The simulation tick (growth, infection events, frontier, contact damage)
+  runs on a fixed timestep via an accumulator, decoupled from render
+  framerate.
 - Numeric tuning constants stay in `tuning/` so balance work is one
   directory, not a hunt through logic.
 
@@ -169,6 +179,79 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-06 (still later) — Phase 3B: Infection Events
+
+**Implementation, on a new machine picking up mid-rework.** Reviewed
+against the actual codebase before starting — the owner explicitly asked
+for a review-and-report pass first, greenlit only after two open questions
+were resolved. Built the same session.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Phase 3B — `systems/events.ts`, `systems/veinPath.ts`, `tuning/events.ts`, `render/events.ts`; `InfectionEvent`/`VeinInfectionEvent`/`BloomInfectionEvent`/`VeinSegment`/`VeinBranch` types; wired into `tick.ts` and `main.ts` |
+
+**Discussed**
+
+- **The pre-build review found the phase plan understated bloom's
+  situation, the same way 3A's review had understated the tier table's.**
+  Bloom's actual job — accelerating maturity — doesn't exist until Phase
+  4A, so building it in 3B alone would ship a lifecycle and visual with
+  almost no mechanical effect. Flagged as a real decision rather than
+  proceeding on the plan's one-line description. **Owner's call: build it
+  anyway**, to keep the event framework as one lifecycle with two variants
+  from the start rather than bolting bloom on later. Recorded as Decision
+  48.
+- **The review also caught that "reuses the existing `veinField`
+  pattern" — one line in the 2026-08-05 plan — didn't actually check out.**
+  The field is a static texture consumed only as a threshold map; it has
+  no traceable edge-to-core routes to reuse. The owner's own read, offered
+  before seeing Claude's independent finding: probably a remnant of an
+  idea that got bounced around early and never developed. Agreed to build
+  a generated branching polyline (the standard lightning-bolt construction
+  — recursive midpoint displacement) instead, which cannot fail to reach
+  the core the way a maze-constrained route could. Recorded as Decision
+  49.
+- **Genuine pathfinding through the coral maze was the owner's original
+  instinct** ("the infection follows its own veins... if not adding it
+  today definitely add to the todo list"). Not built now — no guaranteed
+  route exists at every spawn angle — but recorded in BACKLOG as an idea,
+  along with a cheaper middle ground (bias the polyline's displacement
+  toward the coral pattern rather than true pathfinding).
+- **The branching lattice a jagged polyline produces turned out to matter
+  beyond looks.** Wave 2's Blastoma coagulant (§10 of the 2026-08-05
+  record) is specified to form where a vein has "webbed" through an area —
+  branches forking off the trunk produce exactly that shape as a side
+  effect, so 4C inherits it for free rather than needing its own system.
+
+**Decided** — Decisions 48 (bloom ships now) and 49 (vein geometry is a
+generated polyline, not a `veinField` reuse).
+
+**Verified**: 164/164 tests passing (up from 136 — 6 new for the vein
+polyline's geometry invariants in isolation, 22 for event lifecycle,
+growth injection, and spawn scheduling), typecheck and build clean (59
+modules, up from 53). Verified live in-browser across two full runs:
+watched a vein telegraph faintly, activate, visibly extend inward with
+branches, and inject growth that reads as the vein's own shape in the
+slime layer; watched a bloom telegraph as a pulsing ring and inject a
+visible radial bump of denser slime. No console errors in either run
+beyond the documented Vite self-reload quirk. One bug caught and fixed
+before it shipped: a copy-paste slip in `render/events.ts`'s bloom
+active-phase ramp divided by `event.radius` instead of the active
+duration — caught on self-review immediately after writing it, before any
+test or manual check.
+
+**Also fixed in passing:** the "Where things live" module tree in this
+file's own *Where things live* section still listed `nodes` under
+`systems/` and `tuning/` — missed during 3A's own docs pass. Corrected
+alongside 3B's addition of `events`/`veinPath`.
+
+**Planned** — **Phase 3C, Coagulants Wave 1**, next. This is the phase
+carrying the project's one real technical unknown (bounded flood-fill
+formation, Decision 43) — the mechanism session should be read in full
+before starting, not just skimmed for the numbers. No blockers.
 
 ### 2026-08-06 (later) — Phase 3A: the teardown
 
@@ -491,7 +574,8 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 3B — Infection Events. Phase 3A shipped 2026-08-06.**
+**Next: Phase 3C — Coagulants Wave 1. Phases 3A and 3B shipped
+2026-08-06.**
 
 The design is settled end to end, and as of 2026-08-06 so is the
 mechanism. What remains is implementation, in the order below. Full detail
@@ -501,7 +585,7 @@ in the 2026-08-05 record §17; the concrete next step is in
 | Phase | Content |
 |---|---|
 | **3A** | ✅ Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
-| **3B** | Infection Events — vein (acts on density) + bloom (acts on maturity), full lifecycle |
+| **3B** | ✅ Infection Events — vein (acts on density) + bloom (acts on maturity — payload deferred to 4A), full lifecycle |
 | **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
 | **3D** | XP economy — mass-based, cap removed, superlinear curve → **playtest gate** |
 | **4A–4C** | Maturity field · two-axis visuals · Coagulants Wave 2 → **playtest gate** |
@@ -542,3 +626,7 @@ version of the same risk.
   with meta-currency. Phase 6/7. See BACKLOG.
 - **Spontaneous coagulation** — revisit after the 3C playtest, when it's
   clear whether dead air is actually a problem. See BACKLOG.
+- **Coral-biased vein geometry** — blending the vein's polyline
+  displacement with the field's own coral pattern, raised by the owner
+  during the 3B review. Not blocking; revisit whenever the vein's current
+  look feels too generic. See BACKLOG.

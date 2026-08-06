@@ -8,6 +8,7 @@ import { drawAmbientGrid, drawArenaBounds, drawSafeZone } from './render/backgro
 import { resizeCanvasToWindow, setupCanvas } from './render/canvas';
 import { drawChainFx } from './render/chainFx';
 import { drawClouds } from './render/clouds';
+import { drawInfectionEvents } from './render/events';
 import { drawGems } from './render/gems';
 import { drawNovaFx } from './render/novaFx';
 import { drawOrbitals } from './render/orbitals';
@@ -133,6 +134,7 @@ function render(): void {
     drawClouds(ctx, state);
     drawNovaFx(ctx, state);
     drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.perimeter, state.contactPressure);
+    drawInfectionEvents(ctx, state);
     drawGems(ctx, state);
     drawOrbitals(ctx, state);
     drawProjectiles(ctx, state);

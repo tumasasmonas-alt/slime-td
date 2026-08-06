@@ -628,6 +628,12 @@ as the two-machine handoff mechanism.
 >
 > These close every open question the previous session left. **Phase 3A is
 > unblocked.**
+>
+> **47–49 are later additions**, not from that design session — findings
+> and calls made during the Phase 3A and 3B implementations themselves.
+> Kept in this section because they're still "how it works," not "what it
+> is." No session record covers them individually; the reasoning lives
+> here and in `docs/PROGRESS.md`'s session log.
 
 **38. The perimeter is a fixed radius. 📋**
 *2026-08-06.* It shrank 100 → 45 via `TIERS_LIST`, which #33 strips of
@@ -900,6 +906,57 @@ affects damage, replacing the old test that asserted the opposite.
 `applyAmbientGrowth()` now takes `infectionMult: number` directly instead
 of a `Tier` object — growth math no longer depends on the tier table at
 all, which is the cleaner shape now that tiers are pure flavour.
+
+**48. Bloom ships in Phase 3B, alongside vein, despite its real payload
+waiting for Phase 4A.** 📋 ✅
+*2026-08-06, during the 3B review — the project owner's call: "build it
+now."* Bloom's design job (§11) is accelerating maturity, which doesn't
+exist until 4A; in 3B alone it is elevated growth in a radius and little
+else, nearly invisible against the field.
+
+Considered and rejected: deferring bloom to 3C so it arrives alongside
+formation logic that gives it a purpose (would shrink 3B but load more
+onto 3C, already the phase carrying the project's one real technical
+unknown); inventing a temporary 3B-only job for it, e.g. locally raising
+the density cap past 1.0 (rejected as guessing at a mechanic maturity is
+supposed to own).
+
+Building it now keeps the event framework uniform — one lifecycle, two
+variants, exactly as designed — rather than bolting a second variant onto
+3C later. Its lifecycle, placement, and visual are real work that has to
+happen regardless of when the payload lands.
+
+**49. Vein geometry is a generated branching polyline, not a reuse of
+`veinField`.** 📋 ✅
+*2026-08-06, during the 3B review.* The 2026-08-05 record's one-line plan
+— "reuses the existing `veinField` reaction-diffusion pattern" — turned
+out to describe something that couldn't actually deliver a vein: the
+field is a static *texture* consumed only as a threshold map, with no
+traceable edge-to-core routes baked into it. The project owner's own
+read, on review: probably a remnant of an idea that sounded economical in
+the moment but never got developed.
+
+Built instead as a jagged branching polyline via recursive midpoint
+displacement — the standard lightning-bolt construction, generated once
+at telegraph time and stored on the event (`systems/veinPath.ts`), never
+regenerated per frame (the bubbleSeeds/novaFx bug class, #4/#7). The same
+geometry drives both the rendered stroke and the growth-injection sample
+points, so what's drawn is exactly what's growing — direct service of the
+playtest lesson that a mechanic without its visual reads as broken.
+
+**Branching was a deliberate choice beyond "looks more like lightning."**
+Wave 2's Blastoma coagulant (§10) is specified to form where a vein has
+"webbed" through an area, leaving a lattice rather than a solid sheet — a
+branching vein produces exactly that shape as a side effect, with no
+extra system needed in 4C.
+
+Genuine pathfinding through the coral maze (`grid.vein`) was considered
+and is preserved as an idea, not rejected outright — the owner's instinct
+that "the infection follows its own veins" is thematically appealing. Not
+built now because the coral pattern offers no guarantee a route exists at
+every possible spawn angle, whereas the polyline construction can never
+fail to reach the core. See BACKLOG for the compromise considered (biasing
+displacement toward the coral pattern rather than true pathfinding).
 
 ---
 

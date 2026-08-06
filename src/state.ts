@@ -1,3 +1,4 @@
+import { EVENT_INITIAL_DELAY } from './tuning/events';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './tuning/world';
 import type { PassiveKey, WeaponKey } from './types';
 
@@ -136,6 +137,53 @@ export interface NovaFx {
   maxLife: number;
 }
 
+export interface VeinSegment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+// A short offshoot forking from the trunk at `parentIndex` (an index into
+// the parent vein's `trunk` array). Kept separate from the trunk rather
+// than merged into one flat list so growth injection and rendering can
+// gate a branch's reveal on the trunk having grown as far as its fork
+// point — see systems/events.ts's veinRevealCount().
+export interface VeinBranch {
+  parentIndex: number;
+  segments: VeinSegment[];
+}
+
+// Infection Events replace growth nodes (Phase 3B, Decision 29) — one
+// system, two variants, sharing a lifecycle: telegraph -> active -> peak
+// -> decay -> removed. See docs/DECISIONS.md #29 and
+// docs/sessions/2026-08-05-slime-and-arsenal-rework.md §11.
+export type InfectionEventPhase = 'telegraph' | 'active' | 'peak' | 'decay';
+
+interface InfectionEventBase {
+  phase: InfectionEventPhase;
+  phaseTimer: number;
+  age: number;
+}
+
+export interface VeinInfectionEvent extends InfectionEventBase {
+  kind: 'vein';
+  // Generated once at telegraph time (systems/veinPath.ts), never lazily
+  // inside a draw call or growth-injection call — the bubbleSeeds/novaFx
+  // bug class (docs/DECISIONS.md #4, #7).
+  trunk: VeinSegment[];
+  branches: VeinBranch[];
+}
+
+export interface BloomInfectionEvent extends InfectionEventBase {
+  kind: 'bloom';
+  x: number;
+  y: number;
+  radius: number;
+}
+
+export type InfectionEvent = VeinInfectionEvent | BloomInfectionEvent;
+
 export interface GameState {
   running: boolean;
   paused: boolean;
@@ -160,6 +208,9 @@ export interface GameState {
   novaFx: NovaFx | null;
 
   frontier: Float32Array | null;
+
+  events: InfectionEvent[];
+  eventSpawnTimer: number;
 
   weaponTimers: Record<WeaponKey, number>;
   bladeNextHit: Record<number, number>;
@@ -218,6 +269,11 @@ export function freshState(): GameState {
     novaFx: null,
 
     frontier: null,
+
+    events: [],
+    // A little breathing room before the first event, matching the
+    // node system's old start-of-run grace period.
+    eventSpawnTimer: EVENT_INITIAL_DELAY,
 
     weaponTimers: { bolt: 0, blades: 0, chain: 0, frost: 0, poison: 0, missile: 0 },
     bladeNextHit: {},

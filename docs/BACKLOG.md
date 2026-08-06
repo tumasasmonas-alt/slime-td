@@ -20,14 +20,14 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🔴 Phase 3B — Infection Events (next up)
+### 🔴 Phase 3C — Coagulants Wave 1 (next up)
 
-Phase 3A (teardown) shipped 2026-08-06 — see BACKLOG's Done section and
-`docs/PROGRESS.md`'s session log for what landed. The design rework is
-agreed (DECISIONS.md #23–#47). Reasoning lives in two session records:
-`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is)
-and `docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
-works).
+Phase 3B (Infection Events) shipped 2026-08-06 — see BACKLOG's Done
+section and `docs/PROGRESS.md`'s session log for what landed. The design
+rework is agreed (DECISIONS.md #23–#49). Reasoning lives in two session
+records: `docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the
+game is) and `docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md`
+(how it works).
 
 ### The rest of the phase plan
 
@@ -35,7 +35,7 @@ Full detail in the session record §17.
 
 | Phase | Content |
 |---|---|
-| **3B** | Infection Events framework — vein + bloom, full lifecycle |
+| **3B** | ✅ Infection Events framework — vein + bloom, full lifecycle |
 | **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
 | **3D** | XP economy rework → **playtest gate** |
 | **4A–4C** | Maturity field, two-axis visuals, Coagulants Wave 2 → **playtest gate** |
@@ -206,6 +206,34 @@ it isn't a surprise on launch day.
 
 ## Ideas — not committed
 
+### 💭 Genuine pathfinding for vein geometry
+*Raised by the project owner, 2026-08-06, during the 3B review.*
+
+Veins currently generate a jagged branching polyline via recursive
+midpoint displacement — a lightning-bolt construction, unrelated to the
+field's own terrain (Decision 49). The owner's original instinct was that
+a vein should genuinely route through the coral maze pattern
+(`grid.vein`/`veinField.ts`) rather than draw an independent shape over
+it — "the infection follows its own veins" as a thematic idea, not just a
+visual one.
+
+**Why it didn't ship now:** the coral pattern is a static texture with no
+traceable edge-to-core routes baked into it — turning it into a graph
+means either a real pathfind (A* or similar over low-threshold cells) or
+a corridor-following walk, and either way there's no guarantee a route
+exists at every possible spawn angle. The lightning-bolt approach ships
+today with zero risk of failing to find a path and produces the branching
+lattice Blastoma (Wave 2) needs for free.
+
+**Worth exploring later:** blend the two — bias the recursive
+displacement's midpoint offsets toward locally low-threshold cells (dense
+coral) instead of pure randomness, so the vein still can't fail to reach
+the core but visibly prefers to travel along the existing pattern. Cheaper
+than real pathfinding and keeps the "no path exists" failure mode
+impossible by construction. Not blocking anything; revisit whenever the
+vein's current look feels too generic against the field it's punching
+through.
+
 ### 💭 Spontaneous coagulation — an anti-boredom floor
 *Raised by the project owner, 2026-08-06. Agreed as an idea, deliberately
 not a decision.*
@@ -343,3 +371,32 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
     3C wires it to coagulant kills. Worth a more interesting stat than a
     raw count once that lands (kept as a placeholder rather than renamed,
     per the project owner).
+
+- **Phase 3B — Infection Events.** *(2026-08-06)* One system, two variants
+  (Decision 29), sharing a lifecycle: telegraph -> active -> peak -> decay
+  -> removed (`systems/events.ts`, `tuning/events.ts`, `render/events.ts`).
+  Vein geometry is a branching polyline built once at telegraph time via
+  recursive midpoint displacement — the standard lightning-bolt
+  construction — rather than the originally-sketched `veinField` reuse,
+  which turned out to be a texture with no traceable edge-to-core routes in
+  it (Decision 49). Bloom ships now despite its real payload (accelerating
+  maturity) waiting for Phase 4A, so the event framework has one lifecycle
+  from day one instead of a second variant bolted on later (Decision 48,
+  the project owner's call: "build it now"). Growth injection for both
+  reuses the existing "read density, converge toward 1, update
+  bucket/dirty" shape from `applyAmbientGrowth`/the old node influence —
+  events are just another source writing into the same grid.
+
+  164/164 tests passing (up from 136 — 28 new: 6 pure-geometry tests for
+  the vein polyline, 22 for lifecycle/injection/spawning), typecheck and
+  build clean (59 modules, up from 53). Verified live in-browser across two
+  runs: watched a vein telegraph faintly, activate and visibly extend
+  inward with branches, and inject growth that shows up in the slime layer
+  as the vein's own shape; watched a bloom telegraph as a pulsing ring and
+  inject a visible radial bump of denser slime. No console errors in either
+  run beyond the documented Vite self-reload quirk.
+
+  **Left for the idea backlog rather than built now:** biasing the vein's
+  displacement toward the field's own coral pattern instead of pure
+  randomness, raised by the owner as "the infection follows its own veins."
+  See *Ideas* above.
