@@ -20,11 +20,13 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🔴 Phase 3A — Teardown (blocked on one decision)
+### 🔴 Phase 3A — Teardown (unblocked, ready to build)
 
-The design rework is agreed (DECISIONS.md #23–#37, full reasoning in
-`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`). First
-implementation step:
+The design rework is agreed (DECISIONS.md #23–#46). Reasoning lives in two
+session records: `docs/sessions/2026-08-05-slime-and-arsenal-rework.md`
+(what the game is) and
+`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
+works). First implementation step:
 
 - Remove growth nodes entirely — `systems/nodes.ts`, `tuning/nodes.ts`,
   node targeting in `weapons/poison.ts` and `weapons/missile.ts`, node
@@ -33,15 +35,11 @@ implementation step:
 - Rename `safeRadius` → `perimeter` throughout (Decision 36).
 - Demote `TIERS_LIST` to flavour — names, announcements, colour only, no
   mechanical weight (Decision 33).
+- Perimeter becomes a **fixed constant** (Decision 38), since the tier
+  table no longer drives it.
 
-**🔴 Blocked on:** *what drives the perimeter once tiers carry no
-mechanical weight?* It currently shrinks 100 → 45 via the tier table.
-Options: fixed; an independent time curve; or breach-driven (shrinks as
-hits land — fits the consequence philosophy but may spiral).
-Recommendation on file is **fixed for now, revisit in Phase 8** — the
-perimeter's job is much smaller in the new model, being the line where
-breach splatter starts bleeding the core rather than the primary
-difficulty lever. **Needs the project owner's call before 3A starts.**
+Expect Missile and Caustic Cloud to lose their secondary behaviour until
+Wave 1 coagulants land in 3C — intended, not a regression.
 
 ### The rest of the phase plan
 
@@ -97,7 +95,7 @@ the phase that absorbs each.
 
 | Bug | Absorbed by |
 |---|---|
-| **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — card system replaced |
+| **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — **killed at the root** by Decision 40: weapon *level* cards stop existing, so the failure mode has nowhere to live |
 | **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. | Phase 5/6 — Ward becomes a gem |
 | **Frost Nova's ring is nearly invisible.** 3px stroke, 0.4s life on a 3.6s cooldown (~11% uptime), fading alpha, low-contrast `#bfe9ff`. Also an expectation gap: it reads as an "aura" but is coded as an instantaneous pulse. | Phase 9 |
 | **Frozen cells have no visual at all.** Confirmed by grep — zero references to `frozen` in `src/render/` or `grid/slimeLayer.ts`. A 2-second growth-suppression mechanic the player can never see. | Phase 4B |
@@ -219,6 +217,66 @@ it isn't a surprise on launch day.
 ---
 
 ## Ideas — not committed
+
+### 💭 Spontaneous coagulation — an anti-boredom floor
+*Raised by the project owner, 2026-08-06. Agreed as an idea, deliberately
+not a decision.*
+
+Decision 28 makes infection events the **only** trigger for coagulant
+formation. The owner's concern: veins and blooms rotate on a timer, and any
+timer-driven system has dead air by construction, so a run could have long
+stretches where nothing forms and nothing happens. A rare random spark
+would set a floor.
+
+**The framing that keeps it compatible with Decision 28:**
+
+> Events set the rhythm. Spontaneous sparks set the floor.
+
+It must never be a meaningful *fraction* of what spawns — only a minimum
+below which the arena is never silent.
+
+**Why it is dangerous.** It is Decision 28's problem restated: the
+wilderness is ~76% of the arena and saturates in ~46 seconds, so anything
+letting standing mass self-ignite at scale gives behemoths on tap from
+minute one. That arithmetic does not change because the trigger is random.
+
+**Guard rails agreed if it gets built:**
+- A hard **global rate limit**, never a per-region probability — per-region
+  probability times a large saturated wilderness is exactly how the failure
+  happens.
+- The **same bounded flood-fill mass check** as event formation, so a spark
+  can never produce anything larger than the local field justifies.
+- A **bias toward distant sites**, so it reads as a long dramatic charge
+  rather than an ambush the player could not have anticipated.
+
+Cheap to add once Decision 43's coarse density index exists. Revisit after
+the 3C playtest, when it's clear whether dead air is actually a problem.
+
+### 💭 "Orbital trade ship" — buying specific gems with score points
+*Raised by the project owner, 2026-08-06.*
+
+A deterministic escape hatch against card RNG: the player spends score
+points to buy the gem they actually want, rather than waiting for the pool
+to offer it.
+
+**The problem it solves is real and sharper than pool size.** With gems
+universally live once unlocked (Decision 41), the worry isn't that the pool
+is too big — it's *bad luck*. Never being offered armor penetration in a
+run where a Sclerotic is the thing killing you is a frustrating way to
+lose, and it is not a loss the player could have played around.
+
+Needs its own design pass before it's a decision: what score points are and
+how they're earned, whether they compete with meta-currency (Decision 35's
+survival-time currency) or are a separate in-run resource, and whether the
+shop appears mid-run or between runs. Belongs with Phase 6/7.
+
+### 💭 Filter the card pool by equipped weapons
+The fallback if the gem half of the pool dilutes badly as the gem catalogue
+grows (Decision 41's recorded consequence — fine at 15 gems, a problem at
+60). Cards would only offer gems that fit a weapon actually being run.
+Preferred over restricting unlocks, which would cost the emergent-build
+discovery that made gems universal in the first place. Not needed until the
+catalogue is large.
 
 ### 💭 Fixed-seed debug mode
 Would make balance runs directly comparable (see the note under *Now*).

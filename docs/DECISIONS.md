@@ -619,6 +619,258 @@ as the two-machine handoff mechanism.
 
 ---
 
+## The mechanism — arsenal structure and how coagulants work
+
+> Decisions 38–46 came out of the design session on 2026-08-06. Where
+> 23–37 settled *what the game is*, these settle *how it works* — the
+> layer below. Full reasoning, including every rejected alternative, is in
+> **`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md`**.
+>
+> These close every open question the previous session left. **Phase 3A is
+> unblocked.**
+
+**38. The perimeter is a fixed radius. 📋**
+*2026-08-06.* It shrank 100 → 45 via `TIERS_LIST`, which #33 strips of
+mechanical weight. Fixed for now; revisit in Phase 8.
+
+Its job in the new model is much smaller — it is the line where breach
+splatter starts bleeding the core, not the primary difficulty lever. An
+independent time curve was rejected for re-adding a scripted difficulty
+lever the rework exists to make emergent. Breach-driven (shrinking as hits
+land) fits the consequence philosophy best and remains the interesting
+option, but it is an untested feedback loop with spiral risk, and tuning it
+*before* the horde exists means tuning against a threat model that is not
+there yet.
+
+**39. Meta-currency buys unlocks only, never permanent stats.** 📋
+*2026-08-06.* Confirms what was recommended-but-unconfirmed in the previous
+session. Spends on weapon unlocks, turret weapon slots, and gem bundles.
+
+Permanent stat upgrades would compound the 17–21× in-run scaling problem
+this entire rework exists to fix, on top of a curve that is already the
+diagnosed disease.
+
+**40. Weapon levels leave the card pool and become enhancement points.** 📋
+*2026-08-06.* Cards offer **only** weapon-specific extensions and support
+gems. Every card is therefore a build decision rather than a treadmill
+step — the PoE shape, where a gem's level is power but the support links
+are the game.
+
+**This also kills a shipped bug at the root.** The playtest's "cards appear
+to do nothing" finding was caused by static and plateauing *level* card
+descriptions (`bladeCount(7) === bladeCount(8)`). Remove level cards and
+that failure mode has nowhere to live.
+
+The hole it opens — no guaranteed payout when the pool offers nothing you
+want — is filled by **enhancement points**, proposed by the project owner:
+one point per level-up, spent via +/- next to each weapon in the inventory
+screen. Agreed refinements:
+
+- **One point every level**, not every other. Tune per-point *magnitude*
+  instead; magnitude is a smooth dial and rate is a lumpy one, and every
+  level-up giving *something* is the entire reason the mechanic exists.
+- **A point buys one scalar** — `clearAt`'s existing `power` argument — not
+  a stat bundle. Keeps the meaning legible and stops enhancement competing
+  with gems, which own speed/multishot/pierce.
+- **Freely reassignable.** The +/- is the best part: mid-run respec, which
+  this game specifically wants because the threat model shifts across a run
+  (wilderness behemoths early → armoured close-range late). It also gives
+  the inventory screen a reason to be opened more than once.
+
+**Known risk, accepted knowingly:** with free reassignment and no
+diminishing returns, the optimal play is "dump everything into the weapon
+with the most gems socketed" — a slider, not a decision. Shipped anyway,
+because enhancement's job is the **pacing floor**, not the build. Flagged
+for the playtest gate; if it collapses, the fix is diminishing returns per
+weapon, not a hard cap.
+
+**41. Support gems unlock in themed bundles and are then universally
+live.** 📋
+*2026-08-06.* Unlocking gems one at a time was rejected by the owner as a
+drag. Currency buys **thematic** bundles — "Ballistics Package: Multishot,
+Pierce, Velocity" — which read as unlocking a *playstyle* rather than three
+nouns, and teach the game by suggesting a build from the name alone.
+
+**Once unlocked, a gem is live in every run, no deck slot required.**
+Claude proposed making bundles the unit of *decking* too (bounding the card
+pool permanently); the owner rejected it, correctly — locking gems behind
+deck slots makes combinations you did not foresee at deck time unreachable,
+and emergent mid-run builds are the more interesting game.
+
+**Consequence recorded rather than solved:** the gem half of the card pool
+grows with every gem the project ships and is not deck-bounded. Fine at 15
+gems, a problem at 60. If it bites, the fix is a filter on the *pool* (only
+offer gems that fit a weapon being run), not on unlocks. In BACKLOG,
+alongside the owner's "orbital trade ship" idea for buying specific gems
+with score points.
+
+**42. One mass, two containers — coagulants are entities with no HP.** 📋
+*2026-08-06.* The load-bearing mechanical decision of the session.
+
+> **Mass is the only currency in the game. It lives in two containers: the
+> grid, and entities.**
+
+A coagulant holds `mass`, which *is* simultaneously its hit points, its
+arrival damage, and its XP value. Radius is `r = k·√mass`, so area is
+proportional to mass — **a behemoth is big because it is big.** A separate
+HP number was rejected as redundant: it would need manual syncing with
+three things mass already expresses, and it would break conservation.
+
+**Why it works: a coagulant is dense slime that walks.** `clearAt` already
+contains `resistance = clamp(1.3 - dens, 0.12, 1.3)` and a
+density-shrunken hit radius. If a coagulant's local density is high by
+definition, the *existing* formula makes it tanky with no new mechanic —
+and tanky for two compounding reasons that are both already in the
+codebase: it is dense (resistance per hit) and it is massive (total mass to
+chew).
+
+**The refactor:** split `clearAt` into a damage half and a reward half. The
+damage half gains a second loop over coagulants overlapping the hit disc,
+applying the *same* falloff and resistance maths, subtracting from `mass`
+instead of `growth[i]`. Both loops feed one `totalRemoved`.
+
+What that buys, all automatically:
+
+- **#31 satisfied by construction** — XP tracks destroyed mass wherever it
+  is, because it is the same accumulator. The risk premium is one
+  multiplier on the coagulant portion.
+- **Rule 2 is automatic** — damage dealt is mass destroyed; there is
+  nowhere else for it to go.
+- **Rule 1** is the flood-fill draining grid cells into `mass`; **Rule 3**
+  is dumping `mass` back into grid cells on arrival.
+- **Mass is conserved game-wide as one number**, which is a testable
+  invariant — exactly the invariant-over-mechanism guard #20 argued for.
+- **Every weapon works on them unmodified**, including ones not yet
+  designed, because everything routes through `clearAt`.
+
+**Hard constraint: coagulants must never be composited into the world
+grid.** They stay entities. In the grid they would scar terrain as they
+walk (Phase 4A) and nothing could distinguish coagulant from ground.
+
+Movement is a straight line to the core at a per-entity `speed`, with a
+hook left in place for the Wave 2 Carrier to feed off the field it crosses
+— cheap to leave, annoying to retrofit.
+
+**43. Formation uses a bounded flood-fill, plus a coarse index for site
+selection.** 📋
+*2026-08-06.* This was the project's one named technical unknown. Grounded
+against the real numbers, **the risk was overstated**: the grid is
+150 × 86 = 12,900 cells at 13px, formation happens on discrete event
+*moments* rather than every tick, and even a whole-grid flood is a few
+hundred microseconds. The frame budget was never the problem.
+
+**The real problem is a design problem wearing an algorithm costume:** an
+unbounded flood across saturated wilderness returns *the entire wilderness*
+as one contiguous region — #28's arithmetic in code form.
+
+Two structures, two jobs:
+
+**(a) A coarse density index**, for *choosing* sites. A separate read-only
+side array summing revealed density per 4×4 block: ~836 entries, refreshed
+each tick at ~6% of a grid pass. Answers "where is mass banked" in one
+lookup. Bloom placement, behemoth site selection and spontaneous sparking
+all need exactly that.
+
+> **The simulation grid does not change.** It stays 150 × 86 at 13px, fully
+> simulated and rendered — the density is what makes the slime read as
+> *liquid* rather than pixels. The index is a table of contents beside the
+> map; it is never rendered and never simulated from.
+
+**(b) A bounded flood-fill**, for *executing* formation. From the spark
+point, flood through **revealed** cells only (`growth > threshold` —
+prototype bug #3 discipline, never raw density), capped at ~180px (≈14
+cells, ~600 cells worst case) and a cell count. Sum `growth` over what it
+reached; that is the available mass.
+
+**The radius cap is the entire design.** "Contiguous mass" becomes "mass
+inside a formation footprint," and size emerges from how *full* that
+footprint is — saturated wilderness → behemoth, half-cleared near field →
+mote. Rule 4 with no spawn table, and behemoth size capped by construction
+rather than by tuning.
+
+**The flood-fill result is also the crater shape**, so the hollow follows
+the vein pattern organically with no geometry to author.
+
+Rejected: a summed-area table. O(1) arbitrary-region queries, but it only
+pays off at thousands of queries per second against the handful actually
+needed, and the invalidation complexity is real on a field that changes
+every tick.
+
+**44. Armor is flat reduction on `power`, with a floor.** 📋
+*2026-08-06.*
+
+```
+effectivePower = max(power - armor, power * 0.15)
+```
+
+Percentage reduction (`* (1 - armor)`) was rejected: it scales every build
+down equally — a bigger health bar, not a question — and trends toward
+immunity, which is exactly the "a crust that neutralises your main weapon
+feels awful" risk flagged as open question #4.
+
+Flat reduction says something specific: **armor makes many small hits
+worthless and leaves big hits nearly intact.** That makes the roster's
+existing counter language mechanical rather than flavour — Behemoth
+answered by burst and single-target, Sclerotic by penetration.
+
+Three things fall out free:
+
+- **A Penetration support gem becomes obvious and load-bearing** — it
+  subtracts from armor, useless against soft targets and essential against
+  hard ones. Genuinely situational, which is rare.
+- **It is a natural corrective to the Blades problem.** Blades at level 8
+  fires ~18 `clearAt` calls/sec and is simultaneously top DPS and a gem
+  printer; flat reduction stops many-small-hits being universally correct
+  without nerfing a number.
+- **The 15% floor guarantees nothing is ever immune** — a bad matchup,
+  never a brick wall.
+
+The field ships in Wave 1 at **~0** (Mote, Congealer and Behemoth are all
+low-maturity by definition) and starts mattering in 4C. Building the term
+now with a zero value costs nothing and spares Wave 2 a damage-path
+refactor.
+
+**45. Default targeting stays nearest-thing-wins.** 📋
+*2026-08-06.* Coagulants do not get special targeting treatment.
+`nearestFrontierPoint` gains a pass comparing coagulant *surfaces*
+(`dist − radius`) against the 48-sector frontier raycast and returns
+whichever is nearer. Threat Priority remains a Phase 5 gem that *changes*
+the default rather than introducing targeting as a concept.
+
+Coagulants become simply another close thing — which is what #28 predicted:
+a dirty near field means the guns chew motes while a behemoth walks in, and
+that pressure emerges with no special-casing anywhere.
+
+**46. Coagulants render into the slime layer, in the slime palette.** 📋
+*2026-08-06.* Not as a separate sprite layer on top.
+
+**The identity risk is real:** the instant mass detaches from the field it
+can stop reading as slime and start reading as a monster, and the game's
+whole look depends on it not doing that. A coagulant's density maps to a
+bucket colour exactly as a grid cell does, so a behemoth renders as the
+brightest, densest slime in the game — which is *true*. It reads as the
+field getting up and walking.
+
+**Blob shape:** 5–9 seed circles of varying radius scattered in the body,
+filled flat in one colour. Overlapping flat circles merge into a lumpy
+organic silhouette automatically — no metaballs, no blur, no per-pixel
+work. Slow orbital drift plus a `sin(t·f + phase)` radius wobble makes it
+breathe; one inset lighter fill supplies the wet highlight.
+
+**Seeds are generated at formation and stored on the entity — never lazily
+inside a draw call.** That is the exact bug class that bit the prototype
+three times (#4 and #7); `bubbleSeeds` was this precise mistake.
+
+Wave 2 comes nearly free: Blastoma is the same renderer with more seeds and
+less overlap (visibly a bag of blobs, which is what it must communicate);
+Sclerotic is the same shapes in the mature palette with flatter, plated
+edges.
+
+This is the shipping approach for 3C, not final art — polish belongs to
+Phase 9.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

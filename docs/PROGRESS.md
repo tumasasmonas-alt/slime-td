@@ -48,11 +48,11 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-05 (evening — design session)
+**Last updated:** 2026-08-06 (design session — mechanism)
 
-**The port is complete and the game has been playtested. A full design
-rework is agreed and not yet started.** No game code has changed since
-`ebc58ab`; the last session was design only.
+**The port is complete and playtested. The rework is fully designed, top
+to bottom, and not yet started.** No game code has changed since `ebc58ab`;
+the last two sessions were design only.
 
 | | |
 |---|---|
@@ -61,6 +61,7 @@ rework is agreed and not yet started.** No game code has changed since
 | Typecheck | clean |
 | Branch | `main`, everything pushed |
 | Code state | **Unchanged since the port.** The rework is documented, not built. |
+| Blockers | **None.** Phase 3A is unblocked and ready to build. |
 
 **What works today:** a complete, playable roguelite loop. Infection grows
 as a reaction-diffusion density field and creeps toward a stationary core.
@@ -85,12 +86,17 @@ gem system, and the tier table is demoted to flavour.
 
 **Start here, in order:**
 
-1. **`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`** — the full
-   design, the reasoning, the numbers, and §16 *"Ideas considered and
-   rejected"*, which will save re-proposing something already tested and
-   found broken.
-2. **`docs/DECISIONS.md` #23–#37** — the load-bearing calls in short form.
-3. **`docs/BACKLOG.md`** *Now* section — the concrete first step.
+1. **`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`** — *what the
+   game is.* The full design, the reasoning, the numbers, and §16 *"Ideas
+   considered and rejected"*, which will save re-proposing something
+   already tested and found broken.
+2. **`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md`** —
+   *how it works.* The layer below: what a coagulant is in code, how
+   formation is computed, how armor and the card pool are structured. Also
+   has a rejected-ideas table.
+3. **`docs/DECISIONS.md` #23–#46** — the load-bearing calls in short form.
+   23–37 are the design; 38–46 are the mechanism.
+4. **`docs/BACKLOG.md`** *Now* section — the concrete first step.
 
 **Everything currently on the bug list is absorbed by the rework.** Don't
 fix any of it now; each sits inside a system being replaced. BACKLOG lists
@@ -155,6 +161,82 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-06 — The mechanism session
+
+**Design session. No game code written.** Full record:
+**`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md`**.
+
+Picked up on the other machine. The previous session settled *what the game
+is* and deliberately left *how it works* open, naming coagulant formation
+as the project's one real technical unknown. This session closed that layer
+and every remaining open question.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Docs only — session record, Decisions 38–46, backlog updates, 3A unblocked |
+
+**Discussed**
+
+- **The owner described the arsenal in their own words** and it matched
+  §13 almost exactly, which was itself useful confirmation. Two things fell
+  out of the comparison: it implicitly confirmed that currency buys
+  **unlocks only** (Decision 39, previously recommended-but-unconfirmed),
+  and it quietly **dropped weapon levels from the card pool**.
+- **Weapon levels leaving the pool is a real improvement, not a
+  simplification.** Every card becomes a build decision instead of a
+  treadmill step, and it kills the "cards appear to do nothing" bug at the
+  root — that bug was caused by *level* card descriptions specifically. The
+  hole it opens (no guaranteed payout) is filled by the owner's
+  **enhancement points** proposal, whose best feature is the +/-: mid-run
+  respec, which suits a game whose threat model shifts across a run.
+- **Claude proposed making gem bundles the deck unit; the owner rejected
+  it and was right.** Bounding the pool that way would make combinations
+  you didn't foresee at deck time unreachable, and emergent mid-run builds
+  are the better game. Gems are universally live once unlocked; bundles are
+  a purchase and a theme, not a slot.
+- **An audit of "decided vs. discussed" on coagulant formation** found the
+  design complete and the mechanism entirely untouched. That framing is
+  what made the rest of the session productive — the gap was specific and
+  nameable rather than a vague unease.
+- **The formation-algorithm risk was overstated.** Grounded against real
+  numbers (150 × 86 = 12,900 cells, formation on discrete event moments
+  rather than per tick), the frame budget was never the constraint. The
+  actual problem is that an unbounded flood-fill returns the whole
+  saturated wilderness as one region — a design problem wearing an
+  algorithm costume. Fixed by a radius cap, which is where the design
+  turned out to live.
+- **A misunderstanding worth recording:** the coarse density index was
+  initially read as downsizing the simulation grid, and the owner objected
+  that the dense grid is what makes the slime read as *liquid*. Correct
+  objection, wrong target — the index is a separate read-only side array,
+  never rendered, never simulated from. The grid does not change. Written
+  into Decision 43 explicitly so it can't be misread again.
+- **The best outcome of the session is Decision 42**, "one mass, two
+  containers." A coagulant has no HP; `mass` *is* its hit points, arrival
+  damage and XP value, and it's damaged by the existing `clearAt` formula
+  because a coagulant is just very dense slime that walks. Three of the
+  four conservation rules stop needing enforcement and become consequences
+  of the data model.
+- **Armor as flat reduction rather than percentage** turns "many small hits
+  vs. one big hit" into a real build question, makes a Penetration gem
+  load-bearing, and incidentally corrects the Blades gem-printer problem
+  without touching a number.
+
+**Decided** — Decisions 38–46. The perimeter question that blocked 3A is
+answered (fixed), and every other open question from 2026-08-05 is closed
+except the two deliberately deferred (`frozen`'s fate → Phase 5; whether
+calcified tissue blocks projectiles → prototype in Phase 4).
+
+**New backlog items** — spontaneous coagulation as a guarded anti-boredom
+floor, the "orbital trade ship" for buying specific gems with score points,
+and pool-filtering as the fallback if gem dilution bites.
+
+**Planned** — **Phase 3A, ready to build, no blockers.** Then 3B events,
+then 3C coagulants. 3C should write the mass-conservation invariant test
+first; it catches every economy bug in one assertion.
 
 ### 2026-08-05 (evening) — First playtest, and the design rework
 
@@ -343,15 +425,16 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 3A — teardown.** Blocked on one decision (below).
+**Next: Phase 3A — teardown. Unblocked and ready to build.**
 
-The design is settled end to end. What remains is implementation, in the
-order below. Full detail in the session record §17; the concrete first
-step is in `docs/BACKLOG.md`'s *Now* section.
+The design is settled end to end, and as of 2026-08-06 so is the
+mechanism. What remains is implementation, in the order below. Full detail
+in the 2026-08-05 record §17; the concrete first step is in
+`docs/BACKLOG.md`'s *Now* section.
 
 | Phase | Content |
 |---|---|
-| **3A** | Delete nodes · rename `safeRadius` → `perimeter` · demote `TIERS_LIST` to flavour |
+| **3A** | Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
 | **3B** | Infection Events — vein (acts on density) + bloom (acts on maturity), full lifecycle |
 | **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
 | **3D** | XP economy — mass-based, cap removed, superlinear curve → **playtest gate** |
@@ -369,24 +452,27 @@ behind the largest visual system (Decision 36).
 
 ### Open questions for the project owner
 
-**🔴 1. What drives the perimeter now? — blocks 3A.**
-It currently shrinks 100 → 45 via `TIERS_LIST`, which Decision 33 strips
-of mechanical weight. Options: **fixed**; an independent time curve; or
-breach-driven (shrinks as hits land — fits the consequence philosophy but
-may spiral). *Recommendation on file: fixed for now, revisit in Phase 8 —
-the perimeter's job is much smaller in the new model, being the line where
-breach splatter starts bleeding the core rather than the primary
-difficulty lever.* **Not decided.**
+**None blocking.** The two that blocked or shadowed 3A were answered on
+2026-08-06 — the perimeter is fixed (Decision 38) and meta-currency buys
+unlocks only (Decision 39). Two remain, both deliberately deferred:
 
-**2. Does meta-currency buy permanent stat upgrades, or unlocks only?**
-Recommendation: unlocks only — permanent stats compound the very scaling
-problem this rework exists to fix. Not blocking until Phase 7.
-
-**3. What happens to `frozen`?** Frost's growth-suppression probably
+**1. What happens to `frozen`?** Frost's growth-suppression probably
 becomes a gem effect rather than a weapon-specific mechanic. Phase 5.
 
-**4. Does calcified tissue block projectiles?** High impact — it would
+**2. Does calcified tissue block projectiles?** High impact — it would
 differentiate whole weapon families and revive the parked Scalpel/Lance —
 but the riskiest item in the design, since a crust that neutralises your
 main weapon could feel awful. Recommendation: prototype in Phase 4 and
-decide from feel.
+decide from feel. Note Decision 44's armor floor addresses the milder
+version of the same risk.
+
+### Deferred to their own design pass
+
+- **Phase 6 gets a full arsenal design session** before implementation —
+  the weapon/extension/gem catalogue, authored against a settled threat
+  model.
+- **The "orbital trade ship"** (buying specific gems with score points)
+  needs its own pass on what score points are and whether they compete
+  with meta-currency. Phase 6/7. See BACKLOG.
+- **Spontaneous coagulation** — revisit after the 3C playtest, when it's
+  clear whether dead air is actually a problem. See BACKLOG.
