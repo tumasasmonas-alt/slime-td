@@ -1,7 +1,6 @@
 import type { Grid } from '../state';
 import { clamp } from '../util/math';
-import { TIERS_LIST } from '../tuning/tiers';
-import { CELL_SIZE, WORLD_HEIGHT, WORLD_MAX_RANGE, WORLD_WIDTH } from '../tuning/world';
+import { CELL_SIZE, PERIMETER, WORLD_HEIGHT, WORLD_MAX_RANGE, WORLD_WIDTH } from '../tuning/world';
 import { generateVeinField } from './veinField';
 
 // Sized to the fixed world (tuning/world.ts), not a window — every player
@@ -18,9 +17,6 @@ export function buildGrid(): Grid {
     threshold[i] = clamp(1 - vein[i]!, 0.045, 0.94);
   }
 
-  const firstTier = TIERS_LIST[0];
-  if (!firstTier) throw new Error('TIERS_LIST is empty');
-
   return {
     cols,
     rows,
@@ -32,7 +28,7 @@ export function buildGrid(): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: WORLD_MAX_RANGE,
-    safeRadius: firstTier.safeRadius,
+    perimeter: PERIMETER,
   };
 }
 

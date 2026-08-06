@@ -15,7 +15,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 20,
+    perimeter: 20,
     ...overrides,
   };
 }

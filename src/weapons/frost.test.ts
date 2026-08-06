@@ -17,7 +17,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 800,
-    safeRadius: 50,
+    perimeter: 50,
     ...overrides,
   };
 }
@@ -47,7 +47,7 @@ describe('updateFrostWeapon', () => {
     expect(state.novaFx).toEqual({
       x: 500,
       y: 500,
-      radius: frostRadius(1, state.grid.safeRadius),
+      radius: frostRadius(1, state.grid.perimeter),
       life: 0.4,
       maxLife: 0.4,
     });
@@ -70,10 +70,10 @@ describe('updateFrostWeapon', () => {
     // Regression guard for documented prototype bug #5.
     const state = freshState();
     state.grid = makeTestGrid();
-    state.grid.safeRadius = 200;
+    state.grid.perimeter = 200;
 
     for (let lvl = 1; lvl <= 8; lvl++) {
-      expect(frostRadius(lvl, state.grid.safeRadius)).toBeGreaterThan(state.grid.safeRadius);
+      expect(frostRadius(lvl, state.grid.perimeter)).toBeGreaterThan(state.grid.perimeter);
     }
   });
 });

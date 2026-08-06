@@ -7,7 +7,7 @@ export const FRONTIER_SECTORS = 48;
 // cell in each direction — no per-enemy list to search. Weapons aim at
 // whichever sector is closest.
 //
-// The raycast starts at the tower's own radius, not `safeRadius`. Since
+// The raycast starts at the tower's own radius, not `perimeter`. Since
 // docs/DECISIONS.md #15 lets ambient growth creep inside the
 // safe radius, a breach can now exist there — and if the raycast still
 // started at the old safe-radius boundary, weapons would be structurally

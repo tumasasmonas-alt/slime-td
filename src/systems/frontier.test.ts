@@ -16,7 +16,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 200,
-    safeRadius: 60,
+    perimeter: 60,
     ...overrides,
   };
 }
@@ -61,8 +61,8 @@ describe('computeFrontier / nearestFrontierPoint', () => {
 
   it('can target a breach inside the safe radius', () => {
     // Since docs/DECISIONS.md #15 lets ambient growth creep
-    // inside safeRadius, the raycast must be able to see and target a
-    // breach there too — starting it at safeRadius (the old behavior)
+    // inside perimeter, the raycast must be able to see and target a
+    // breach there too — starting it at perimeter (the old behavior)
     // would make any breach structurally unkillable, since weapons could
     // never aim at it. See the frontier.ts header comment.
     const state = freshState();
@@ -70,7 +70,7 @@ describe('computeFrontier / nearestFrontierPoint', () => {
     state.tower.x = 150;
     state.tower.y = 150;
     state.tower.radius = 20;
-    // Reveal a cell inside safeRadius (60) but well outside the tower's
+    // Reveal a cell inside perimeter (60) but well outside the tower's
     // own radius (20) — a plausible breach location.
     const cx = Math.floor(190 / state.grid.cellSize);
     const cy = Math.floor(150 / state.grid.cellSize);
@@ -81,6 +81,6 @@ describe('computeFrontier / nearestFrontierPoint', () => {
     computeFrontier(state);
     const nearest = nearestFrontierPoint(state);
     expect(nearest).not.toBeNull();
-    expect(nearest!.dist).toBeLessThan(state.grid.safeRadius);
+    expect(nearest!.dist).toBeLessThan(state.grid.perimeter);
   });
 });

@@ -1,7 +1,6 @@
 import type { GameState } from '../state';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { CONTACT_SCALE } from '../tuning/growth';
-import { TIERS_LIST } from '../tuning/tiers';
 import { dist } from '../util/math';
 import { damageTower } from './tower';
 
@@ -27,13 +26,18 @@ const CONTACT_FLOOR = 0.02;
 // completely unaffected by any of this and still applies. Raw density
 // can cross the damage floor before a cell individually crosses its own
 // reveal threshold.
+//
+// No longer scaled by a per-tier contactMult (Decision 24, 2026-08-06):
+// the field is "the clock, not the executioner" in the new model, so
+// contact damage doesn't escalate on a timer any more — its escalation
+// arrives via Rule 3 (arrival splatter seeding breaches), which raises
+// pressure through this same formula rather than through a multiplier.
 export function tickContactDamage(state: GameState, dt: number): void {
   const grid = state.grid;
-  const tier = TIERS_LIST[state.tierIndex];
-  if (!grid || !tier) return;
+  if (!grid) return;
   const t = state.tower;
-  const safeRadius = grid.safeRadius;
-  const radiusCells = Math.ceil(safeRadius / grid.cellSize);
+  const perimeter = grid.perimeter;
+  const radiusCells = Math.ceil(perimeter / grid.cellSize);
   const { cx: tcx, cy: tcy } = worldToCell(grid, t.x, t.y);
 
   let weightedSum = 0;
@@ -47,8 +51,8 @@ export function tickContactDamage(state: GameState, dt: number): void {
       const wx = cx * grid.cellSize + grid.cellSize / 2;
       const wy = cy * grid.cellSize + grid.cellSize / 2;
       const d = dist(wx, wy, t.x, t.y);
-      if (d > safeRadius) continue;
-      const weight = 1 - d / safeRadius;
+      if (d > perimeter) continue;
+      const weight = 1 - d / perimeter;
       if (weight <= 0) continue;
       const i = gIdx(grid, cx, cy);
       const density = isRevealedIdx(grid, i) ? grid.growth[i]! : 0;
@@ -60,6 +64,6 @@ export function tickContactDamage(state: GameState, dt: number): void {
   const pressure = weightTotal > 0 ? weightedSum / weightTotal : 0;
   state.contactPressure = pressure;
   if (pressure > CONTACT_FLOOR) {
-    damageTower(state, pressure * tier.contactMult * CONTACT_SCALE * dt);
+    damageTower(state, pressure * CONTACT_SCALE * dt);
   }
 }

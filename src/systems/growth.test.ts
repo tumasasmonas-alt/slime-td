@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid, Tower } from '../state';
-import { TIERS_LIST } from '../tuning/tiers';
 import { applyAmbientGrowth } from './growth';
 
 // Synthetic small grid, matching the fixture pattern used in grid.test.ts —
@@ -18,7 +17,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 100,
+    perimeter: 100,
     ...overrides,
   };
 }
@@ -38,19 +37,17 @@ function makeTower(overrides: Partial<Tower> = {}): Tower {
   };
 }
 
-const tier = TIERS_LIST[0]!;
-
 describe('applyAmbientGrowth — outside the safe radius', () => {
   it('grows cells outside the safe radius over repeated ticks', () => {
     const grid = makeTestGrid();
     const tower = makeTower();
-    // cell (0,0) -> world center (5,5), well outside safeRadius=100.
+    // cell (0,0) -> world center (5,5), well outside perimeter=100.
     const i = 0;
-    applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+    applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     expect(grid.growth[i]).toBeGreaterThan(0);
     const afterOneTick = grid.growth[i]!;
     for (let k = 0; k < 20; k++) {
-      applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+      applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     }
     expect(grid.growth[i]).toBeGreaterThan(afterOneTick);
     expect(grid.growth[i]).toBeLessThanOrEqual(1);
@@ -61,7 +58,7 @@ describe('applyAmbientGrowth — outside the safe radius', () => {
     grid.threshold[0] = 0; // reveals immediately once growth is > 0
     const tower = makeTower();
     const dirty = new Set<number>();
-    applyAmbientGrowth(grid, tower, tier, 0.18, dirty);
+    applyAmbientGrowth(grid, tower, 1, 0.18, dirty);
     expect(dirty.has(0)).toBe(true);
     dirty.clear();
     // Same bucket next tick (still climbing toward the top, not crossing
@@ -69,7 +66,7 @@ describe('applyAmbientGrowth — outside the safe radius', () => {
     // change, it must be re-marked.
     grid.bucket[0] = 5; // pin at the top bucket so no further change is possible
     grid.growth[0] = 1;
-    applyAmbientGrowth(grid, tower, tier, 0.18, dirty);
+    applyAmbientGrowth(grid, tower, 1, 0.18, dirty);
     expect(dirty.has(0)).toBe(false);
   });
 
@@ -77,11 +74,11 @@ describe('applyAmbientGrowth — outside the safe radius', () => {
     const grid = makeTestGrid();
     grid.frozen[0] = 0.3;
     const tower = makeTower();
-    applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+    applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     expect(grid.growth[0]).toBe(0);
     expect(grid.frozen[0]).toBeCloseTo(0.12, 5);
 
-    applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+    applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     expect(grid.frozen[0]).toBe(0);
     // The tick that brings the freeze timer to zero still `continue`s past
     // growth for that cell — growth only resumes on the tick after.
@@ -91,7 +88,7 @@ describe('applyAmbientGrowth — outside the safe radius', () => {
 
 describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {
   // docs/DECISIONS.md #15: ambient growth used to be hard-gated to zero
-  // inside safeRadius (confirmed unintended prototype behavior — see
+  // inside perimeter (confirmed unintended prototype behavior — see
   // prototype bug #2 in the same file). It now creeps in at a rate damped
   // linearly by proximity to the tower, so the core is genuinely
   // reachable rather than structurally safe.
@@ -101,12 +98,12 @@ describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {
     const tower = makeTower();
     // Cell halfway between the tower's radius and the safe radius —
     // under the old hard gate this stayed at exactly 0 forever.
-    const midR = (tower.radius + grid.safeRadius) / 2;
+    const midR = (tower.radius + grid.perimeter) / 2;
     const cx = Math.round((tower.x + midR) / grid.cellSize);
     const cy = Math.round(tower.y / grid.cellSize);
     const i = cy * grid.cols + cx;
     for (let k = 0; k < 200; k++) {
-      applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+      applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     }
     expect(grid.growth[i]).toBeGreaterThan(0);
   });
@@ -115,12 +112,12 @@ describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {
     const grid = makeTestGrid();
     const tower = makeTower();
     const nearTowerR = tower.radius + 2;
-    const midR = (tower.radius + grid.safeRadius) / 2;
+    const midR = (tower.radius + grid.perimeter) / 2;
     const cy = Math.round(tower.y / grid.cellSize);
     const nearTowerI = cy * grid.cols + Math.round((tower.x + nearTowerR) / grid.cellSize);
     const midI = cy * grid.cols + Math.round((tower.x + midR) / grid.cellSize);
     for (let k = 0; k < 50; k++) {
-      applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+      applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     }
     // Relative comparison rather than an absolute closeness check — the
     // exact magnitude at any one cell is sensitive to grid quantization,
@@ -132,13 +129,13 @@ describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {
     const grid = makeTestGrid();
     const tower = makeTower();
     const nearTowerR = tower.radius + 10;
-    const nearLineR = grid.safeRadius - 10;
+    const nearLineR = grid.perimeter - 10;
     const nearTowerI =
       Math.round((tower.y) / grid.cellSize) * grid.cols + Math.round((tower.x + nearTowerR) / grid.cellSize);
     const nearLineI =
       Math.round((tower.y) / grid.cellSize) * grid.cols + Math.round((tower.x + nearLineR) / grid.cellSize);
     for (let k = 0; k < 30; k++) {
-      applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+      applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     }
     expect(grid.growth[nearLineI]).toBeGreaterThan(grid.growth[nearTowerI]!);
   });
@@ -146,13 +143,13 @@ describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {
   it('is continuous across the safe-radius boundary — no visible seam in growth rate', () => {
     const grid = makeTestGrid();
     const tower = makeTower();
-    const justInsideR = grid.safeRadius - 1;
-    const justOutsideR = grid.safeRadius + 1;
+    const justInsideR = grid.perimeter - 1;
+    const justOutsideR = grid.perimeter + 1;
     const justInsideI =
       Math.round(tower.y / grid.cellSize) * grid.cols + Math.round((tower.x + justInsideR) / grid.cellSize);
     const justOutsideI =
       Math.round(tower.y / grid.cellSize) * grid.cols + Math.round((tower.x + justOutsideR) / grid.cellSize);
-    applyAmbientGrowth(grid, tower, tier, 0.18, new Set());
+    applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
     // Both are essentially at the line, so their single-tick growth
     // should be very close, not an order of magnitude apart.
     const inside = grid.growth[justInsideI]!;

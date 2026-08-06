@@ -8,9 +8,6 @@ const CLOUD_LIFE = 3.4;
 const CLOUD_COLOR = '#8aff4d';
 const BUBBLE_COUNT = 4;
 
-// Prefers a live growth node over the frontier — nodes are the priority
-// target, and a lingering cloud is well suited to sitting on one while
-// it ticks down.
 export function updatePoisonWeapon(state: GameState, dt: number): void {
   const lvl = state.weapons.poison;
   if (!lvl) return;
@@ -18,8 +15,7 @@ export function updatePoisonWeapon(state: GameState, dt: number): void {
   if (state.weaponTimers.poison > 0) return;
   state.weaponTimers.poison = poisonCooldown(lvl) / atkSpeedMult(state);
 
-  const activeNode = state.nodes.find((n) => !n.dead);
-  const target = activeNode ?? nearestFrontierPoint(state);
+  const target = nearestFrontierPoint(state);
   if (!target) return;
 
   state.clouds.push({

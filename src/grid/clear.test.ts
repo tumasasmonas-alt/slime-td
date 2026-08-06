@@ -19,7 +19,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 20,
+    perimeter: 20,
     ...overrides,
   };
 }
@@ -111,69 +111,6 @@ describe('clearAt', () => {
     clearAt(state, 105, 105, 1, { radiusPx: 15 });
 
     expect(state.gems).toHaveLength(0);
-  });
-
-  it('damages a growth node within radius + hitRadius of the hit', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    state.nodes.push({
-      x: 105,
-      y: 105,
-      hp: 100,
-      maxHp: 100,
-      radius: 90,
-      strength: 1,
-      hitRadius: 16,
-      dead: false,
-      pulseSeed: 0,
-    });
-
-    clearAt(state, 105, 105, 30, { radiusPx: 20 });
-
-    expect(state.nodes[0]!.hp).toBe(70); // hp -= power, not scaled by falloff/resistance
-    expect(state.nodes[0]!.dead).toBe(false);
-  });
-
-  it('destroys a node once a hit brings its hp to 0 or below', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    state.nodes.push({
-      x: 105,
-      y: 105,
-      hp: 10,
-      maxHp: 100,
-      radius: 90,
-      strength: 1,
-      hitRadius: 16,
-      dead: false,
-      pulseSeed: 0,
-    });
-
-    clearAt(state, 105, 105, 30, { radiusPx: 20 });
-
-    expect(state.nodes[0]!.dead).toBe(true);
-    expect(state.nodesPurged).toBe(1);
-    expect(state.tower.xp).toBeGreaterThan(0);
-  });
-
-  it('leaves a node untouched when the hit lands outside radius + hitRadius', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    state.nodes.push({
-      x: 195,
-      y: 105,
-      hp: 100,
-      maxHp: 100,
-      radius: 5,
-      strength: 1,
-      hitRadius: 5,
-      dead: false,
-      pulseSeed: 0,
-    });
-
-    clearAt(state, 105, 105, 30, { radiusPx: 20 });
-
-    expect(state.nodes[0]!.hp).toBe(100);
   });
 
   it('freezes cells within the hit radius when a freeze duration is given', () => {

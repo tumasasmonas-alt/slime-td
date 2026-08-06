@@ -21,7 +21,7 @@ export function updateWardPulse(state: GameState, dt: number): void {
   state.wardTimer -= dt;
   if (state.wardTimer <= 0) {
     state.wardTimer = WARD_TICK;
-    const radius = towerCenteredRadius(WARD_REACH, lvl, grid.safeRadius);
+    const radius = towerCenteredRadius(WARD_REACH, lvl, grid.perimeter);
     clearAt(state, state.tower.x, state.tower.y, 10 * lvl, { radiusPx: radius });
   }
 }

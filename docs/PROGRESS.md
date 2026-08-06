@@ -48,41 +48,46 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-06 (design session — mechanism)
+**Last updated:** 2026-08-06 (Phase 3A shipped)
 
-**The port is complete and playtested. The rework is fully designed, top
-to bottom, and not yet started.** No game code has changed since `ebc58ab`;
-the last two sessions were design only.
+**The rework has started.** Phase 3A (teardown) is built, tested, and
+verified live: growth nodes are gone, `safeRadius` is renamed to
+`perimeter` and fixed, and `TIERS_LIST` carries no mechanical weight.
 
 | | |
 |---|---|
-| Tests | 153 passing (29 test files) — one known flake, see BACKLOG |
-| Source | 56 modules under `src/` |
+| Tests | 136 passing (28 test files) — one known flake, see BACKLOG |
+| Source | 53 modules under `src/` |
 | Typecheck | clean |
-| Branch | `main`, everything pushed |
-| Code state | **Unchanged since the port.** The rework is documented, not built. |
-| Blockers | **None.** Phase 3A is unblocked and ready to build. |
+| Build | clean |
+| Branch | `main` — 3A not yet pushed, see below |
+| Code state | **Phase 3A complete.** Everything else in the rework is still design-only. |
+| Blockers | **None.** Phase 3B (Infection Events) is next. |
 
-**What works today:** a complete, playable roguelite loop. Infection grows
-as a reaction-diffusion density field and creeps toward a stationary core.
-Six auto-firing weapons and eight passives via level-up cards. Growth
-nodes, contact damage, escalating tiers, game over, restart with a fresh
-maze.
+**What works today:** a playable loop with the horde-economy teardown
+applied. Infection grows as a reaction-diffusion density field and creeps
+toward a stationary core across a **fixed perimeter** (no longer
+tier-driven). Six auto-firing weapons and eight passives via level-up
+cards. Contact damage, flavour-only tiers, game over, restart with a fresh
+maze. **Growth nodes are gone** — Missile and Caustic Cloud fire at the
+frontier only until Phase 3C gives them coagulants to chase.
 
-**What the playtest found:** the game is too easy and structurally so, not
-numerically. **Player power scales 17–21× across a run; the infection
-scales 3.1×.** No value of `CONTACT_SCALE` is right at both ends. Nodes
-felt bad. XP arrives far too fast. The full findings and math are in the
-session record below.
+**What the playtest found (2026-08-05, pre-rework):** the game was too easy
+and structurally so, not numerically. **Player power scaled 17–21× across
+a run; the infection scaled 3.1×.** No value of `CONTACT_SCALE` was right
+at both ends. Nodes felt bad. XP arrived far too fast. The full findings
+and math are in the 2026-08-05 session record.
 
 ### ⚠️ Read this before writing any code
 
-The next work is **not** the balance pass. Decision 13 is superseded.
+The next work is **Phase 3B — Infection Events.** Not the balance pass
+(Decision 13, superseded).
 
 The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
-gem system, and the tier table is demoted to flavour.
+gem system, and the tier table is demoted to flavour. **Phase 3A (the
+teardown) is done;** 3B is the next unbuilt piece.
 
 **Start here, in order:**
 
@@ -94,13 +99,16 @@ gem system, and the tier table is demoted to flavour.
    *how it works.* The layer below: what a coagulant is in code, how
    formation is computed, how armor and the card pool are structured. Also
    has a rejected-ideas table.
-3. **`docs/DECISIONS.md` #23–#46** — the load-bearing calls in short form.
-   23–37 are the design; 38–46 are the mechanism.
-4. **`docs/BACKLOG.md`** *Now* section — the concrete first step.
+3. **`docs/DECISIONS.md` #23–#47** — the load-bearing calls in short form.
+   23–37 are the design; 38–47 are the mechanism, including #47's
+   mid-implementation finding about `infectionMult`/`contactMult`.
+4. **`docs/BACKLOG.md`** *Now* section — 3B is the concrete next step; 3A's
+   own follow-ups (missile targeting, the dormant kill counter) are noted
+   in *Done*.
 
-**Everything currently on the bug list is absorbed by the rework.** Don't
-fix any of it now; each sits inside a system being replaced. BACKLOG lists
-the absorbing phase for each.
+**Everything remaining on the pre-rework bug list is absorbed by later
+phases.** Don't fix any of it now; each sits inside a system being
+replaced. BACKLOG lists the absorbing phase for each.
 
 **Environment note:** `.nvmrc` pins Node 22.12.0, but the work machine is
 running 24.19.0. `package.json` engines (`^20.19.0 || >=22.12.0`) permits
@@ -161,6 +169,64 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-06 (later) — Phase 3A: the teardown
+
+**Implementation. The rework's first code lands.** Reviewed against the
+actual codebase before starting (see the mechanism session below for the
+review); greenlit by the project owner; built the same session.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Phase 3A — nodes deleted, `safeRadius` → `perimeter` (fixed constant), `TIERS_LIST` demoted to flavour, ambient/contact decoupled from tiers |
+
+**Discussed**
+
+- **The review before building found the plan understated its own
+  scope.** `TIERS_LIST` carried four mechanical values (`safeRadius`,
+  `nodeInterval`, `infectionMult`, `contactMult`), not the one the written
+  plan named. Stripping all four with nothing to replace three of them
+  would have left the game with **zero escalation** for three phases
+  (3B/3C/4A) before events, coagulants, and maturity exist to take over —
+  correct per Decision 33's letter, wrong in effect.
+- **The fix, confirmed against the 2026-08-05 record before proposing
+  it:** §15 already lists "ambient rate" as one of five organic escalation
+  axes that survive the rework. So `infectionMult` was never meant to die
+  with the tier table — it becomes its own time-driven curve. `contactMult`
+  goes the other way and is retired outright, folded into the existing
+  `CONTACT_SCALE` constant, because Decision 24 already establishes contact
+  damage as "the clock, not the executioner" — it isn't supposed to escalate
+  on a timer at all once Rule 3 (arrival splatter) exists to do that job.
+  Recorded as Decision 47.
+- **Three smaller gaps the plan didn't mention**, surfaced during review
+  and accepted by the owner before starting: Homing Missile loses its only
+  moving target and degrades to firing at a fixed frontier point (the
+  owner: "okay, not a big deal" — restoring it is a small follow-up once
+  3C exists, not a rewrite); the kill counter (`nodesPurged`) goes dormant
+  rather than being renamed or removed (owner: "left alone... until we get
+  to coagulants"); the start-overlay blurb needed rewriting since it was
+  the only place a player learned what nodes were.
+- **The game is honestly thinner right now than before this session**,
+  and that's correct for a teardown, not a regression to worry about. No
+  playtest verdict is expected until the 3C gate.
+
+**Decided** — Decision 47 (ambient/contact decoupling, found and agreed
+mid-implementation, not in either prior session record).
+
+**Verified**: 136/136 tests passing (153 → 136: `nodes.test.ts` removed
+outright, six other files lost node-dependent cases), typecheck clean,
+production build clean (55 modules bundled; 56 → 53 non-test files under
+`src/`, net of the three node modules deleted). Also verified live in the
+browser, not just by test suite — started a run,
+watched ambient growth and the bolt weapon operate against the fixed
+perimeter with no console errors, leveled up twice, and confirmed Homing
+Missile's card text no longer mentions nodes (`"Homes onto the nearest
+wall and explodes."`) now that the string itself was fixed as part of the
+sweep for stray references.
+
+**Planned** — **Phase 3B, Infection Events**, next. No blockers.
 
 ### 2026-08-06 — The mechanism session
 
@@ -425,16 +491,16 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 3A — teardown. Unblocked and ready to build.**
+**Next: Phase 3B — Infection Events. Phase 3A shipped 2026-08-06.**
 
 The design is settled end to end, and as of 2026-08-06 so is the
 mechanism. What remains is implementation, in the order below. Full detail
-in the 2026-08-05 record §17; the concrete first step is in
+in the 2026-08-05 record §17; the concrete next step is in
 `docs/BACKLOG.md`'s *Now* section.
 
 | Phase | Content |
 |---|---|
-| **3A** | Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
+| **3A** | ✅ Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
 | **3B** | Infection Events — vein (acts on density) + bloom (acts on maturity), full lifecycle |
 | **3C** | Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate** |
 | **3D** | XP economy — mass-based, cap removed, superlinear curve → **playtest gate** |

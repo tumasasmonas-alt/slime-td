@@ -57,8 +57,8 @@ export function updateHud(refs: HudRefs, state: GameState): void {
 
   // Only pop the next queued announcement once the current one has fully
   // displayed — popping unconditionally would let a same-tick collision
-  // (e.g. a tier escalation and a node spawn) flash through both within a
-  // single frame instead of each getting its full ANNOUNCE_DURATION.
+  // flash through both within a single frame instead of each getting its
+  // full ANNOUNCE_DURATION.
   if (state.announceTimer <= 0 && state.pendingAnnouncements.length > 0) {
     announce(refs, state, state.pendingAnnouncements.shift()!);
   }

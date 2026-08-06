@@ -2,7 +2,6 @@
 // they are not finalized (see Balance Notes in archive/PROTOTYPE_HANDOFF.md).
 export const AMBIENT_BASE = 0.05;
 export const CONTACT_SCALE = 15;
-export const MAX_NODES = 5;
 
 // Floor rate ambient growth creeps at inside the safe zone (damped
 // further by proximity to the tower), and the floor the outside ramp
@@ -12,3 +11,32 @@ export const CREEP_RAMP = 0.09;
 
 // Fixed simulation timestep in seconds, decoupled from render framerate.
 export const SIM_TICK = 0.18;
+
+// Ambient infection escalation, decoupled from TIERS_LIST (Decision 33/38
+// — see docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md §"the
+// perimeter"). This is axis 3 of the five organic escalation axes named
+// in the 2026-08-05 session record §15 ("ambient rate — the existing
+// lever"); the rework replaces the *tier table* as difficulty mechanism,
+// not this curve. Same breakpoints and values the tier table used to
+// carry, now driven directly by elapsed time so it survives tiers being
+// demoted to flavour.
+interface EscalationPoint {
+  readonly t: number;
+  readonly infectionMult: number;
+}
+
+const AMBIENT_ESCALATION: readonly EscalationPoint[] = [
+  { t: 0, infectionMult: 1.0 },
+  { t: 90, infectionMult: 1.35 },
+  { t: 220, infectionMult: 1.8 },
+  { t: 380, infectionMult: 2.3 },
+  { t: 560, infectionMult: 3.1 },
+];
+
+export function ambientInfectionMult(elapsedSeconds: number): number {
+  let mult = AMBIENT_ESCALATION[0]!.infectionMult;
+  for (const point of AMBIENT_ESCALATION) {
+    if (elapsedSeconds >= point.t) mult = point.infectionMult;
+  }
+  return mult;
+}

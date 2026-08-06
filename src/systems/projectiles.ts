@@ -77,15 +77,8 @@ export function updateProjectiles(state: GameState, dt: number): void {
 
 // Returns whether the missile should keep flying this frame.
 function updateMissile(state: GameState, grid: Grid, p: MissileProjectile, dt: number): boolean {
-  let tx: number;
-  let ty: number;
-  if (p.targetNode && !p.targetNode.dead) {
-    tx = p.targetNode.x;
-    ty = p.targetNode.y;
-  } else {
-    tx = p.targetPoint.x;
-    ty = p.targetPoint.y;
-  }
+  const tx = p.targetPoint.x;
+  const ty = p.targetPoint.y;
 
   const a = Math.atan2(ty - p.y, tx - p.x);
   p.vx = lerp(p.vx, Math.cos(a) * p.speed, MISSILE_STEER);

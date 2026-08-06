@@ -20,26 +20,14 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🔴 Phase 3A — Teardown (unblocked, ready to build)
+### 🔴 Phase 3B — Infection Events (next up)
 
-The design rework is agreed (DECISIONS.md #23–#46). Reasoning lives in two
-session records: `docs/sessions/2026-08-05-slime-and-arsenal-rework.md`
-(what the game is) and
-`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
-works). First implementation step:
-
-- Remove growth nodes entirely — `systems/nodes.ts`, `tuning/nodes.ts`,
-  node targeting in `weapons/poison.ts` and `weapons/missile.ts`, node
-  damage in `grid/clear.ts`, `nodes` on `GameState`, `render/nodes.ts`,
-  `systems/nodes.test.ts`.
-- Rename `safeRadius` → `perimeter` throughout (Decision 36).
-- Demote `TIERS_LIST` to flavour — names, announcements, colour only, no
-  mechanical weight (Decision 33).
-- Perimeter becomes a **fixed constant** (Decision 38), since the tier
-  table no longer drives it.
-
-Expect Missile and Caustic Cloud to lose their secondary behaviour until
-Wave 1 coagulants land in 3C — intended, not a regression.
+Phase 3A (teardown) shipped 2026-08-06 — see BACKLOG's Done section and
+`docs/PROGRESS.md`'s session log for what landed. The design rework is
+agreed (DECISIONS.md #23–#47). Reasoning lives in two session records:
+`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is)
+and `docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
+works).
 
 ### The rest of the phase plan
 
@@ -329,3 +317,29 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
   tier, any level, any run. Now prevented structurally by
   `towerCenteredRadius()` plus an invariant test. See prototype bug #5 in
   DECISIONS.md.
+
+- **Phase 3A — Teardown.** *(2026-08-06)* Growth nodes removed entirely
+  (`systems/nodes.ts`, `tuning/nodes.ts`, `render/nodes.ts`, node targeting
+  in `poison.ts`/`missile.ts`, node damage in `clear.ts`). `safeRadius`
+  renamed to `perimeter` throughout and fixed as a constant (Decision 38).
+  `TIERS_LIST` demoted to name/t/color only; the mechanical values it used
+  to carry moved to their own owners — ambient escalation is now its own
+  time-driven curve and contact damage no longer scales by tier at all
+  (Decision 47, found mid-implementation — the original plan only accounted
+  for the perimeter). 136/136 tests passing (down from 153 — `nodes.test.ts`
+  removed, node-dependent cases pruned from six other files), typecheck and
+  build clean, verified live in-browser (level-up, card picks, and Homing
+  Missile's now-fixed description all confirmed working with no console
+  errors).
+
+  **Left deliberately incomplete, both by explicit instruction:**
+  - **Homing Missile no longer homes onto anything** — it flies at a fixed
+    frontier point since nodes were its only moving target. Restoring real
+    homing is a small follow-up once Phase 3C gives it a coagulant to
+    chase; the projectile's steering already tracks whatever `targetPoint`
+    holds, so no rewrite is needed, just a new target source.
+  - **The kill counter (`nodesPurged`, HUD "Purged" stat) is dormant** —
+    nothing increments it now that nodes are gone. Stays at 0 until Phase
+    3C wires it to coagulant kills. Worth a more interesting stat than a
+    raw count once that lands (kept as a placeholder rather than renamed,
+    per the project owner).

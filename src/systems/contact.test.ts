@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { Grid } from '../state';
 import { freshState } from '../state';
 import { gIdx, worldToCell } from '../grid/grid';
-import { TIERS_LIST } from '../tuning/tiers';
 import { applyAmbientGrowth } from './growth';
 import { tickContactDamage } from './contact';
 
@@ -19,7 +18,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 100,
+    perimeter: 100,
     ...overrides,
   };
 }
@@ -36,7 +35,7 @@ function revealAt(grid: Grid, x: number, y: number, density: number): number {
 // tickContactDamage always finds something, regardless of exactly which
 // cells its weighting favors.
 function fillSafeZoneDisc(grid: Grid, towerX: number, towerY: number, density: number): void {
-  const radiusCells = Math.ceil(grid.safeRadius / grid.cellSize);
+  const radiusCells = Math.ceil(grid.perimeter / grid.cellSize);
   const { cx: tcx, cy: tcy } = worldToCell(grid, towerX, towerY);
   for (let oy = -radiusCells; oy <= radiusCells; oy++) {
     for (let ox = -radiusCells; ox <= radiusCells; ox++) {
@@ -45,7 +44,7 @@ function fillSafeZoneDisc(grid: Grid, towerX: number, towerY: number, density: n
       if (cx < 0 || cx >= grid.cols || cy < 0 || cy >= grid.rows) continue;
       const wx = cx * grid.cellSize + grid.cellSize / 2;
       const wy = cy * grid.cellSize + grid.cellSize / 2;
-      if (Math.hypot(wx - towerX, wy - towerY) > grid.safeRadius) continue;
+      if (Math.hypot(wx - towerX, wy - towerY) > grid.perimeter) continue;
       const i = gIdx(grid, cx, cy);
       grid.threshold[i] = 0.1;
       grid.growth[i] = density;
@@ -91,7 +90,7 @@ describe('tickContactDamage', () => {
     nearLine.grid = makeTestGrid();
     nearLine.tower.x = 300;
     nearLine.tower.y = 300;
-    revealAt(nearLine.grid, nearLine.tower.x + nearLine.grid.safeRadius - 10, nearLine.tower.y, 0.9);
+    revealAt(nearLine.grid, nearLine.tower.x + nearLine.grid.perimeter - 10, nearLine.tower.y, 0.9);
     tickContactDamage(nearLine, 1);
 
     expect(nearCore.contactPressure).toBeGreaterThan(nearLine.contactPressure);
@@ -117,16 +116,19 @@ describe('tickContactDamage', () => {
     expect(state.tower.hp).toBe(state.tower.maxHp);
   });
 
-  it("scales damage with the current tier's contactMult", () => {
+  it('deals identical damage regardless of tierIndex — contact no longer scales on a timer', () => {
+    // Decision 24, 2026-08-06: the field is "the clock, not the
+    // executioner"; contact damage escalates via arrival splatter (Rule
+    // 3), not a per-tier multiplier. tierIndex is flavour-only now.
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 300;
     state.tower.y = 300;
     fillSafeZoneDisc(state.grid, state.tower.x, state.tower.y, 0.9);
-    state.tierIndex = 4; // Apocalypse, contactMult 2.1 vs tier 0's 1.0
+    state.tierIndex = 4; // Apocalypse — presentation only, must not affect damage
 
     tickContactDamage(state, 1);
-    const apocalypseDamage = state.tower.maxHp - state.tower.hp;
+    const laterTierDamage = state.tower.maxHp - state.tower.hp;
 
     const baseline = freshState();
     baseline.grid = makeTestGrid();
@@ -137,7 +139,7 @@ describe('tickContactDamage', () => {
     tickContactDamage(baseline, 1);
     const baselineDamage = baseline.tower.maxHp - baseline.tower.hp;
 
-    expect(apocalypseDamage).toBeGreaterThan(baselineDamage);
+    expect(laterTierDamage).toBeCloseTo(baselineDamage, 10);
   });
 });
 
@@ -153,7 +155,7 @@ describe('tickContactDamage — outcome guard for superseded bug #2', () => {
   // how/where the sample is taken: an undefended core in a dirty zone
   // must be killable, and a core kept clean must take no damage,
   // regardless of the exact sampling method. See docs/DECISIONS.md #20.
-  const tier = TIERS_LIST[0]!;
+  const BASELINE_INFECTION_MULT = 1;
 
   it('an undefended core eventually dies when the safe zone is left dirty', () => {
     const state = freshState();
@@ -168,7 +170,7 @@ describe('tickContactDamage — outcome guard for superseded bug #2', () => {
     const MAX_TICKS = 5000;
     let ticks = 0;
     while (state.tower.hp > 0 && ticks < MAX_TICKS) {
-      applyAmbientGrowth(state.grid, state.tower, tier, 0.18, state.dirty);
+      applyAmbientGrowth(state.grid, state.tower, BASELINE_INFECTION_MULT, 0.18, state.dirty);
       tickContactDamage(state, 0.18);
       ticks++;
     }
@@ -183,14 +185,14 @@ describe('tickContactDamage — outcome guard for superseded bug #2', () => {
     state.grid.threshold.fill(0);
     state.tower.x = 300;
     state.tower.y = 300;
-    const radiusCells = Math.ceil(state.grid.safeRadius / state.grid.cellSize) + 1;
+    const radiusCells = Math.ceil(state.grid.perimeter / state.grid.cellSize) + 1;
     const { cx: tcx, cy: tcy } = worldToCell(state.grid, state.tower.x, state.tower.y);
 
     for (let i = 0; i < 3000; i++) {
       // Growth genuinely ticks (so the field could fill in), but the
       // safe zone is scrubbed clean before contact damage samples it —
       // the scenario a working defense actually produces.
-      applyAmbientGrowth(state.grid, state.tower, tier, 0.18, state.dirty);
+      applyAmbientGrowth(state.grid, state.tower, BASELINE_INFECTION_MULT, 0.18, state.dirty);
       for (let oy = -radiusCells; oy <= radiusCells; oy++) {
         const cy = tcy + oy;
         if (cy < 0 || cy >= state.grid.rows) continue;

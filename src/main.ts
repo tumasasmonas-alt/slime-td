@@ -1,7 +1,6 @@
-// Phase 2D: contact damage, growth nodes, and game over/restart — a
-// complete run with a real win/lose arc. Remaining weapons/passive
-// polish lands in 2E/2F. See docs/BACKLOG.md and
-// archive/PROTOTYPE_HANDOFF.md.
+// Phase 3A: the horde-economy teardown — growth nodes removed, the
+// perimeter fixed, tiers demoted to flavour. See docs/PROGRESS.md and
+// docs/DECISIONS.md #38-46.
 import { applyCameraTransform, applyScreenTransform, fitCamera, type Camera } from './core/camera';
 import { buildGrid } from './grid/grid';
 import { flushDirtyCells, initSlimeLayer } from './grid/slimeLayer';
@@ -10,7 +9,6 @@ import { resizeCanvasToWindow, setupCanvas } from './render/canvas';
 import { drawChainFx } from './render/chainFx';
 import { drawClouds } from './render/clouds';
 import { drawGems } from './render/gems';
-import { drawNodes } from './render/nodes';
 import { drawNovaFx } from './render/novaFx';
 import { drawOrbitals } from './render/orbitals';
 import { drawParticles } from './render/particles';
@@ -86,7 +84,7 @@ function update(dt: number): void {
   if (!state.running || state.paused) return;
 
   state.time += dt;
-  runSimulation(state, dt); // includes node spawn/influence and contact damage
+  runSimulation(state, dt); // includes ambient growth and contact damage
   updateBoltWeapon(state, dt);
   updateBladesWeapon(state, dt);
   updateChainWeapon(state, dt);
@@ -134,8 +132,7 @@ function render(): void {
     if (state.slimeLayer) ctx.drawImage(state.slimeLayer.canvas, 0, 0);
     drawClouds(ctx, state);
     drawNovaFx(ctx, state);
-    drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.safeRadius, state.contactPressure);
-    drawNodes(ctx, state);
+    drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.perimeter, state.contactPressure);
     drawGems(ctx, state);
     drawOrbitals(ctx, state);
     drawProjectiles(ctx, state);

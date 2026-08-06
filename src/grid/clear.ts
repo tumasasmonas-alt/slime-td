@@ -1,8 +1,7 @@
 import type { GameState } from '../state';
-import { clamp, dist, rand } from '../util/math';
+import { clamp, rand } from '../util/math';
 import { gemValueFromRemoved } from '../tuning/xp';
 import { dropGem } from '../systems/gems';
-import { destroyNode } from '../systems/nodes';
 import { spawnParticles } from '../systems/particles';
 import { cellBucket, gIdx, worldToCell } from './grid';
 
@@ -54,15 +53,6 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
         grid.bucket[i] = nb;
         state.dirty.add(i);
       }
-    }
-  }
-
-  for (const node of state.nodes) {
-    if (node.dead) continue;
-    if (dist(x, y, node.x, node.y) <= radiusPx + node.hitRadius) {
-      node.hp -= power;
-      spawnParticles(state, node.x, node.y, '#ffcf4d', 3, 60);
-      if (node.hp <= 0 && !node.dead) destroyNode(state, node);
     }
   }
 

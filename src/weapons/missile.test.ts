@@ -17,7 +17,7 @@ function makeTestGrid(): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 200,
-    safeRadius: 20,
+    perimeter: 20,
   };
 }
 
@@ -37,7 +37,7 @@ describe('updateMissileWeapon', () => {
     expect(state.projectiles).toHaveLength(0);
   });
 
-  it('fires at the frontier with no target node, starting stationary', () => {
+  it('fires at the frontier, starting stationary', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 150;
@@ -57,37 +57,8 @@ describe('updateMissileWeapon', () => {
     expect(p.y).toBe(150);
     expect(p.vx).toBe(0);
     expect(p.vy).toBe(0);
-    expect(p.targetNode).toBeNull();
     expect(p.targetPoint).toEqual({ x: 190, y: 150 });
     expect(state.weaponTimers.missile).toBeGreaterThan(0);
-  });
-
-  it('prefers a live growth node and threads it as the actual target', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    state.tower.x = 150;
-    state.tower.y = 150;
-    state.weapons.missile = 1;
-    const node = {
-      x: 50,
-      y: 50,
-      hp: 100,
-      maxHp: 100,
-      radius: 90,
-      strength: 1,
-      hitRadius: 16,
-      dead: false,
-      pulseSeed: 0,
-    };
-    state.nodes.push(node);
-
-    updateMissileWeapon(state, 0.016);
-
-    const p = state.projectiles[0]!;
-    expect(p.type).toBe('missile');
-    if (p.type !== 'missile') return;
-    expect(p.targetNode).toBe(node);
-    expect(p.targetPoint).toEqual({ x: 50, y: 50 });
   });
 
   it('does not fire again before its cooldown elapses', () => {

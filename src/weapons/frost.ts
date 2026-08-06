@@ -8,9 +8,9 @@ const FX_LIFE = 0.4;
 
 // Untargeted — pulses outward from the tower on a cooldown, damaging and
 // freezing growth in radius. The freeze mechanic itself (clearAt's
-// freezeDuration, respected by both applyAmbientGrowth and
-// applyNodeInfluence) already landed in 2D; this is what actually fires
-// it. Radius floors at the safe radius (Confirmed decision 16).
+// freezeDuration, respected by applyAmbientGrowth) already landed in 2D;
+// this is what actually fires it. Radius floors at the safe radius
+// (Confirmed decision 16).
 export function updateFrostWeapon(state: GameState, dt: number): void {
   const lvl = state.weapons.frost;
   const grid = state.grid;
@@ -20,7 +20,7 @@ export function updateFrostWeapon(state: GameState, dt: number): void {
   state.weaponTimers.frost = frostCooldown(lvl) / atkSpeedMult(state);
 
   const t = state.tower;
-  const radius = frostRadius(lvl, grid.safeRadius);
+  const radius = frostRadius(lvl, grid.perimeter);
   clearAt(state, t.x, t.y, frostDamage(lvl) * damageMult(state), {
     radiusPx: radius,
     freezeDuration: FREEZE_DURATION,

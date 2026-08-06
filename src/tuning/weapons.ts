@@ -43,8 +43,8 @@ export function frostDamage(lvl: number): number {
 const FROST_REACH: TowerCenteredReach = { margin: 20, base: 115, perLevel: 12 };
 
 // Radius, anchored to the safe radius as a floor (docs/DECISIONS.md #16) — see bladeRadius() above for why that matters.
-export function frostRadius(lvl: number, safeRadius: number): number {
-  return towerCenteredRadius(FROST_REACH, lvl, safeRadius);
+export function frostRadius(lvl: number, perimeter: number): number {
+  return towerCenteredRadius(FROST_REACH, lvl, perimeter);
 }
 
 export function frostCooldown(lvl: number): number {
@@ -85,8 +85,8 @@ const BLADE_REACH: TowerCenteredReach = { margin: 15, base: 64, perLevel: 2 };
 // constant — see "documented prototype bugs" #5 for why that mattered:
 // the flat constant made blades unable to hit ambient infection at any
 // tier or level, in any run.
-export function bladeRadius(lvl: number, safeRadius: number): number {
-  return towerCenteredRadius(BLADE_REACH, lvl, safeRadius);
+export function bladeRadius(lvl: number, perimeter: number): number {
+  return towerCenteredRadius(BLADE_REACH, lvl, perimeter);
 }
 
 // Single shared library for every weapon's data — upgrades, tiers, and
@@ -127,6 +127,6 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     name: 'Homing Missile',
     icon: '🚀',
     maxLevel: 8,
-    desc: () => `Homes onto growth nodes (or the nearest wall) and explodes.`,
+    desc: () => `Homes onto the nearest wall and explodes.`,
   },
 };

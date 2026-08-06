@@ -17,7 +17,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 20,
+    perimeter: 20,
     ...overrides,
   };
 }
@@ -42,7 +42,7 @@ describe('updateBladesWeapon', () => {
 
     const expectedCount = bladeCount(3);
     expect(state.orbitals).toHaveLength(expectedCount);
-    const expectedRadius = bladeRadius(3, state.grid.safeRadius);
+    const expectedRadius = bladeRadius(3, state.grid.perimeter);
     for (const o of state.orbitals) {
       const d = Math.hypot(o.x - state.tower.x, o.y - state.tower.y);
       expect(d).toBeCloseTo(expectedRadius, 3);
@@ -58,8 +58,8 @@ describe('updateBladesWeapon', () => {
     state.time = 0;
 
     // At t=0 with 1 blade, spin=0 and angle=0, so the blade sits due
-    // east of the tower at bladeRadius(1, safeRadius).
-    const radius = bladeRadius(1, state.grid.safeRadius);
+    // east of the tower at bladeRadius(1, perimeter).
+    const radius = bladeRadius(1, state.grid.perimeter);
     const bx = state.tower.x + radius;
     const by = state.tower.y;
     const cx = Math.floor(bx / state.grid.cellSize);
@@ -92,11 +92,11 @@ describe('updateBladesWeapon', () => {
 
   it('never orbits closer than the safe radius, at any level', () => {
     // Regression guard for documented prototype bug #5: a tower-centered
-    // weapon smaller than safeRadius is aimed at guaranteed-near-empty
+    // weapon smaller than perimeter is aimed at guaranteed-near-empty
     // space. See docs/DECISIONS.md.
     const state = freshState();
     state.grid = makeTestGrid();
-    state.grid.safeRadius = 100;
+    state.grid.perimeter = 100;
     state.tower.x = 300;
     state.tower.y = 300;
 
@@ -105,7 +105,7 @@ describe('updateBladesWeapon', () => {
       updateBladesWeapon(state, 0.016);
       for (const o of state.orbitals) {
         const d = Math.hypot(o.x - state.tower.x, o.y - state.tower.y);
-        expect(d).toBeGreaterThan(state.grid.safeRadius);
+        expect(d).toBeGreaterThan(state.grid.perimeter);
       }
     }
   });

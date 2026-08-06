@@ -17,7 +17,7 @@ function makeTestGrid(): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 200,
-    safeRadius: 20,
+    perimeter: 20,
   };
 }
 

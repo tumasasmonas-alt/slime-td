@@ -29,24 +29,12 @@ export interface Grid {
   frozen: Float32Array;
   bucket: Int8Array;
   maxRange: number;
-  safeRadius: number;
+  perimeter: number;
 }
 
 export interface SlimeLayer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-}
-
-export interface GrowthNode {
-  x: number;
-  y: number;
-  hp: number;
-  maxHp: number;
-  radius: number;
-  strength: number;
-  hitRadius: number;
-  dead: boolean;
-  pulseSeed: number;
 }
 
 interface ProjectileBase {
@@ -75,7 +63,6 @@ export interface MissileProjectile extends ProjectileBase {
   type: 'missile';
   speed: number;
   splashRadius: number;
-  targetNode: GrowthNode | null;
   targetPoint: { x: number; y: number };
 }
 
@@ -164,7 +151,6 @@ export interface GameState {
   slimeLayer: SlimeLayer | null;
   dirty: Set<number>;
 
-  nodes: GrowthNode[];
   projectiles: Projectile[];
   orbitals: OrbitalVisual[];
   chainFx: ChainFx[];
@@ -178,7 +164,6 @@ export interface GameState {
   weaponTimers: Record<WeaponKey, number>;
   bladeNextHit: Record<number, number>;
   wardTimer: number;
-  nodeSpawnTimer: number;
   simAcc: number;
   announceTimer: number;
   contactPressure: number;
@@ -187,10 +172,10 @@ export interface GameState {
   // shown a card for yet, consumed one at a time — see systems/xp.ts and
   // docs/BACKLOG.md "A single XP grant crossing two levels".
   pendingLevelUps: number;
-  // Queued rather than a single slot — a tier escalation and a node spawn
-  // can land in the same sim tick, and each deserves its own full
-  // announceTimer display instead of the second silently overwriting the
-  // first (same overwrite bug class as pendingLevelUps above).
+  // Queued rather than a single slot — multiple events can land in the
+  // same sim tick, and each deserves its own full announceTimer display
+  // instead of the second silently overwriting the first (same overwrite
+  // bug class as pendingLevelUps above).
   pendingAnnouncements: string[];
 }
 
@@ -224,7 +209,6 @@ export function freshState(): GameState {
     slimeLayer: null,
     dirty: new Set(),
 
-    nodes: [],
     projectiles: [],
     orbitals: [],
     chainFx: [],
@@ -238,7 +222,6 @@ export function freshState(): GameState {
     weaponTimers: { bolt: 0, blades: 0, chain: 0, frost: 0, poison: 0, missile: 0 },
     bladeNextHit: {},
     wardTimer: 0,
-    nodeSpawnTimer: 14,
     simAcc: 0,
     announceTimer: 0,
     contactPressure: 0,

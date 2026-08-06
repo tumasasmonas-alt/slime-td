@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid } from '../state';
-import { TIERS_LIST } from '../tuning/tiers';
-import { CELL_SIZE, WORLD_HEIGHT, WORLD_WIDTH } from '../tuning/world';
+import { CELL_SIZE, PERIMETER, WORLD_HEIGHT, WORLD_WIDTH } from '../tuning/world';
 import { buildGrid, cellBucket, gIdx, isRevealedIdx, worldToCell } from './grid';
 
 // Pure-math grid functions don't need a real generated field — a small
@@ -19,19 +18,19 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(16),
     bucket: new Int8Array(16),
     maxRange: 100,
-    safeRadius: 50,
+    perimeter: 50,
     ...overrides,
   };
 }
 
 describe('buildGrid', () => {
-  it('sizes to the fixed world, starts at zero growth, tier-0 safe radius, valid thresholds', () => {
+  it('sizes to the fixed world, starts at zero growth, fixed perimeter, valid thresholds', () => {
     const grid = buildGrid();
     expect(grid.cols).toBe(Math.ceil(WORLD_WIDTH / CELL_SIZE) + 2);
     expect(grid.rows).toBe(Math.ceil(WORLD_HEIGHT / CELL_SIZE) + 2);
     expect(grid.size).toBe(grid.cols * grid.rows);
     expect(grid.growth.every((v) => v === 0)).toBe(true);
-    expect(grid.safeRadius).toBe(TIERS_LIST[0]!.safeRadius);
+    expect(grid.perimeter).toBe(PERIMETER);
     for (const t of grid.threshold) {
       expect(t).toBeGreaterThanOrEqual(0.045);
       expect(t).toBeLessThanOrEqual(0.94);

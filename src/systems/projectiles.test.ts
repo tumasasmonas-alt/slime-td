@@ -17,7 +17,7 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 20,
+    perimeter: 20,
     ...overrides,
   };
 }
@@ -174,7 +174,6 @@ describe('updateProjectiles — missile', () => {
       radius: 5,
       color: '#ff9d6b',
       life: 5,
-      targetNode: null,
       targetPoint: { x: 500, y: 300 },
     });
 
@@ -204,7 +203,6 @@ describe('updateProjectiles — missile', () => {
       radius: 5,
       color: '#ff9d6b',
       life: 5,
-      targetNode: null,
       targetPoint: { x: 302, y: 300 }, // already within MISSILE_REACH_DIST
     });
 
@@ -230,7 +228,6 @@ describe('updateProjectiles — missile', () => {
       radius: 5,
       color: '#ff9d6b',
       life: 5,
-      targetNode: null,
       targetPoint: { x: 1000, y: 300 }, // far beyond the revealed wall
     });
 
@@ -241,82 +238,5 @@ describe('updateProjectiles — missile', () => {
     updateProjectiles(state, 0.02);
 
     expect(state.projectiles).toHaveLength(0);
-  });
-
-  it('homes on a live target node in preference to its stale target point', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    const node = {
-      x: 300,
-      y: 500,
-      hp: 100,
-      maxHp: 100,
-      radius: 90,
-      strength: 1,
-      hitRadius: 16,
-      dead: false,
-      pulseSeed: 0,
-    };
-    state.projectiles.push({
-      type: 'missile',
-      x: 300,
-      y: 300,
-      vx: 0,
-      vy: 0,
-      speed: 300,
-      dmg: 30,
-      splashRadius: 60,
-      radius: 5,
-      color: '#ff9d6b',
-      life: 5,
-      targetNode: node,
-      targetPoint: { x: 500, y: 300 }, // stale — should be ignored while the node is alive
-    });
-
-    updateProjectiles(state, 0.1);
-
-    const p = state.projectiles[0]!;
-    expect(p.type).toBe('missile');
-    if (p.type !== 'missile') return;
-    expect(p.vy).toBeGreaterThan(0); // steering toward the node (+y), not the stale point (+x)
-  });
-
-  it('falls back to the target point once its target node has died', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    const node = {
-      x: 300,
-      y: 500,
-      hp: 0,
-      maxHp: 100,
-      radius: 90,
-      strength: 1,
-      hitRadius: 16,
-      dead: true,
-      pulseSeed: 0,
-    };
-    state.projectiles.push({
-      type: 'missile',
-      x: 300,
-      y: 300,
-      vx: 0,
-      vy: 0,
-      speed: 300,
-      dmg: 30,
-      splashRadius: 60,
-      radius: 5,
-      color: '#ff9d6b',
-      life: 5,
-      targetNode: node,
-      targetPoint: { x: 500, y: 300 },
-    });
-
-    updateProjectiles(state, 0.1);
-
-    const p = state.projectiles[0]!;
-    expect(p.type).toBe('missile');
-    if (p.type !== 'missile') return;
-    expect(p.vx).toBeGreaterThan(0); // steering toward the target point (+x), node is dead
-    expect(p.vy).toBe(0);
   });
 });

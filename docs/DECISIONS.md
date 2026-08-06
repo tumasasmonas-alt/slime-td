@@ -869,6 +869,38 @@ edges.
 This is the shipping approach for 3C, not final art — polish belongs to
 Phase 9.
 
+**47. Ambient escalation and contact damage are decoupled from
+`TIERS_LIST` during 3A, not just the perimeter.** 📋 ✅
+*2026-08-06, during Phase 3A implementation.* Reviewing the teardown found
+`TIERS_LIST` carried four mechanical values, not the one (`safeRadius`)
+Decision 38 addressed — `nodeInterval` (dies with nodes), `infectionMult`
+(1.0→3.1 across a run), and `contactMult` (1.0→2.1) both needed a home now
+that the tier table itself is presentation-only (#33).
+
+**`infectionMult` becomes its own time-driven curve**
+(`ambientInfectionMult()` in `tuning/growth.ts`), same breakpoints and
+values as before, decoupled from tier lookup. This is axis 3 of the five
+organic escalation axes named in the 2026-08-05 record §15 ("ambient
+rate — the existing lever") — the rework retires the *tier table* as
+difficulty mechanism, not ambient escalation itself. Stripping it with
+nothing to replace it would have left the game with zero escalation for
+the three phases (3B/3C/4A) before events, coagulants, and maturity exist
+to take over.
+
+**`contactMult` is retired outright, folded into the existing
+`CONTACT_SCALE` constant** rather than kept as a second multiplier frozen
+at 1. Decision 24 already establishes contact damage as "the clock, not
+the executioner" — it isn't meant to escalate on a timer any more, its
+pressure rises through Rule 3 (arrival splatter seeding breaches) via the
+*existing* depth-weighted formula. Two constants permanently multiplying
+into one number is redundant; `CONTACT_SCALE` alone is the knob.
+`contact.test.ts` gained a regression guard asserting tierIndex no longer
+affects damage, replacing the old test that asserted the opposite.
+
+`applyAmbientGrowth()` now takes `infectionMult: number` directly instead
+of a `Tier` object — growth math no longer depends on the tier table at
+all, which is the cleaner shape now that tiers are pure flavour.
+
 ---
 
 ## Documented prototype bugs

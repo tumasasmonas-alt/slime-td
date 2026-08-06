@@ -32,7 +32,7 @@ export function updateBladesWeapon(state: GameState, _dt: number): void {
   const count = bladeCount(lvl);
   const dmg = bladeDamage(lvl) * damageMult(state);
   const spin = state.time * SPIN_SPEED;
-  const radius = bladeRadius(lvl, grid.safeRadius);
+  const radius = bladeRadius(lvl, grid.perimeter);
 
   state.orbitals = [];
   for (let i = 0; i < count; i++) {

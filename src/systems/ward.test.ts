@@ -16,7 +16,7 @@ function makeTestGrid(): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 300,
-    safeRadius: 20,
+    perimeter: 20,
   };
 }
 
@@ -49,7 +49,7 @@ describe('updateWardPulse', () => {
   });
 
   it('reaches past a large safe radius rather than staying capped at its base formula', () => {
-    // Confirmed decision 16: radius floors at safeRadius + margin, so
+    // Confirmed decision 16: radius floors at perimeter + margin, so
     // Ward Pulse can't end up smaller than the zone it's meant to purge.
     const size = 2500;
     const grid: Grid = {
@@ -63,7 +63,7 @@ describe('updateWardPulse', () => {
       frozen: new Float32Array(size),
       bucket: new Int8Array(size),
       maxRange: 500,
-      safeRadius: 200, // larger than the base+perLevel formula alone would give at level 1
+      perimeter: 200, // larger than the base+perLevel formula alone would give at level 1
     };
     const state = freshState();
     state.grid = grid;

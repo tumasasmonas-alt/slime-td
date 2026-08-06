@@ -3,7 +3,7 @@
 //
 // Density is always lowest right around the tower — ambient growth
 // creeps in there at a heavily damped rate (see docs/DECISIONS.md #15), so a tower-centered radius smaller than
-// safeRadius is aimed mostly at near-empty space. The prototype used
+// perimeter is aimed mostly at near-empty space. The prototype used
 // flat constants and Orbiting Blades (64-78px) ended up smaller than
 // even the tightest safe radius it ever reached under the *old*
 // hard-gated model — the weapon could not touch ambient infection at any
@@ -11,7 +11,7 @@
 // unrepresentable.
 //
 // The anchor is a FLOOR, not a lock. Reach is the larger of:
-//   - `safeRadius + margin`  — guarantees the weapon always at least
+//   - `perimeter + margin`  — guarantees the weapon always at least
 //     reaches the infection boundary, at any tier, however the tier
 //     table is later retuned;
 //   - `base + perLevel * (lvl - 1)`  — lets levels (and, later, explicit
@@ -33,6 +33,6 @@ export interface TowerCenteredReach {
   readonly perLevel: number;
 }
 
-export function towerCenteredRadius(spec: TowerCenteredReach, lvl: number, safeRadius: number): number {
-  return Math.max(spec.margin + safeRadius, spec.base + spec.perLevel * (lvl - 1));
+export function towerCenteredRadius(spec: TowerCenteredReach, lvl: number, perimeter: number): number {
+  return Math.max(spec.margin + perimeter, spec.base + spec.perLevel * (lvl - 1));
 }

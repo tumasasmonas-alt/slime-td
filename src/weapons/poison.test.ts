@@ -17,7 +17,7 @@ function makeTestGrid(): Grid {
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
     maxRange: 200,
-    safeRadius: 20,
+    perimeter: 20,
   };
 }
 
@@ -37,7 +37,7 @@ describe('updatePoisonWeapon', () => {
     expect(state.clouds).toHaveLength(0);
   });
 
-  it('drops a cloud at the nearest frontier point when no node is active', () => {
+  it('drops a cloud at the nearest frontier point', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 150;
@@ -55,58 +55,6 @@ describe('updatePoisonWeapon', () => {
     expect(cloud.y).toBeCloseTo(150, 5);
     expect(cloud.bubbleSeeds).toHaveLength(4);
     expect(state.weaponTimers.poison).toBeGreaterThan(0);
-  });
-
-  it('prefers a live growth node over the frontier', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    state.tower.x = 150;
-    state.tower.y = 150;
-    state.weapons.poison = 1;
-    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
-    computeFrontier(state);
-    state.nodes.push({
-      x: 50,
-      y: 50,
-      hp: 100,
-      maxHp: 100,
-      radius: 90,
-      strength: 1,
-      hitRadius: 16,
-      dead: false,
-      pulseSeed: 0,
-    });
-
-    updatePoisonWeapon(state, 0.016);
-
-    expect(state.clouds[0]!.x).toBe(50);
-    expect(state.clouds[0]!.y).toBe(50);
-  });
-
-  it('ignores a dead node and falls back to the frontier', () => {
-    const state = freshState();
-    state.grid = makeTestGrid();
-    state.tower.x = 150;
-    state.tower.y = 150;
-    state.tower.radius = 20; // round number so the raycast's fixed steps land cleanly
-    state.weapons.poison = 1;
-    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
-    computeFrontier(state);
-    state.nodes.push({
-      x: 50,
-      y: 50,
-      hp: 0,
-      maxHp: 100,
-      radius: 90,
-      strength: 1,
-      hitRadius: 16,
-      dead: true,
-      pulseSeed: 0,
-    });
-
-    updatePoisonWeapon(state, 0.016);
-
-    expect(state.clouds[0]!.x).toBeCloseTo(190, 5);
   });
 
   it('does not drop another cloud before its cooldown elapses', () => {
