@@ -3,12 +3,15 @@ import type { Grid } from '../state';
 import { freshState } from '../state';
 import { cellBucket, gIdx, worldToCell } from '../grid/grid';
 import {
+  FORMATION_MIN_DISTANCE,
   FORMATION_RADIUS_CAP,
+  FORMATION_RISE_DURATION,
   MASS_BEHEMOTH,
   MASS_CONGEALER,
   MASS_MIN_FORMATION,
   coagulantKindFromMass,
   coagulantRadius,
+  coagulantSpeed,
 } from '../tuning/coagulants';
 import { attemptFormation } from './formation';
 
@@ -186,6 +189,66 @@ describe('attemptFormation', () => {
     attemptFormation(state, 400, 400);
 
     expect(state.dirty.size).toBeGreaterThan(0);
+  });
+
+  it('starts in the forming phase, not immediately active', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    fillSquare(state.grid, 400, 400, 30, 0.9);
+
+    const result = attemptFormation(state, 400, 400);
+
+    expect(result).not.toBeNull();
+    expect(result!.phase).toBe('forming');
+    expect(result!.phaseTimer).toBe(FORMATION_RISE_DURATION);
+  });
+
+  describe('the perimeter distance gate (2026-08-06 follow-up session)', () => {
+    it('refuses to form within perimeter + FORMATION_MIN_DISTANCE of the core, however much mass is available', () => {
+      const state = freshState();
+      state.grid = makeTestGrid(); // perimeter: 100
+      state.tower.x = 400;
+      state.tower.y = 400;
+      // Spark point well inside the gate (distance ~50, gate is 100+30=130),
+      // with abundant mass sitting right there.
+      fillSquare(state.grid, 400, 450, 30, 0.9);
+
+      const result = attemptFormation(state, 400, 450);
+
+      expect(result).toBeNull();
+      expect(state.coagulants).toHaveLength(0);
+      // And nothing was drained — the gate rejects before the flood-fill runs.
+      const before = worldToCell(state.grid, 400, 450);
+      expect(state.grid.growth[gIdx(state.grid, before.cx, before.cy)]).toBeCloseTo(0.9, 5);
+    });
+
+    it('forms normally just outside perimeter + FORMATION_MIN_DISTANCE', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 400;
+      state.tower.y = 400;
+      const gateDist = state.grid.perimeter + FORMATION_MIN_DISTANCE;
+      const sparkY = 400 - gateDist - 20; // comfortably outside the gate
+      fillSquare(state.grid, 400, sparkY, 30, 0.9);
+
+      const result = attemptFormation(state, 400, sparkY);
+
+      expect(result).not.toBeNull();
+    });
+  });
+});
+
+describe('coagulantSpeed', () => {
+  it('is slower for a larger mass — "big mass, slow movement" holds continuously, not just per-kind', () => {
+    const small = coagulantSpeed(MASS_MIN_FORMATION);
+    const mid = coagulantSpeed(MASS_CONGEALER);
+    const big = coagulantSpeed(MASS_BEHEMOTH);
+    expect(small).toBeGreaterThan(mid);
+    expect(mid).toBeGreaterThan(big);
+  });
+
+  it('never drops below the floor, however large the mass', () => {
+    expect(coagulantSpeed(MASS_BEHEMOTH * 100)).toBeGreaterThan(0);
   });
 });
 

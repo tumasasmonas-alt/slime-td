@@ -20,6 +20,7 @@ import {
   VEIN_ACTIVE_RATE,
   VEIN_FORMATION_INTERVAL,
   VEIN_PEAK_RATE,
+  VEIN_STOP_MARGIN,
   VEIN_WEIGHT,
   VEIN_WIDTH,
   eventSpawnInterval,
@@ -263,11 +264,24 @@ function pickFieldPoint(grid: Grid, tower: { x: number; y: number }): { x: numbe
   };
 }
 
+// Stops the vein's target short of the core, at perimeter + margin,
+// rather than aiming it at the tower directly. Found necessary live
+// during the Phase 3C playtest gate (2026-08-06): a vein aimed at the
+// tower floods mass right at the defended ring, leaving a coagulant that
+// forms from it almost no distance to cross before arrival. Veins are
+// meant to deliver mass "close" (§11), not mass with no runway at all.
+function veinTargetPoint(grid: Grid, tower: { x: number; y: number }, originX: number, originY: number) {
+  const stopDist = grid.perimeter + VEIN_STOP_MARGIN;
+  const angle = Math.atan2(tower.y - originY, tower.x - originX);
+  return { x: tower.x - Math.cos(angle) * stopDist, y: tower.y - Math.sin(angle) * stopDist };
+}
+
 function spawnVein(state: GameState): void {
   const grid = state.grid;
   if (!grid) return;
   const origin = pickEdgePoint(grid, state.tower);
-  const { trunk, branches } = generateVeinPath(origin.x, origin.y, state.tower.x, state.tower.y);
+  const target = veinTargetPoint(grid, state.tower, origin.x, origin.y);
+  const { trunk, branches } = generateVeinPath(origin.x, origin.y, target.x, target.y);
   state.events.push({
     kind: 'vein',
     phase: 'telegraph',

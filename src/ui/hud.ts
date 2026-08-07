@@ -76,7 +76,22 @@ function updateDifficultyHud(refs: HudRefs, state: GameState): void {
     : '100%';
 }
 
+// Rebuilt only when the weapon loadout actually changes — updateHud runs
+// every frame, and an innerHTML clear + re-append of every chip 60 times
+// a second regardless of whether anything changed is pure waste. Found
+// during the Phase 3C playtest gate's performance investigation
+// (2026-08-06): not the cause of the frame-time spikes chased there (the
+// browser's own Long Task profiler cleared this code), but a real
+// anti-pattern worth fixing on its own merits regardless.
+let lastWeaponSnapshot = '';
+
 function updateWeaponTray(refs: HudRefs, state: GameState): void {
+  const snapshot = (Object.keys(state.weapons) as WeaponKey[])
+    .map((key) => `${key}:${state.weapons[key] ?? 0}`)
+    .join(',');
+  if (snapshot === lastWeaponSnapshot) return;
+  lastWeaponSnapshot = snapshot;
+
   refs.weaponTray.innerHTML = '';
   for (const key of Object.keys(state.weapons) as WeaponKey[]) {
     const lvl = state.weapons[key];

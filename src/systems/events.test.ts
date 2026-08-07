@@ -8,6 +8,7 @@ import {
   EVENT_DECAY_DURATION,
   EVENT_TELEGRAPH_DURATION,
   MAX_CONCURRENT_EVENTS,
+  VEIN_STOP_MARGIN,
   VEIN_WEIGHT,
 } from '../tuning/events';
 import { updateEvents, updateEventSpawn, veinRevealCount } from './events';
@@ -349,5 +350,36 @@ describe('updateEventSpawn', () => {
     updateEventSpawn(state, 0.1);
 
     expect(state.events).toHaveLength(0);
+  });
+
+  describe('vein target point (2026-08-06 follow-up session)', () => {
+    it('stops the trunk short of the core, at perimeter + VEIN_STOP_MARGIN, not at the tower itself', () => {
+      // Mocking Math.random to a constant collapses both the coin flip
+      // (0 < VEIN_WEIGHT -> vein) and the edge-point angle (rand(0, 2pi)
+      // -> 0, due east) to fixed values, and pins every midpoint
+      // displacement's push to a nonzero but deterministic offset — the
+      // trunk jags, but its first and last points are never displaced
+      // (see veinPath.ts's displace()), so the endpoint math stays exact.
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+      const state = freshState();
+      state.grid = makeTestGrid(); // perimeter: 100
+      state.tower.x = 300;
+      state.tower.y = 300;
+      state.eventSpawnTimer = 0;
+
+      updateEventSpawn(state, 0.1);
+
+      expect(state.events).toHaveLength(1);
+      const event = state.events[0]!;
+      expect(event.kind).toBe('vein');
+      if (event.kind !== 'vein') return;
+      const tip = event.trunk[event.trunk.length - 1]!;
+      const stopDist = state.grid.perimeter + VEIN_STOP_MARGIN;
+      const distFromTower = Math.hypot(tip.x2 - state.tower.x, tip.y2 - state.tower.y);
+      expect(distFromTower).toBeCloseTo(stopDist, 5);
+      // And it's a real gap, not merely "closer than the old aim-at-core
+      // behavior" — the trunk must not reach anywhere near the tower.
+      expect(distFromTower).toBeGreaterThan(state.grid.perimeter);
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { clamp } from '../util/math';
 import type { CoagulantKind } from '../state';
 
 // Coagulants: Phase 3C, Wave 1 (Mote/Congealer/Behemoth — pure density
@@ -21,6 +22,24 @@ export const MASS_MIN_FORMATION = 10;
 export const MASS_CONGEALER = 25;
 export const MASS_BEHEMOTH = 150;
 
+// A spark landing closer than perimeter + this can't form at all — a
+// backstop, not the primary mechanism (that's the vein stopping short of
+// the perimeter, tuning/events.ts's VEIN_STOP_MARGIN, and blooms already
+// landing no closer than perimeter+70 by construction). Found live during
+// the Phase 3C playtest gate (2026-08-06): a coagulant sparking with
+// almost no runway to the core is a distinct failure from the mass being
+// too large, and deserves its own guard rather than relying on upstream
+// placement never producing a close point.
+export const FORMATION_MIN_DISTANCE = 30;
+
+// How long a coagulant sits in its 'forming' phase — visible, growing,
+// but not yet moving, targetable, or damageable — before it detaches and
+// goes live. Formation used to be instant: a full-mass, full-speed,
+// already-lethal coagulant would appear with zero warning, which is what
+// actually produced "a behemoth spawned and insta-exploded on me" in the
+// 2026-08-06 playtest, not (only) a speed or distance problem.
+export const FORMATION_RISE_DURATION = 1.8;
+
 export function coagulantKindFromMass(mass: number): CoagulantKind {
   if (mass >= MASS_BEHEMOTH) return 'behemoth';
   if (mass >= MASS_CONGEALER) return 'congealer';
@@ -37,15 +56,26 @@ export function coagulantRadius(mass: number): number {
 }
 
 // --- movement ---------------------------------------------------------
-// Straight line to the core (Decision 42). Small is fast, big is slow —
-// a behemoth's ~700px wilderness walk takes ~28s and stays visible the
-// whole way, matching §10's "requires burst, single-target, slows, plus
-// spare weapon attention" counter language.
-export const COAGULANT_SPEED: Record<CoagulantKind, number> = {
-  mote: 70,
-  congealer: 45,
-  behemoth: 25,
-};
+// Straight line to the core (Decision 42). A continuous function of mass
+// rather than three discrete per-kind speeds — "big mass, slow movement"
+// should hold *within* a kind too, not just across kind boundaries — and
+// roughly 40-50% slower across the board than the original per-kind
+// figures (mote 70 / congealer 45 / behemoth 25), per the Phase 3C
+// playtest gate (2026-08-06). r = k*sqrt(mass) already governs radius, so
+// an inverse-sqrt shape here means speed and size grow from the same
+// underlying quantity rather than two independently-tuned curves.
+// Halved again the same day, same playtest round as AMBIENT_BASE/
+// CREEP_RAMP: coagulant travel still read as too fast on its own. The
+// K/MIN/MAX trio is scaled uniformly, so the inverse-sqrt *shape* (the
+// mass-to-speed curve, "big mass, slow movement") is unchanged — only
+// the absolute speeds it produces are smaller.
+const COAGULANT_SPEED_K = 60;
+const COAGULANT_SPEED_MIN = 4;
+const COAGULANT_SPEED_MAX = 22.5;
+
+export function coagulantSpeed(mass: number): number {
+  return clamp(COAGULANT_SPEED_K / Math.sqrt(mass), COAGULANT_SPEED_MIN, COAGULANT_SPEED_MAX);
+}
 
 // --- the conservation rules (2026-08-05 session record §8) ------------
 

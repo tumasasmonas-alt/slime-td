@@ -73,7 +73,9 @@ export function nearestFrontierPoint(state: GameState): FrontierPoint | null {
   }
 
   for (const c of state.coagulants) {
-    if (c.mass <= 0) continue;
+    // 'forming' coagulants haven't detached from the field yet — nothing
+    // aims at them any more than it aims at ordinary ground.
+    if (c.mass <= 0 || c.phase === 'forming') continue;
     const surfaceDist = Math.max(0, dist(t.x, t.y, c.x, c.y) - c.radius);
     if (best === null || surfaceDist < best.dist) {
       best = { x: c.x, y: c.y, dist: surfaceDist };

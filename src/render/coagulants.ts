@@ -1,5 +1,7 @@
 import type { Coagulant, GameState } from '../state';
 import { BUCKET_COLORS } from '../grid/grid';
+import { FORMATION_RISE_DURATION } from '../tuning/coagulants';
+import { clamp } from '../util/math';
 
 const HIGHLIGHT_COLOR = 'rgba(255,255,255,0.18)';
 
@@ -23,18 +25,28 @@ export function drawCoagulants(ctx: CanvasRenderingContext2D, state: GameState):
 // are generated once at formation (systems/formation.ts) and only read
 // here, never created inside this draw call (the bubbleSeeds/novaFx bug
 // class, docs/DECISIONS.md #4/#7).
+//
+// While 'forming', the body rises from nothing to full size and fades in
+// — the visible half of the pause between spark and threat added after
+// the Phase 3C playtest gate (2026-08-06) found formation was instant.
 function drawBlob(ctx: CanvasRenderingContext2D, c: Coagulant, time: number): void {
+  const riseProgress =
+    c.phase === 'forming' ? clamp(1 - c.phaseTimer / FORMATION_RISE_DURATION, 0, 1) : 1;
+  const drawRadius = c.radius * riseProgress;
+  if (drawRadius <= 0) return;
+
   const color = BUCKET_COLORS[5]!; // brightest bucket — coagulants are always the densest slime in the game
   ctx.save();
+  ctx.globalAlpha = 0.3 + 0.7 * riseProgress;
   ctx.fillStyle = color;
   ctx.shadowColor = color;
   ctx.shadowBlur = 10;
   for (const seed of c.seeds) {
     const wobble = 1 + Math.sin(time * seed.speed * 3 + seed.phase) * 0.12;
     const angle = seed.a + time * seed.speed * 0.3;
-    const sx = c.x + Math.cos(angle) * seed.r * c.radius * 0.5;
-    const sy = c.y + Math.sin(angle) * seed.r * c.radius * 0.5;
-    const sr = c.radius * (0.4 + seed.r * 0.3) * wobble;
+    const sx = c.x + Math.cos(angle) * seed.r * drawRadius * 0.5;
+    const sy = c.y + Math.sin(angle) * seed.r * drawRadius * 0.5;
+    const sr = drawRadius * (0.4 + seed.r * 0.3) * wobble;
     ctx.beginPath();
     ctx.arc(sx, sy, sr, 0, Math.PI * 2);
     ctx.fill();
@@ -43,7 +55,7 @@ function drawBlob(ctx: CanvasRenderingContext2D, c: Coagulant, time: number): vo
 
   ctx.fillStyle = HIGHLIGHT_COLOR;
   ctx.beginPath();
-  ctx.arc(c.x - c.radius * 0.2, c.y - c.radius * 0.2, c.radius * 0.3, 0, Math.PI * 2);
+  ctx.arc(c.x - drawRadius * 0.2, c.y - drawRadius * 0.2, drawRadius * 0.3, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }

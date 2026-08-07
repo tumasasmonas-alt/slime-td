@@ -200,6 +200,16 @@ export interface CoagulantSeed {
   phase: number;
 }
 
+// 'forming': visible (rising, growing toward full size) but not yet
+// moving, targetable, or damageable — it hasn't detached from the field.
+// 'active': live — moves toward the core, can be hit, can arrive.
+// Added after the Phase 3C playtest gate (2026-08-06) found formation was
+// instant: a full-mass, full-speed, already-lethal coagulant appearing
+// with zero warning. Same naming as InfectionEvent's phase/phaseTimer,
+// not to be confused with CoagulantSeed's unrelated `phase` (a wobble
+// angle, not a lifecycle stage).
+export type CoagulantPhase = 'forming' | 'active';
+
 export interface Coagulant {
   x: number;
   y: number;
@@ -210,6 +220,8 @@ export interface Coagulant {
   kind: CoagulantKind;
   radius: number;
   speed: number;
+  phase: CoagulantPhase;
+  phaseTimer: number;
   // Generated once at formation (systems/formation.ts), never lazily
   // inside a draw call — the bubbleSeeds/novaFx bug class again
   // (docs/DECISIONS.md #4, #7).

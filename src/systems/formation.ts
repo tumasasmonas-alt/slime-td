@@ -1,14 +1,16 @@
 import type { Coagulant, CoagulantSeed, GameState, Grid } from '../state';
 import { cellBucket, gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import {
-  COAGULANT_SPEED,
   FORMATION_CELL_CAP,
+  FORMATION_MIN_DISTANCE,
   FORMATION_RADIUS_CAP,
+  FORMATION_RISE_DURATION,
   MASS_MIN_FORMATION,
   coagulantKindFromMass,
   coagulantRadius,
+  coagulantSpeed,
 } from '../tuning/coagulants';
-import { rand } from '../util/math';
+import { dist, rand } from '../util/math';
 
 interface FloodResult {
   mass: number;
@@ -90,9 +92,16 @@ function generateSeeds(mass: number): CoagulantSeed[] {
 // whatever pattern the field was already in — no separate crater
 // geometry to author. Returns null below the threshold: a well-managed
 // field genuinely produces nothing, which is the point.
+//
+// Also refuses to form within perimeter + FORMATION_MIN_DISTANCE of the
+// core — a backstop against near-zero-runway spawns, found necessary
+// live during the Phase 3C playtest gate (2026-08-06) alongside the vein
+// stopping short of the perimeter (tuning/events.ts's VEIN_STOP_MARGIN)
+// and bloom's existing perimeter+70 minimum placement.
 export function attemptFormation(state: GameState, sx: number, sy: number): Coagulant | null {
   const grid = state.grid;
   if (!grid) return null;
+  if (dist(sx, sy, state.tower.x, state.tower.y) < grid.perimeter + FORMATION_MIN_DISTANCE) return null;
   const { mass, cells } = floodFillMass(grid, sx, sy);
   if (mass < MASS_MIN_FORMATION) return null;
 
@@ -113,7 +122,9 @@ export function attemptFormation(state: GameState, sx: number, sy: number): Coag
     armor: 0, // Wave 1 — see docs/DECISIONS.md #44
     kind,
     radius: coagulantRadius(mass),
-    speed: COAGULANT_SPEED[kind],
+    speed: coagulantSpeed(mass),
+    phase: 'forming',
+    phaseTimer: FORMATION_RISE_DURATION,
     seeds: generateSeeds(mass),
   };
   state.coagulants.push(coagulant);

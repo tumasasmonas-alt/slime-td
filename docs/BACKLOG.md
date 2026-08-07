@@ -20,24 +20,33 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🔴 Playtest gate — Phase 3C is built, awaiting the project owner's verdict
+### 🟡 The arsenal (Phase 5/6) — the actual next step
 
-Phase 3C (Coagulants Wave 1) shipped 2026-08-06 — see BACKLOG's Done
-section and `docs/PROGRESS.md`'s session log for what landed. This is the
-first playtest gate in the rework (2026-08-05 record §17): the point
-where the game becomes "the new game" and the first honest feedback on
-whether the horde reads as intended actually happens. Not a decision
-Claude can make solo — needs the owner playing it.
+Phase 3C's playtest gate has now been through one full round: first
+playtest found four real bugs (all fixed, Decisions 54–59), a fifth
+question about the browser as a platform (answered no, Decision 60), and
+a second playtest on the fixed build read as promising but still fast at
+the very start (fixed, Decision 57's second half). See BACKLOG's Done
+section and `docs/PROGRESS.md`'s session log for the full round.
 
-**What to watch for at the gate**, since every number is a first guess:
-arrival speed and mass (the agreed tuning dials, Decision 27), whether a
-behemoth crossing the arena reads as dramatic or tedious, whether the
-conservation rules feel right in practice (motes shouldn't chain into
-behemoths — Rule 4). The design rework is agreed end to end (DECISIONS.md
-#23–#53). Reasoning lives in two session records:
-`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is)
-and `docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
-works).
+**Not blocking, but the honest next step per the project owner's own
+diagnosis:** pacing cannot be meaningfully tuned further with only the
+starting weapon and no arsenal to build against. Further pacing passes on
+the current one-weapon loadout would be guessing. Phase 5 (arsenal
+framework — slots, gems, inventory UI) and Phase 6 (arsenal content, its
+own design session first) are what unblock a real balance pass, not more
+tuning here. The design rework is agreed end to end (DECISIONS.md
+#23–#60). Reasoning lives in three places:
+`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is),
+`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
+works), and DECISIONS.md #54–60 plus PROGRESS.md's most recent session log
+entry (the first playtest-and-fix round).
+
+**Still open, not urgent:** whether a behemoth crossing the arena reads as
+dramatic or tedious, and whether the conservation rules feel right in
+practice (motes shouldn't chain into behemoths — Rule 4) — both need more
+playtesting than one round to judge, but neither blocks moving on to the
+arsenal.
 
 ### The rest of the phase plan
 
@@ -465,3 +474,32 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
   displacement toward the field's own coral pattern instead of pure
   randomness, raised by the owner as "the infection follows its own veins."
   See *Ideas* above.
+
+- **First 3C playtest-and-fix round.** *(2026-08-06, second playtest and
+  final speed cut 2026-08-07, kept dated 2026-08-06 as one gate)* Four
+  bugs from the first playtest, all fixed: coagulants now rise and fade in
+  over 1.8s before they can move, be targeted, or arrive
+  (`CoagulantPhase`, Decision 54); formation is hard-gated away from the
+  core (`FORMATION_MIN_DISTANCE`, Decision 55) and veins stop short of the
+  perimeter instead of aiming at the tower (`veinTargetPoint`, Decision
+  56); coagulant speed became a continuous mass-based function and, along
+  with ambient growth, was cut roughly in half twice across the two
+  playtests (Decision 57) — the escalation curve and the inverse-sqrt
+  mass-to-speed shape were both left alone on purpose, only the base
+  magnitude moved. `depositMass` also picked up a genuine O(ring³) →
+  O(ring) algorithmic fix (Decision 58) during a debug-harness-driven lag
+  investigation (Decision 59) whose honest conclusion was "probably not
+  the game" rather than a confirmed fix — the browser's own Long Task
+  API recorded zero long tasks under a provoked worst case. A direct
+  question about whether the browser itself was the ceiling was raised and
+  answered no (Decision 60): no evidence Canvas 2D was the bottleneck, and
+  the procedural asset generation ports to any target at the same cost
+  regardless.
+
+  231/231 tests passing (up from 217 — 14 new across `coagulants.test.ts`,
+  `formation.test.ts`, `frontier.test.ts`, `events.test.ts`), typecheck and
+  build clean. Verified live in-browser after the final speed cut: a fresh
+  run on the starting weapon plus organic level-up picks reached level 7 /
+  t=1:29 with core integrity still full and two active coagulants on
+  screen not threatening the core — a different outcome from the first
+  playtest's early death on a comparable loadout.

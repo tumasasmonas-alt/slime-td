@@ -48,37 +48,45 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-06 (Phase 3C shipped — playtest gate)
+**Last updated:** 2026-08-06 (post-3C playtest — first round of fixes in,
+second playtest promising)
 
-**The rework's identity change is built.** Phases 3A (teardown), 3B
-(Infection Events), and 3C (Coagulants Wave 1) are all built, tested, and
-verified live: growth nodes are gone, replaced by veins and blooms that
-spark coagulants — Mote, Congealer, Behemoth — which walk to the core, get
-damaged through the existing weapon formulas, and either die or breach.
-**This is the first playtest gate.** Code is done; the verdict is not —
-that needs the project owner playing it, not another verification pass.
+**The rework's identity change is built and has survived two playtests.**
+Phases 3A (teardown), 3B (Infection Events), and 3C (Coagulants Wave 1) are
+built and tested; the first playtest of 3C found four real bugs (coagulant
+insta-formation, a vein reaching the core, slime speed, a 5–10fps stretch),
+all now fixed (Decisions 54–59), plus a direct question about whether the
+browser was the wrong platform (answered no — Decision 60, staying on
+Canvas 2D). A second playtest on the fixed build read as "nice" but still
+too fast at the very start, so `AMBIENT_BASE`/`CREEP_RAMP` and the
+coagulant speed constants were both cut a second time (Decision 57).
+**Balance itself is explicitly not yet gradeable** — the project owner's
+own observation: there's no arsenal to tune pacing against yet (Phase
+5/6), so every number here is still a playability floor, not a tuned
+result.
 
 | | |
 |---|---|
-| Tests | 217 passing (32 test files) — one known flake, see BACKLOG |
+| Tests | 231 passing (32 test files) — one known flake, see BACKLOG |
 | Source | 61 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
-| Branch | `main` — 3C not yet pushed, see below |
-| Code state | **Phases 3A–3C complete.** Everything past this gate (4A onward) is still design-only. |
-| Blockers | **The 3C playtest gate.** Numbers are first-pass by design — see BACKLOG. |
+| Branch | `main` |
+| Code state | **Phases 3A–3C complete**, plus a first round of playtest fixes on top of 3C. Everything past this gate (3D onward) is still design-only. |
+| Blockers | **None hard.** The real balance pass still waits on the arsenal (Phase 5/6) existing to tune against — see BACKLOG. |
 
-**What works today:** the horde-economy loop, end to end, for the first
-time. Infection grows as a density field across a **fixed perimeter**,
+**What works today:** the horde-economy loop, end to end, playtested
+twice. Infection grows as a density field across a **fixed perimeter**,
 punctuated by **Infection Events** (branching veins, radial blooms) that
 inject growth and, at their peak, spark **coagulants** out of whatever
-contiguous mass a bounded flood-fill finds. A coagulant is pure mass with
-no separate HP — every weapon damages it through the same formula that
-clears grid tissue, scaled by how much of the hit actually overlaps its
-body. Kill one and it's gone, converted to XP; let one reach the core and
-it dumps its full remaining mass as tower damage and a field breach. Six
-auto-firing weapons, eight passives via level-up cards, contact damage,
-flavour-only tiers, game over, restart with a fresh maze.
+contiguous mass a bounded flood-fill finds — now with a visible rise/fade
+telegraph before one can move or be targeted (Decision 54). A coagulant is
+pure mass with no separate HP — every weapon damages it through the same
+formula that clears grid tissue, scaled by how much of the hit actually
+overlaps its body. Kill one and it's gone, converted to XP; let one reach
+the core and it dumps its full remaining mass as tower damage and a field
+breach. Six auto-firing weapons, eight passives via level-up cards, contact
+damage, flavour-only tiers, game over, restart with a fresh maze.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -86,10 +94,23 @@ a run; the infection scaled 3.1×.** No value of `CONTACT_SCALE` was right
 at both ends. Nodes felt bad. XP arrived far too fast. The full findings
 and math are in the 2026-08-05 session record.
 
+**What the first 3C playtest found (2026-08-06):** four real bugs, not
+balance noise — coagulants formed instantly at full lethality with zero
+warning, a vein could flood mass right at the defended ring, ambient slime
+speed read as too fast, and a 5–10fps stretch appeared during vein/
+coagulant activity. All four addressed (Decisions 54–59); a fifth,
+unrelated question — whether the browser itself was the ceiling — was
+raised and answered no (Decision 60). A second playtest on the fixed build
+read as promising but still fast at the very start, so both ambient growth
+and coagulant speed were cut a second time (Decision 57's second half).
+
 ### ⚠️ Read this before writing any code
 
-**Nothing should be built past this point until the 3C playtest gate
-closes.** The next phase (3D, XP economy — mostly already pulled forward
+**Nothing should be built past this point until the arsenal exists to
+balance against.** The 3C playtest gate found real bugs, not a verdict on
+numbers — the project owner's own read is that pacing can't be honestly
+tuned with only the starting weapon and no arsenal (Phase 5/6) to test
+against. The next phase (3D, XP economy — mostly already pulled forward
 into 3C, see below) is small; 4A (maturity) is not, and building terrain
 on top of an unverified horde is exactly the ordering mistake Decision 36
 already argued against once.
@@ -98,7 +119,7 @@ The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
 gem system, and the tier table is demoted to flavour. **Phases 3A, 3B, and
-3C are done.**
+3C are done, and have been through one playtest-and-fix round.**
 
 **Start here, in order:**
 
@@ -110,14 +131,15 @@ gem system, and the tier table is demoted to flavour. **Phases 3A, 3B, and
    *how it works.* The layer below: what a coagulant is in code, how
    formation is computed, how armor and the card pool are structured. Also
    has a rejected-ideas table.
-3. **`docs/DECISIONS.md` #23–#53** — the load-bearing calls in short form.
-   23–37 are the design; 38–53 are the mechanism. #47–53 are
-   implementation-time findings from 3A/3B/3C, not from either design
-   session — see the note at the top of that section.
-4. **`docs/BACKLOG.md`** *Now* section — the playtest gate is the concrete
-   next step, not new code. 3A/3B/3C's own follow-ups (coral-biased vein
-   geometry, spontaneous coagulation, the orbital trade ship) are noted in
-   *Done* and *Ideas*.
+3. **`docs/DECISIONS.md` #23–#60** — the load-bearing calls in short form.
+   23–37 are the design; 38–53 are the mechanism; 54–60 are the first
+   playtest-and-fix round on top of 3C. #47–60 are implementation-time
+   findings, not from either design session — see the notes at the top of
+   each of those sections.
+4. **`docs/BACKLOG.md`** *Now* section — the arsenal (Phase 5/6) is the
+   concrete next step before a real balance pass is possible. 3A/3B/3C's
+   own follow-ups (coral-biased vein geometry, spontaneous coagulation, the
+   orbital trade ship) are noted in *Done* and *Ideas*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -187,6 +209,109 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-06 (post-3C playtest) — Pacing fixes, a lag investigation, and the browser-viability question
+
+**Playtest response, on a different machine, picking up mid-rework.** The
+project owner ran the game after 3C shipped and reported four specific
+bugs from one sitting, then asked a fifth, larger question before any
+fixing started: whether the browser itself was the wrong platform. Fixed
+all four bugs, answered the platform question, then — after the owner's
+own follow-up playtest on the fixed build — cut two more numbers a second
+time. Kept dated 2026-08-06 at the owner's request, as a continuation of
+the same gate rather than a new session.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | `state.ts` (`CoagulantPhase`), `systems/formation.ts` (distance gate, forming phase), `systems/coagulants.ts` (ring-perimeter `depositMass`, forming-phase gating in movement/arrival/`findCoagulantHit`), `systems/frontier.ts` (forming-phase skip), `systems/events.ts` (`veinTargetPoint`), `render/coagulants.ts` (rise/fade animation), `ui/hud.ts` (weapon tray DOM fix), `tuning/coagulants.ts` + `tuning/events.ts` + `tuning/growth.ts` (all the tuning changes below) |
+
+**Discussed**
+
+- **The playtest report, verbatim in substance:** slime speed needed
+  cutting by "at least 40 percent"; the vein was good but shouldn't reach
+  all the way to the core, since mass spawning right at the tower let a
+  behemoth form and arrive almost instantly; the coagulation/telegraph
+  stage needed to be both longer and slower ("big mass, slow movement");
+  and vein/coagulation activity dropped the game to 5–10fps. **Diagnosis
+  reframed the insta-death complaint**: it wasn't purely a speed problem —
+  formation itself was instant, a full-mass full-speed coagulant
+  materializing with zero warning frame. Fixed as its own thing (Decision
+  54, the forming phase) rather than trying to solve it by tuning speed
+  alone.
+- **The lag chase kept losing to the pause button.** Level-up cards set
+  `state.paused = true`, and granting max weapons via a debug hook
+  generates enough clear activity to trigger a level-up almost
+  immediately — so early attempts to reproduce the reported fps drop
+  through ordinary play kept getting interrupted before anything
+  conclusive built up. **The owner's redirect was the turning point:**
+  *"write a specific test, remove level ups, give core all the weapons at
+  max level... measure the performance of the whole coagulant and vein
+  issue."* Built a temporary `window.__debug` bridge to do exactly that —
+  deterministic reproduction instead of anecdote. Full findings in
+  Decision 59; nothing from the harness shipped, it was removed once the
+  investigation closed.
+- **The lag investigation's honest conclusion is "probably not the game,"
+  not "definitely not the game."** No instrumented system exceeded ~8ms
+  even under an artificial worst case; the browser's own Long Task API
+  recorded zero long tasks during a provoked 100+ms frame gap. One
+  synthetic benchmark from earlier in the chase was itself wrong — it
+  assumed a full-canvas clear that `flushDirtyCells` never actually does —
+  and a corrected version reversed the conclusion (per-cell repaint is
+  faster than batching at every realistic size). Communicated as an open
+  uncertainty to the owner rather than oversold as solved.
+- **"Can this game run on HTML... are we limiting ourselves too much?"**
+  Asked directly after the lag report, with a standalone-engine port on
+  the table as the alternative. Answered no, and explained why: the
+  investigation found no evidence Canvas 2D was the actual bottleneck, the
+  one real perf fix found (Decision 58) is an algorithmic fix that ports
+  identically anywhere, and the procedural asset generation (density
+  field, vein polylines, seed-circle blobs) is plain code with no art
+  pipeline tying it to the browser specifically — porting would mean
+  re-authoring the same generation logic against a different renderer's
+  API for no measured gain. Full reasoning in Decision 60. **The owner's
+  response, once reassured:** greenlit all seven identified fixes in one
+  go, with an explicit standing instruction not to commit or push until
+  they'd playtested locally themselves.
+- **The second playtest (after all seven fixes landed) read as "nice,"
+  but flagged the same axis again:** ambient/coagulant speed still felt
+  too fast at the very start of a run. **The owner's framing mattered:**
+  keep the existing time-based escalation curve exactly as it is, just
+  halve where it starts — not a request to redesign the ramp, just to
+  lower its floor. Implemented as a second, uniform halving of
+  `AMBIENT_BASE`/`CREEP_RAMP` and the `COAGULANT_SPEED_K/MIN/MAX` trio,
+  leaving `AMBIENT_ESCALATION` (the curve itself) and the inverse-sqrt
+  mass-to-speed relationship (the other "curve") both untouched — see
+  Decision 57 for why a uniform scale-down of the base is mathematically
+  the same thing as "halve the start, keep the curve." **The owner also
+  named the real ceiling on how far this iteration can go:** balance can't
+  be honestly judged with only the starting weapon and no arsenal yet to
+  build against — that's Phase 5/6 work, not more tuning here.
+
+**Decided** — Decisions 54 (coagulant forming phase), 55 (formation
+distance gate), 56 (vein stop-margin target point), 57 (both speed
+halvings, and why the curves themselves were left alone), 58
+(`depositMass` ring-perimeter walk), 59 (the debug-harness investigation
+methodology and its findings, including the retracted batch-fill idea),
+60 (staying on browser/Canvas 2D, no engine port).
+
+**Verified**: 231/231 tests passing (up from 217 — 14 new: forming-phase
+gating in `coagulants.test.ts` and `formation.test.ts`, the distance gate,
+`coagulantSpeed`'s monotonic-and-floored shape, forming-skip in
+`frontier.test.ts`, and the vein's stop-margin endpoint math in
+`events.test.ts`), typecheck and build clean. Verified live in-browser
+after the second speed cut (2026-08-07): a fresh run using only the
+starting weapon plus organic level-up picks reached level 7 / t=1:29 with
+core integrity still full, one coagulant already killed, and two more
+active on screen without threatening the core — a materially different
+outcome from the first playtest's early death on a comparable loadout.
+
+**Planned** — No hard blocker. The honest next step, per the owner's own
+diagnosis, is the arsenal (Phase 5/6) rather than another pacing pass —
+pacing can't be tuned meaningfully against a one-weapon loadout. Until
+then, further playtests of the current build are welcome but numbers
+should be treated as a playability floor, not a target.
 
 ### 2026-08-06 (yet later) — Phase 3C: Coagulants Wave 1
 
@@ -678,8 +803,14 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: the Phase 3C playtest gate — the project owner playing the game,
-not more code. Phases 3A, 3B, and 3C shipped 2026-08-06.**
+**Next: the arsenal (Phase 5/6) — not another pacing pass.** Phases 3A,
+3B, and 3C shipped 2026-08-06 and have now been through one full
+playtest-and-fix round (also 2026-08-06 by the owner's dating, second
+playtest 2026-08-07 — see the *Session log* entry above). The project
+owner's own read after the second playtest: pacing genuinely cannot be
+balanced further with only the starting weapon and no arsenal to build
+against, so the honest next step is Phase 5/6, not more tuning on the
+current one-weapon loadout.
 
 The design is settled end to end, and as of 2026-08-06 so is the
 mechanism — all the way through the horde's first playable form. Full
@@ -690,10 +821,10 @@ detail in the 2026-08-05 record §17; the concrete next step is in
 |---|---|
 | **3A** | ✅ Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
 | **3B** | ✅ Infection Events — vein (acts on density) + bloom (acts on maturity — payload deferred to 4A), full lifecycle |
-| **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate, awaiting the owner** |
+| **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth. **First playtest-and-fix round done** (Decisions 54–60); pacing is a floor, not a tuned result — real balance waits on the arsenal. |
 | **3D** | XP economy — mass-based (value cap removal already pulled into 3C), superlinear curve, gem showers, risk premium → **playtest gate** |
 | **4A–4C** | Maturity field · two-axis visuals · Coagulants Wave 2 → **playtest gate** |
-| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
+| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved → **next up** |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase · real balance pass · leaderboard |

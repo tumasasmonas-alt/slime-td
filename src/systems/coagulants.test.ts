@@ -33,6 +33,8 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     kind: 'congealer',
     radius: 18,
     speed: 45,
+    phase: 'active',
+    phaseTimer: 0,
     seeds: [{ a: 0, r: 0.5, speed: 0.5, phase: 0 }],
     ...overrides,
   };
@@ -76,6 +78,75 @@ describe('updateCoagulants — movement', () => {
     updateCoagulants(state, 0.1);
 
     expect(state.coagulants).toHaveLength(0);
+  });
+});
+
+describe('updateCoagulants — forming phase (2026-08-06 follow-up session)', () => {
+  it('does not move a forming coagulant, even one placed right on top of the tower', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    const c = makeCoagulant({ x: 305, y: 300, radius: 5, phase: 'forming', phaseTimer: 1 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants).toHaveLength(1);
+    expect(state.coagulants[0]!.x).toBe(305);
+    expect(state.coagulants[0]!.y).toBe(300);
+  });
+
+  it('does not let a forming coagulant arrive at the tower, however close it sits', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    const c = makeCoagulant({ x: 300, y: 300, radius: 5, phase: 'forming', phaseTimer: 1 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants).toHaveLength(1);
+    expect(state.tower.hp).toBe(state.tower.maxHp); // no arrival damage taken
+  });
+
+  it('counts down phaseTimer while forming, without becoming active early', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const c = makeCoagulant({ phase: 'forming', phaseTimer: 0.3 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants[0]!.phase).toBe('forming');
+    expect(state.coagulants[0]!.phaseTimer).toBeCloseTo(0.2, 5);
+  });
+
+  it('transitions to active once phaseTimer expires', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const c = makeCoagulant({ phase: 'forming', phaseTimer: 0.05 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants[0]!.phase).toBe('active');
+  });
+
+  it('moves normally the tick after it turns active', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 700;
+    state.tower.y = 300;
+    const c = makeCoagulant({ x: 300, y: 300, radius: 5, phase: 'forming', phaseTimer: 0.05 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1); // expires the timer, turns active
+    updateCoagulants(state, 0.1); // now it should step toward the tower
+
+    expect(state.coagulants).toHaveLength(1);
+    expect(state.coagulants[0]!.x).toBeGreaterThan(300);
   });
 });
 
@@ -208,6 +279,12 @@ describe('findCoagulantHit', () => {
     const far = makeCoagulant({ x: 400, y: 400, radius: 300 }); // huge, also overlaps
     state.coagulants = [far, near];
     expect(findCoagulantHit(state, 105, 100, 5)).toBe(near);
+  });
+
+  it("ignores a coagulant still in the 'forming' phase — it hasn't detached from the field yet (2026-08-06 follow-up session)", () => {
+    const state = freshState();
+    state.coagulants = [makeCoagulant({ x: 100, y: 100, radius: 20, phase: 'forming', phaseTimer: 1 })];
+    expect(findCoagulantHit(state, 100, 100, 5)).toBeNull();
   });
 });
 

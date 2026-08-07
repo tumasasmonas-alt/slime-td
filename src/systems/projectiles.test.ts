@@ -13,6 +13,8 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     kind: 'congealer',
     radius: 10,
     speed: 45,
+    phase: 'active',
+    phaseTimer: 0,
     seeds: [],
     ...overrides,
   };

@@ -12,6 +12,8 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     kind: 'congealer',
     radius: 15,
     speed: 45,
+    phase: 'active',
+    phaseTimer: 0,
     seeds: [],
     ...overrides,
   };
@@ -177,6 +179,32 @@ describe('computeFrontier / nearestFrontierPoint', () => {
       computeFrontier(state); // vacuous otherwise — frontier defaults to null, which alone returns null
 
       expect(nearestFrontierPoint(state)).toBeNull();
+    });
+
+    it("ignores a 'forming' coagulant — it hasn't detached from the field yet (2026-08-06 follow-up session)", () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.coagulants = [makeCoagulant({ x: 250, y: 150, phase: 'forming', phaseTimer: 1 })];
+      computeFrontier(state); // vacuous otherwise — frontier defaults to null, which alone returns null
+
+      expect(nearestFrontierPoint(state)).toBeNull();
+    });
+
+    it("targets a coagulant once it turns 'active', at the same spot it was ignored while forming", () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.coagulants = [makeCoagulant({ x: 250, y: 150, phase: 'active', phaseTimer: 0 })];
+      computeFrontier(state);
+
+      const nearest = nearestFrontierPoint(state);
+
+      expect(nearest).not.toBeNull();
+      expect(nearest!.x).toBe(250);
+      expect(nearest!.y).toBe(150);
     });
   });
 });

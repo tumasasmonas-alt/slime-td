@@ -1052,6 +1052,157 @@ tapering requires the per-segment form the trunk deliberately avoids.
 
 ---
 
+## The 3C playtest gate — first-round fixes
+
+> Decisions 54–60 came out of the project owner's first live playtest of
+> Phase 3C (2026-08-06) and a follow-up round the next day, kept dated
+> 2026-08-06 per the owner's request since it's a direct continuation of
+> that gate rather than new scope. Four bugs were reported from one
+> sitting — slime speed, a vein reaching the core, instant coagulant
+> formation, and a 5–10fps stretch during vein/coagulation activity — plus
+> a direct question about whether the browser was the wrong platform. No
+> long-form session file for this one; the reasoning is dense but each
+> item is small, so it lives here and in `docs/PROGRESS.md`'s session log
+> rather than a dedicated `docs/sessions/` file.
+
+**54. Coagulant formation gets a visible 'forming' phase — rising and
+fading in over `FORMATION_RISE_DURATION` (1.8s) — before it can move, be
+targeted, or arrive.** ✅
+*2026-08-06.* The playtest's sharpest bug: "a behemoth spawned and
+insta-exploded on me." Formation was instant — a full-mass, full-speed,
+already-lethal coagulant could appear with zero warning, which no amount
+of retuning speed or distance alone would fix, since the player never got
+a frame to react in the first place.
+
+New `CoagulantPhase = 'forming' | 'active'` (`state.ts`), mirroring
+`InfectionEvent`'s existing `phase`/`phaseTimer` shape. While `'forming'`
+a coagulant does not move (`updateCoagulants`), cannot be hit
+(`findCoagulantHit` skips it), and is invisible to targeting
+(`nearestFrontierPoint` skips it too) — it reads as still part of the
+field, not yet a detached threat, which is also the visual
+(`render/coagulants.ts` scales it from 0 to full radius and fades alpha in
+across the rise). It only becomes `'active'` — mobile, targetable,
+damageable — once the timer expires.
+
+**55. A hard distance gate blocks formation within `perimeter +
+FORMATION_MIN_DISTANCE` (30px) of the core, however much mass is
+available.** ✅
+*2026-08-06.* A backstop, not the primary mechanism — that's #56 for veins,
+and blooms already place no closer than `perimeter + 70` by construction.
+Found live: a coagulant sparking with almost no runway to the core is a
+distinct failure from the mass being too large, and deserves its own guard
+rather than trusting every upstream placement to never produce a close
+point. `attemptFormation` (`systems/formation.ts`) checks this before the
+flood-fill runs, so a rejected spark drains nothing.
+
+**56. Veins stop short of the perimeter — at `perimeter +
+VEIN_STOP_MARGIN` (60px) — instead of aiming at the tower.** ✅
+*2026-08-06.* The other half of the insta-death bug: a vein aimed
+straight at the tower flooded mass right at the defended ring, so a
+coagulant sparked from that mass could form inside or barely outside the
+ring with almost no distance to cross before arrival. `veinTargetPoint()`
+(`systems/events.ts`) computes a target short of the core along the same
+bearing; `generateVeinPath`'s midpoint displacement never moves the two
+endpoints, so the trunk's tip lands exactly at the stop distance
+regardless of how jagged the path is.
+
+**57. Coagulant speed and ambient growth were both cut roughly in half a
+second time, in the same playtest round, on top of the cut already made
+at the 3C gate — with the escalation curve left untouched both times.** ✅
+*2026-08-06.* The first cut (3C gate, discrete per-kind speeds — mote 70 /
+congealer 45 / behemoth 25 — replaced by the continuous
+`coagulantSpeed(mass) = clamp(K/√mass, MIN, MAX)`, and `AMBIENT_BASE`/
+`CREEP_RAMP` trimmed ~40%) wasn't enough on its own: a second playtest,
+run only with the starting weapon since no arsenal exists yet to balance
+against, still read as overwhelming early. Both cut again by half —
+`COAGULANT_SPEED_K/MIN/MAX`: 120/8/45 → 60/4/22.5; `AMBIENT_BASE`: 0.03 →
+0.015; `CREEP_RAMP`: 0.054 → 0.027.
+
+**`AMBIENT_ESCALATION`'s time-driven multiplier curve was not touched by
+either cut.** The owner's request was specifically "half the speed at the
+start... keep the curve the same" — since the escalation table is a
+multiplier applied on top of the base rate, scaling the base uniformly
+halves every point along the curve including its start, without changing
+the curve's relative shape. Same logic applied to the coagulant speed
+constants: `K`/`MIN`/`MAX` scaled together preserves the inverse-sqrt
+*shape* ("big mass, slow movement"), only the absolute speeds it produces
+move.
+
+**This is a playability floor, not a balance pass.** The owner named the
+real blocker directly: pacing can't be honestly tuned against an arsenal
+that doesn't exist yet — the balance pass stays Phase 8, gated on Phase
+5/6 first, per Decision 13's supersession. Live-verified afterward
+(2026-08-07): a fresh run reached level 7 / t=1:29 with core integrity
+still full, a coagulant already killed, and two more coagulants active on
+screen without threatening the core — a different outcome from the first
+playtest's early death, on the same starting loadout.
+
+**58. `depositMass` walks ring *perimeters*, not ring bounding boxes.** ✅
+*2026-08-06, found via the targeted stress test in #59.* The original
+walked a full `(2·ring+1)²` box per ring and re-deposited into
+already-full cells near the center every time, which is O(ring³) worst
+case across a fully-saturated field. Rewritten to walk only the O(ring)
+cells actually on each ring's edge. Confirmed by direct iteration counts
+in the pathological fully-saturated-map case: ~1.9M → ~30K. Genuine
+algorithmic fix, not proven to be the cause of the reported lag — see #59.
+
+**59. Suspected lag was investigated with a deterministic debug harness,
+not by chasing it through noisy normal play.** ✅ *(investigation, no
+mechanic changed)*
+*2026-08-06, methodology proposed by the project owner.* Early attempts to
+reproduce the reported 5–10fps stretches through ordinary play kept
+getting interrupted by level-up cards pausing the simulation before
+anything conclusive built up. The owner's redirect: *"write a specific
+test, remove level ups, give core all the weapons at max level... measure
+the performance of the whole coagulant and vein issue."* A temporary
+`window.__debug` bridge (`grantMaxWeapons`, `saturateArena`,
+`forceFormation`, all in `main.ts`, all removed afterward — nothing
+shipped) made the worst case reproducible on demand instead of anecdotal.
+
+**Findings:** no individual system exceeded ~8ms even in an artificial
+8,150-dirty-cell stress tick (`performance.now()` wrapping with
+max-tracking, since an aggregate total hides which system caused a
+specific spike). A **corrected** canvas benchmark — matching
+`flushDirtyCells`'s real *scattered* dirty-cell pattern rather than an
+earlier synthetic benchmark's full-canvas-clear assumption — showed the
+current per-cell repaint is faster than a "batch fills by colour"
+alternative at every realistic size (18× faster at 12,900 cells). **That
+fix idea is retracted**, and the retraction is written directly into
+`flushDirtyCells`'s own comment so it isn't re-attempted from the same
+false start. The browser's own Long Task API (`PerformanceObserver`,
+`entryTypes: ['longtask']`) recorded **zero** long tasks during a 100+ms
+frame gap deliberately provoked during the stress test — the most
+authoritative signal available, since it catches deferred layout/paint
+work a manual JS wrapper can't see. Conclusion communicated honestly as an
+open uncertainty, not a closed case: the spikes are **likely** an
+automation/remote-browser artifact rather than reproducible game-code
+cost, but not proven absent.
+
+**Real, if unproven-to-be-causal, fix made anyway:** `ui/hud.ts`'s
+`updateWeaponTray` was rebuilding every weapon chip via `innerHTML = ''` +
+`appendChild` on *every* frame regardless of whether the loadout changed.
+Gated on a loadout snapshot string; only rebuilds on an actual change. A
+real anti-pattern worth fixing on its own merits even though the Long Task
+profiler cleared it as the spike's cause.
+
+**60. The game stays a browser/Canvas 2D game — no port to a standalone
+engine.** 📋
+*2026-08-06.* Raised directly by the owner after the lag report, worried
+the platform itself might be the ceiling: *"can it be a browser game? Are
+we limiting ourselves too much?"* Assessed and rejected porting: the
+investigation in #59 found no evidence Canvas 2D itself was the
+bottleneck — every measured system cost was small, and the one genuine
+perf fix found (#58) was an algorithmic one that ports identically to any
+target. Procedural generation (the density field, vein polylines, seed-
+circle coagulant blobs) is plain code with no baked art pipeline behind
+it, so it is not a reason to leave the browser either — it would need
+re-authoring in a new renderer's terms regardless of engine, at the same
+cost. Staying on web keeps the GitHub Pages deployment plan (`CLAUDE.md`)
+intact with no migration cost paid for a problem that, on the evidence
+gathered, the platform did not actually cause.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

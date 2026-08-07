@@ -8,7 +8,10 @@ import { clamp, lerp } from '../util/math';
 // docs/DECISIONS.md #29. Numbers here are first-pass, not balanced — see
 // the Phase 3C playtest gate in docs/BACKLOG.md.
 
-export const EVENT_TELEGRAPH_DURATION = 2.5;
+// Telegraph lengthened from 2.5s per the Phase 3C playtest gate
+// (2026-08-06) — the player needs real time to see a vein coming and
+// react, not a token warning before it starts flooding the field.
+export const EVENT_TELEGRAPH_DURATION = 4.5;
 export const EVENT_ACTIVE_DURATION = 4;
 export const EVENT_PEAK_DURATION = 3.5;
 export const EVENT_DECAY_DURATION = 1.5;
@@ -54,6 +57,15 @@ export const VEIN_BRANCH_LENGTH = 70;
 export const VEIN_WIDTH = 20;
 export const VEIN_ACTIVE_RATE = 0.55;
 export const VEIN_PEAK_RATE = 0.85;
+
+// The vein's target point stops this far *outside* the perimeter, rather
+// than at the core — found live during the Phase 3C playtest gate
+// (2026-08-06): a vein aimed at the tower floods mass right at the
+// defended ring, and a coagulant sparking from that mass can form inside
+// or barely outside the ring with almost no runway to react. Veins are
+// meant to deliver fresh, short-runway mass "close" (§11) — not mass that
+// never had a distance to cross at all.
+export const VEIN_STOP_MARGIN = 60;
 
 // Bloom: radial and local. In 3B this is elevated growth in its radius
 // only — its real job (accelerating maturity, per §11) waits for Phase
