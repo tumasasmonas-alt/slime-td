@@ -62,7 +62,16 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       const d = Math.sqrt(ddx * ddx + ddy * ddy);
       if (d > radiusPx) continue;
       const i = gy * grid.cols + gx;
-      if (freezeDuration > 0) grid.frozen[i] = Math.max(grid.frozen[i]!, freezeDuration);
+      if (freezeDuration > 0) {
+        // Phase 4B: frozen renders as a rim (grid/slimeLayer.ts), gated on
+        // the dirty set like every other rendered state — mark dirty only
+        // on the newly-frozen transition, not every hit while already
+        // frozen, or an AoE freeze weapon would spam the dirty set for no
+        // visible change.
+        const wasFrozen = grid.frozen[i]! > 0;
+        grid.frozen[i] = Math.max(grid.frozen[i]!, freezeDuration);
+        if (!wasFrozen) state.dirty.add(i);
+      }
       const dens = grid.growth[i]!;
       if (dens <= 0.001) continue;
       const falloff = 1 - d / radiusPx;

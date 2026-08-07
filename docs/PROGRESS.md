@@ -48,15 +48,16 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-07 (Phase 4A shipped — the terrain layer exists)
+**Last updated:** 2026-08-07 (Phase 4B shipped — the field is now readable)
 
-**Phase 3 is complete and Phase 4A is built.** 3A (teardown), 3B
+**Phase 3 is complete and Phase 4A/4B are built.** 3A (teardown), 3B
 (Infection Events), 3C (Coagulants Wave 1) and 3D (XP economy) are all
 playtested and confirmed — verdict on 3D: *"it plays much better now."*
-**4A adds the maturity field**: the arena now hardens where the player
-fights and stays soft where they can't reach (Decisions 63–65). Rendered
-with a deliberately crude **neon-green placeholder** — the real two-axis
-visual system is 4B.
+**4A added the maturity field**: the arena hardens where the player fights
+and stays soft where they can't reach (Decisions 63–65). **4B made both
+axes readable**: density → alpha, maturity → colour, on a pink → coral →
+clay → bone ramp, plus a rim for `frozen` (Decisions 66–67). Owner's
+verdict on 4B: *"looks nice, I like the more colour gradient."*
 
 **4A took five bug-fix rounds after first build**, all found by running the
 game rather than by tests — including a regression that made 22% of the
@@ -70,13 +71,13 @@ Phase 8 (Decision 13's supersession), not a reason to reorder anything.
 
 | | |
 |---|---|
-| Tests | 273 passing (34 test files) — one known flake, see BACKLOG |
-| Source | 63 modules under `src/` |
+| Tests | 286 passing (35 test files) — one known flake, see BACKLOG |
+| Source | 64 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main` |
-| Code state | **Phase 3 complete (3A–3D) + Phase 4A.** 4B onward is still design-only. |
-| Blockers | **None.** Next is Phase 4B (two-axis visuals), linearly. |
+| Code state | **Phase 3 complete (3A–3D) + Phase 4A + 4B.** 4C onward is still design-only. |
+| Blockers | **None.** Next is Phase 4C (Coagulants Wave 2), linearly. |
 
 **What works today:** the horde-economy loop, end to end, playtested
 twice. Infection grows as a density field across a **fixed perimeter**,
@@ -222,6 +223,77 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-07 (later still) — Phase 4B: the two-axis visual system
+
+**Planning + implementation.** Plan and as-built delta:
+**`docs/plans/phase-4b-two-axis-visuals.md`**.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Phase 4B — new `tuning/palette.ts`; two-axis composition in `grid/slimeLayer.ts`; frozen rim + transition-gated dirty marking in `grid/clear.ts` and `systems/growth.ts`; `BUCKET_COLORS` deleted; `render/coagulants.ts` resourced |
+
+**Discussed**
+
+- **Texture deferred to Phase 9, and not just for scheduling reasons.** §6
+  wants mature ground "matte, fibrous, crystalline/plated." Real per-cell
+  texture in Canvas 2D at 13px either multiplies draw calls (fighting the
+  dirty-set discipline 4A had to respect) or needs pre-rendered variants
+  per state, which is absurd at 20 states. The right implementation is a
+  single full-screen noise pass masked by maturity — a different rendering
+  architecture, and genuinely overhaul-scale. Owner agreed; colour alone
+  delivers 4B's stated goal (*"the slime is readable by colours and
+  states, and maturity and denseness can be told apart"*) and texture on
+  top of a correct colour system later is purely additive.
+- **The collapse bug turned out to be about *spacing*, not hues.** The old
+  `BUCKET_COLORS` read as ~3 buckets because its steps were unevenly
+  spaced, not because the colours were badly chosen. Moving density onto
+  evenly-stepped alpha makes recollapse structurally impossible — and,
+  unlike a hand-picked hex list, mechanically testable.
+- **One genuine conflict with the design record, raised before building.**
+  §6 says mature ground is *dark*; the owner said calcified should be
+  white-ish. Flagged under the ground-truth protocol rather than silently
+  picking — and the owner is right, for a reason §6 could not have known:
+  **dark scarring rebuilds the exact bug 4A shipped with**, since 64% of
+  scarred cells sit on cleared (black) ground. §7's tree-ring goal also
+  requires scar legible on bare ground, and §6 itself calls the top tier
+  "crystalline/plated," which reads pale. Recorded as a deliberate
+  supersession (Decision 66).
+- **`frozen` finally has a visual**, closing a bug open since Phase 2 — the
+  precedent that forced 4A to ship a placeholder in the first place. Drawn
+  as a rim rather than a fill so it can't compete with either axis, in
+  Frost Nova's existing `#bfe9ff` rather than a fourth colour language.
+- **The dirty-set rule got generalised into Decision 67.** Three
+  applications now, each a different quantization shape: growth → 5
+  buckets, maturity → 4 buckets, frozen → a boolean with only two
+  transitions marking dirty. Worth stating as its own rule because the
+  failure mode is quiet — correct output, gradually worse frame time — and
+  the next field state wired into the render will need it too.
+- **The plan's own test caught a defect before it reached the browser** —
+  a first for this project. §4 specified bare-scar alphas up to 0.30 while
+  §6 stated they must sit below the thinnest slime alpha (0.25); those
+  contradict, and writing the test from the plan failed immediately on the
+  plan's own numbers. Fixed the constants, not the test. The difference
+  from 4A's five browser-only bugs is that this invariant was stated
+  explicitly and was therefore mechanically checkable.
+
+**Decided** — Decisions 66 (two-axis palette: density → alpha, maturity →
+hue; calcified pale, superseding §6; bare scar below slime; frozen as a
+rim) and 67 (anything feeding the rendered colour must be quantized and
+mark dirty only on quantized change).
+
+**Verified**: 286/286 tests passing (up from 273), typecheck and build
+clean, debug harness removed. Verified live at 300s with maxed weapons:
+maturity buckets `[12142, 538, 198, 22]` so the full range is reachable and
+rendering, 1,153 frozen cells drawing their rim, no console errors. Owner
+playtested and accepted: *"looks nice, I like the more colour gradient."*
+
+**Planned** — **Phase 4C, Coagulants Wave 2.** One follow-up in BACKLOG
+rather than fixed here: the owner's read that scarring may want a different
+colour than the current clay/bone ramp. Cheap now that the palette is one
+file.
 
 ### 2026-08-07 (later) — Phase 4A: the maturity field
 
@@ -983,9 +1055,9 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 4B, the two-axis visual system. Phase 3 and 4A are
-complete.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round),
-3D and 4A on 2026-08-07 — see the *Session log* above.
+**Next: Phase 4C, Coagulants Wave 2. Phase 3, 4A and 4B are complete.**
+3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round), 3D/4A/4B on
+2026-08-07 — see the *Session log* above.
 
 **Go linearly.** Settled 2026-08-07: no skipping ahead to the arsenal.
 Phase 4 adds the *questions* (armor, penetration, range-vs-callus); Phases
@@ -1003,8 +1075,8 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth. Playtest-and-fix round done (Decisions 54–60). |
 | **3D** | ✅ XP economy — quadratic level curve, 15% coagulant risk premium, gem showers as rate limiter (Decision 61). Playtested: *"plays much better now."* |
 | **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay; clear-resistance, regrowth-rate and threshold-relative ceiling effects (Decisions 63–65). Neon-green placeholder visual. |
-| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture. Fixes the palette collapse, replaces 4A's placeholder → **next up** |
-| **4C** | Coagulants Wave 2 — bloom's maturity role activates; Blastoma, Carrier, Sclerotic, Bulwark → **playtest gate** |
+| **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse fixed, `frozen` finally visible, 4A's placeholder replaced (Decisions 66–67). Texture deferred to Phase 9. |
+| **4C** | Coagulants Wave 2 — bloom's maturity role activates; Blastoma, Carrier, Sclerotic, Bulwark → **next up, ends in a playtest gate** |
 | **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |

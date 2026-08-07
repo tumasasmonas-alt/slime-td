@@ -20,36 +20,48 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 Phase 4B — the two-axis visual system
+### 🟡 Phase 4C — Coagulants Wave 2
 
-**Phase 4A shipped 2026-08-07** (Decisions 63–65) — maturity exists, the
-arena hardens where the player fights, and it's rendered with a
-deliberately crude **neon-green placeholder**. 4B is what makes it real.
+**Phase 4A and 4B shipped 2026-08-07** (Decisions 63–67) — maturity exists
+and is now readable on screen. 4C is what finally *uses* it: the terrain
+layer stops being scenery and starts picking what the horde sends.
 
-Content, per the 2026-08-05 record §6: **density → thickness/opacity,
-maturity → colour and texture.** 5 density steps × 4 maturity steps = 20
-visual states from two axes, none hand-authored. Also folds in the
-palette-collapse bug below, since it's the same code.
+Content, per the 2026-08-05 record §10/§11:
+- **Bloom's maturity payload activates** — deferred here from 3B
+  specifically so 4A's global resistance change could be read on its own
+  (Decision 48, corrected).
+- **Four new coagulant types**, identity derived from field state rather
+  than a spawn table: **Blastoma** (high but fragmented mass — a bag of
+  blobs), **Carrier** (needs a dense corridor to the core; gated purely on
+  player failure), **Sclerotic** (high maturity — the player's own scar
+  ring gets up and walks), **Bulwark** (high maturity with soft mass
+  behind it — a moving wall).
+- **The vein-hits-scar-ring beat** — fresh short-runway chaff *plus* it
+  wakes Sclerotics out of the player's own callus.
 
-**The constraint §6 is emphatic about:** the two channels must stay
-*strictly* separated. Thickness must mean only mass; colour/texture must
-mean only hardness. If they bleed into each other, 20 states read worse
-than 5.
+**Carrier and Bulwark should ship as a pair** (§10) — Carrier makes the
+Threat Priority gem meaningful, Bulwark makes it a genuine tradeoff.
+Without Bulwark it's a flat tax rather than a decision.
 
-Two things 4A leaves for 4B specifically:
-- **Replace the neon-green placeholder.** It's debug-visible on purpose and
-  shares a colour family with Caustic Cloud (`#c9ff8a`) — fine while it's
-  obviously temporary, wrong as shipped art.
-- **The top colour bucket now doubles as a scarred-ground signature**,
-  while Decision 46 renders coagulants in that same bucket. Probably a
-  legibility win, but worth a deliberate look when the palette is reworked.
+**Ends in a playtest gate**, and it's the phase where the design's riskiest
+open question gets prototyped: **does calcified tissue block projectiles?**
+(open question 4 — high impact, would differentiate whole weapon families
+and revive the parked Scalpel/Lance, but a crust that neutralises your main
+weapon could feel awful).
 
-### Phase 4A — done, for reference
+**The standing risk to watch:** §7's counters — penetration, range — are
+Phase 5/6 gems that still don't exist. 4A was tuned gently for exactly this
+reason. 4C adds *armoured* enemies on top of that, so it is the point where
+"the scar ring might feel oppressive" (the design record's own risk #4)
+actually gets tested.
 
-The scoping conversation and a full as-built delta (four constants and two
+### Phases 4A / 4B — done, for reference
+
+4A's scoping conversation and as-built delta (four constants and two
 formula shapes changed during implementation, all found by running the
 game) are in `docs/plans/phase-4a-maturity.md`; the debugging account is in
-`docs/sessions/2026-08-07-phase-4a-maturity.md`.
+`docs/sessions/2026-08-07-phase-4a-maturity.md`. 4B's plan and its single
+as-built delta are in `docs/plans/phase-4b-two-axis-visuals.md`.
 
 ### Standing rule — go phase by phase
 
@@ -78,8 +90,8 @@ Full detail in the session record §17.
 | Phase | Content |
 |---|---|
 | **3A–3D** | ✅ Complete — teardown, Infection Events, Coagulants Wave 1, XP economy |
-| **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay, resistance/regrowth/ceiling effects, placeholder visual |
-| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture → **next up** |
+| **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay, resistance/regrowth/ceiling effects |
+| **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse and `frozen` visual both fixed |
 | **4C** | Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark → **playtest gate** |
 | **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
@@ -120,8 +132,8 @@ the phase that absorbs each.
 | **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — **killed at the root** by Decision 40: weapon *level* cards stop existing, so the failure mode has nowhere to live |
 | **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. | Phase 5/6 — Ward becomes a gem |
 | **Frost Nova's ring is nearly invisible.** 3px stroke, 0.4s life on a 3.6s cooldown (~11% uptime), fading alpha, low-contrast `#bfe9ff`. Also an expectation gap: it reads as an "aura" but is coded as an instantaneous pulse. | Phase 9 |
-| **Frozen cells have no visual at all.** Confirmed by grep — zero references to `frozen` in `src/render/` or `grid/slimeLayer.ts`. A 2-second growth-suppression mechanic the player can never see. **This is the precedent that forced 4A to ship a placeholder rather than shipping blind** (Decision 63) — it has now sat unfixed across three phases. | Phase 4B — **next up** |
-| **Density palette collapses.** 5 buckets read as ~3: `#5c2430`/`#8a2f42` are both dark maroons, `#ff3f68`/`#ff7590` both bright pinks. Matters because density drives a ~10× resistance swing — it's a tactical readout the player can't read. | Phase 4B — **next up**, same code as the two-axis system |
+| ~~**Frozen cells have no visual at all.**~~ ✅ **Fixed in Phase 4B** (Decision 66) — now a `#bfe9ff` rim, reusing Frost Nova's existing colour. Open since Phase 2; it was the precedent that forced 4A to ship a placeholder rather than shipping blind. | ✅ Done |
+| ~~**Density palette collapses.**~~ ✅ **Fixed in Phase 4B** (Decision 66). The cause turned out to be uneven *spacing*, not bad hues — density now rides evenly-stepped alpha, so recollapse is structurally impossible and mechanically tested. | ✅ Done |
 | **Screen shake fires only on contact damage.** Nothing else in the game shakes. | Phase 9 |
 | **`pickThree` uses a biased shuffle** — `sort(() => Math.random() - 0.5)` is not a uniform permutation, so card appearance rates are skewed. | Phase 5 |
 
@@ -176,6 +188,23 @@ with emergent pressure plus a terminal phase (Decision 34). The plateau
 still needs solving — Decision 35's currency model depends on runs
 actually ending — it just isn't solved by extending the tier curve any
 more.
+
+### 🟢 Scarring may want its own colour, not the clay/bone ramp
+*Project owner, 2026-08-07, on accepting the Phase 4B palette: "I think
+scars will have to have a different colour, but we will see later."*
+
+The shipped maturity ramp (hot pink → coral → clay → bone) reads correctly
+as "drying and hardening," and the owner accepted it — but scarring
+specifically may want to be more distinct rather than sitting on a
+continuum with fresh slime.
+
+Constraints if this is revisited: it has to stay legible against **cleared
+black ground**, since that's where most scarring lives (Decision 66's 64%
+figure), and it must not collide with the colours already spoken for —
+cyan (tower/gems/UI), yellow-green (Caustic Cloud), purple (chain), orange
+(missile), pale blue (frost/frozen rim). Cheap to change now that the whole
+palette is one file (`src/tuning/palette.ts`) with invariant tests around
+it. Natural companion to the Phase 9 visual overhaul.
 
 ### 🟢 `.nvmrc` and the installed Node disagree
 `.nvmrc` pins 22.12.0; the work machine runs 24.19.0. `package.json`

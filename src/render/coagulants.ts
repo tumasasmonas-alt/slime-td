@@ -1,6 +1,6 @@
 import type { Coagulant, GameState } from '../state';
-import { BUCKET_COLORS } from '../grid/grid';
 import { FORMATION_RISE_DURATION } from '../tuning/coagulants';
+import { MATURITY_COLORS } from '../tuning/palette';
 import { clamp } from '../util/math';
 
 const HIGHLIGHT_COLOR = 'rgba(255,255,255,0.18)';
@@ -35,7 +35,10 @@ function drawBlob(ctx: CanvasRenderingContext2D, c: Coagulant, time: number): vo
   const drawRadius = c.radius * riseProgress;
   if (drawRadius <= 0) return;
 
-  const color = BUCKET_COLORS[5]!; // brightest bucket — coagulants are always the densest slime in the game
+  // Freshest maturity, full alpha — the brightest, densest slime in the
+  // game (Decision 46). Phase 4B: sourced from the two-axis palette
+  // (tuning/palette.ts) rather than a flat bucket list.
+  const color = `rgb(${MATURITY_COLORS[0]})`;
   ctx.save();
   ctx.globalAlpha = 0.3 + 0.7 * riseProgress;
   ctx.fillStyle = color;

@@ -1,5 +1,5 @@
 import type { Grid, SlimeLayer } from '../state';
-import { BUCKET_COLORS } from './grid';
+import { BARE_SCAR_ALPHA, DENSITY_ALPHA, FROZEN_RIM_COLOR, MATURITY_COLORS } from '../tuning/palette';
 
 export function initSlimeLayer(grid: Grid): SlimeLayer {
   const canvas = document.createElement('canvas');
@@ -9,6 +9,8 @@ export function initSlimeLayer(grid: Grid): SlimeLayer {
   if (!ctx) throw new Error('2D canvas rendering context is unavailable');
   return { canvas, ctx };
 }
+
+const FROZEN_RIM_WIDTH = 1.5;
 
 // Repaints only the cells marked dirty since the last call, rather than
 // the whole grid every frame — cheap enough to run every simulation tick.
@@ -20,29 +22,15 @@ export function initSlimeLayer(grid: Grid): SlimeLayer {
 // at every realistic size, since clearRect still has to run per cell
 // regardless (this layer only repaints what changed — clearing the whole
 // canvas would erase untouched cells' content).
-// Phase 4A placeholder for maturity — deliberately, unmistakably crude:
-// neon green, a colour that appears nowhere else in the game, so there's no
-// chance of mistaking a debug overlay for finished art. The real two-axis
-// system (density -> thickness, maturity -> colour/texture) is Phase 4B.
-// Without *something* on screen the scar ring can't be playtested at all,
-// which is the same mistake `frozen` already made (docs/BACKLOG.md).
 //
-// The first attempt was a black overlay at low alpha, and it was invisible
-// for a measurable structural reason rather than a tuning one: scarring
-// concentrates exactly where the player clears, and cleared cells have
-// growth bucket 0 — no slime circle drawn under them. Measured on a
-// max-weapons run, **64% of all scarred cells sat on bucket-0 ground**, so
-// most of the overlay was black drawn on black. The rest was dark-on-dark
-// maroon and barely better. A placeholder has to be legible against the
-// empty background, not just against slime.
-//
-// Drawn even where growth is 0, on purpose — maturity outlives the density
-// that earned it (Decision 25), so a cleared-but-scarred cell should still
-// read as scarred ground, matching "the arena is a legible record of the
-// run."
-const MATURITY_PLACEHOLDER_COLOR = '57,255,20'; // neon green, rgb components
-const MATURITY_OVERLAY_ALPHA_STEP = 0.3;
-
+// Phase 4B (Decisions 66/67): density and maturity compose into one fill —
+// density picks the alpha (thickness), maturity picks the colour
+// (hardness) — replacing Phase 4A's neon-green maturity placeholder.
+// Frozen draws as a rim on top, never a fill, so it can't compete with
+// either axis (tuning/palette.ts). Bare scarred ground (no slime, but
+// maturity > 0) still draws at a low alpha — maturity outlives the density
+// that earned it (Decision 25), so a cleared-but-scarred cell reads as
+// scarred ground, matching "the arena is a legible record of the run."
 export function flushDirtyCells(grid: Grid, layer: SlimeLayer, dirty: Set<number>): void {
   if (dirty.size === 0) return;
   const r = grid.cellSize * 0.62;
@@ -51,20 +39,30 @@ export function flushDirtyCells(grid: Grid, layer: SlimeLayer, dirty: Set<number
     const cy = Math.floor(i / grid.cols);
     const px = cx * grid.cellSize;
     const py = cy * grid.cellSize;
+    const cxWorld = px + grid.cellSize / 2;
+    const cyWorld = py + grid.cellSize / 2;
     layer.ctx.clearRect(px - 1, py - 1, grid.cellSize + 2, grid.cellSize + 2);
+
     const bucket = grid.bucket[i]!;
+    const matBucket = grid.matBucket[i]!;
     if (bucket > 0) {
       layer.ctx.beginPath();
-      layer.ctx.fillStyle = BUCKET_COLORS[bucket]!;
-      layer.ctx.arc(px + grid.cellSize / 2, py + grid.cellSize / 2, r, 0, Math.PI * 2);
+      layer.ctx.fillStyle = `rgba(${MATURITY_COLORS[matBucket]},${DENSITY_ALPHA[bucket]})`;
+      layer.ctx.arc(cxWorld, cyWorld, r, 0, Math.PI * 2);
+      layer.ctx.fill();
+    } else if (matBucket > 0) {
+      layer.ctx.beginPath();
+      layer.ctx.fillStyle = `rgba(${MATURITY_COLORS[matBucket]},${BARE_SCAR_ALPHA[matBucket]})`;
+      layer.ctx.arc(cxWorld, cyWorld, r, 0, Math.PI * 2);
       layer.ctx.fill();
     }
-    const matBucket = grid.matBucket[i]!;
-    if (matBucket > 0) {
+
+    if (grid.frozen[i]! > 0) {
       layer.ctx.beginPath();
-      layer.ctx.fillStyle = `rgba(${MATURITY_PLACEHOLDER_COLOR},${matBucket * MATURITY_OVERLAY_ALPHA_STEP})`;
-      layer.ctx.arc(px + grid.cellSize / 2, py + grid.cellSize / 2, r, 0, Math.PI * 2);
-      layer.ctx.fill();
+      layer.ctx.strokeStyle = FROZEN_RIM_COLOR;
+      layer.ctx.lineWidth = FROZEN_RIM_WIDTH;
+      layer.ctx.arc(cxWorld, cyWorld, r, 0, Math.PI * 2);
+      layer.ctx.stroke();
     }
   }
   dirty.clear();

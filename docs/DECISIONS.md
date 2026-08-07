@@ -1383,6 +1383,85 @@ habitat is cleared ground, so that is what it had to be readable against.
 
 ---
 
+## Phase 4B — the two-axis visual system
+
+> Decisions 66–67 came out of the 2026-08-07 session that planned and built
+> Phase 4B. Plan and scope conversation:
+> **`docs/plans/phase-4b-two-axis-visuals.md`**. The design they implement
+> is §6 of the 2026-08-05 record.
+
+**66. Density and maturity render on two independent perceptual channels —
+alpha and hue — and calcified ground is pale, not dark.** ✅
+*2026-08-07.* §6 promised "5 density steps × 4 maturity steps = 20 states,
+none hand-authored." Delivered as: **density → alpha** (on a black
+background alpha *is* thickness, which is §6's "opacity, mass" directly),
+**maturity → hue/saturation** on a pink → coral → clay → bone ramp. The
+channels stay strictly separated, which §6 is emphatic about — bleed them
+and 20 states read worse than 5.
+
+**The collapse bug was fixed by construction, not by picking better
+colours.** The old `BUCKET_COLORS` read as ~3 buckets instead of 5 because
+its steps were *unevenly spaced* (two dark maroons, two bright pinks), not
+because the hues were wrong. Moving density onto evenly-stepped alpha means
+the ramp cannot collapse again regardless of what colour rides on top — and
+unlike a hand-picked hex list, that is testable, which is now guarded.
+
+**Calcified is pale — a deliberate supersession of §6**, made on the
+project owner's instruction and recorded per the ground-truth protocol
+(#22). §6 says *"Mature = dark, desaturated"* with a table reading *"Dark
+thick crust — the worst ground in the game."* Three reasons pale wins, the
+first being evidence §6 could not have had:
+
+1. **Dark rebuilds the bug Phase 4A shipped with.** Measured at the time:
+   **64% of all scarred cells sit on *cleared* ground**, which is black.
+   That is exactly why 4A's dark placeholder was invisible. "Mature = dark"
+   reproduces that failure at ship quality.
+2. **§7 needs scarring legible on bare ground** — it wants the arena to be
+   *"a legible record of the run"* where a veteran reads a screenshot and
+   knows how long it's been going. Tree rings require reading scar on
+   cleared ground.
+3. **§6 is arguably self-inconsistent** — it also specifies
+   *"crystalline/plated at the top,"* which reads pale and mineral.
+
+**Two supporting rules:**
+
+- **Bare scarred ground draws below the thinnest slime alpha.** Terrain can
+  never read as "more" than actual tissue; it is ground, not growth. This
+  is what replaces 4A's neon-green placeholder and makes tree rings legible.
+- **`frozen` renders as a rim, never a fill**, so it cannot compete with
+  either axis, and reuses Frost Nova's existing `#bfe9ff` rather than
+  introducing a fourth colour language. This also closes a bug open since
+  Phase 2 — the precedent that forced 4A to ship a placeholder (#63).
+
+Palette moved to its own `src/tuning/palette.ts`; `BUCKET_COLORS` deleted
+rather than left as a dead export, and coagulants now source
+`MATURITY_COLORS[0]` — fresh slime at full density, which is exactly what
+#46 says they are.
+
+**67. Anything feeding the rendered colour must be quantized, and mark
+cells dirty only on a *quantized* change.** 📋 ✅
+*2026-08-07, generalised from three applications.* The slime layer repaints
+only dirty cells, which is what keeps it at microseconds instead of
+milliseconds. Any continuous value wired into the render therefore has to
+be bucketed first, or the dirty set silently becomes the whole grid every
+tick and the optimisation evaporates.
+
+Applied three times now, each a different shape of the same rule:
+
+- **`growth` → `bucket`** (5 steps) — the original, from the port.
+- **`maturity` → `matBucket`** (4 steps, #63) — the case that made the rule
+  explicit, since maturity decays on *every cell every tick*.
+- **`frozen` → a boolean** (#66) — quantization can be as coarse as
+  "nonzero," and then only the two transitions (freeze, thaw) mark dirty. A
+  cell counting down mid-freeze marks nothing, and an AoE freeze re-hitting
+  already-frozen cells marks nothing.
+
+The rule is worth stating separately from any one mechanic because the next
+field state added to the render will need it too, and the failure mode is
+quiet: correct output, gradually worse frame time.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

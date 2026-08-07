@@ -87,6 +87,32 @@ describe('applyAmbientGrowth — outside the safe radius', () => {
     // growth for that cell — growth only resumes on the tick after.
     expect(grid.growth[0]).toBe(0);
   });
+
+  describe('frozen dirty-marking (Phase 4B, Decision 66)', () => {
+    it('does not mark a cell dirty while merely counting down', () => {
+      const grid = makeTestGrid();
+      grid.frozen[0] = 0.3;
+      const tower = makeTower();
+      const dirty = new Set<number>();
+
+      applyAmbientGrowth(grid, tower, 1, 0.18, dirty);
+
+      expect(grid.frozen[0]).toBeGreaterThan(0); // still frozen
+      expect(dirty.has(0)).toBe(false);
+    });
+
+    it('marks a cell dirty on the exact tick it thaws, so the rim can be erased', () => {
+      const grid = makeTestGrid();
+      grid.frozen[0] = 0.1; // expires within one 0.18s tick
+      const tower = makeTower();
+      const dirty = new Set<number>();
+
+      applyAmbientGrowth(grid, tower, 1, 0.18, dirty);
+
+      expect(grid.frozen[0]).toBe(0);
+      expect(dirty.has(0)).toBe(true);
+    });
+  });
 });
 
 describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {

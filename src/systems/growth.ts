@@ -42,7 +42,12 @@ export function applyAmbientGrowth(
       const i = cy * grid.cols + cx;
       const frozen = grid.frozen[i]!;
       if (frozen > 0) {
-        grid.frozen[i] = Math.max(0, frozen - dt);
+        const newFrozen = Math.max(0, frozen - dt);
+        grid.frozen[i] = newFrozen;
+        // Phase 4B: frozen renders as a rim (grid/slimeLayer.ts) — mark
+        // dirty only on the thaw transition, so the rim gets erased,
+        // rather than every tick of the countdown.
+        if (newFrozen === 0) dirty.add(i);
         continue;
       }
       const wx = cx * grid.cellSize + grid.cellSize / 2;

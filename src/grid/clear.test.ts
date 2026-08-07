@@ -146,6 +146,30 @@ describe('clearAt', () => {
     expect(state.grid.frozen[farIdx]).toBe(0);
   });
 
+  describe('frozen dirty-marking (Phase 4B, Decision 66)', () => {
+    it('marks a cell dirty the tick it newly freezes, so the rim can be drawn', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const idx = 10 * state.grid.cols + 10;
+
+      clearAt(state, 105, 105, 10, { radiusPx: 5, freezeDuration: 1.5 });
+
+      expect(state.dirty.has(idx)).toBe(true);
+    });
+
+    it('does not re-mark a cell dirty on a second hit while already frozen', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const idx = 10 * state.grid.cols + 10;
+      clearAt(state, 105, 105, 10, { radiusPx: 5, freezeDuration: 1.5 });
+      state.dirty.clear();
+
+      clearAt(state, 105, 105, 10, { radiusPx: 5, freezeDuration: 1.5 });
+
+      expect(state.dirty.has(idx)).toBe(false);
+    });
+  });
+
   describe('maturity (Phase 4A, Decision 25/63)', () => {
     it('scars what it clears — a hit raises the maturity of the cells it touches', () => {
       const state = freshState();

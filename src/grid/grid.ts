@@ -45,18 +45,6 @@ export function worldToCell(grid: Grid, x: number, y: number): { cx: number; cy:
   };
 }
 
-// Density buckets 0-5 map to these slime colors — sparse tissue starts
-// dark maroon, mature tissue brightens toward hot pink. Preserve exactly;
-// see "Palette" in archive/PROTOTYPE_HANDOFF.md.
-export const BUCKET_COLORS: readonly string[] = [
-  'transparent',
-  '#5c2430',
-  '#8a2f42',
-  '#c23a5a',
-  '#ff3f68',
-  '#ff7590',
-];
-
 // i is always produced by gIdx()/worldToCell() and therefore always
 // in-bounds for this grid — the `!` assertions below encode that
 // invariant rather than masking a real out-of-bounds case.
