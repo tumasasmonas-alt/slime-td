@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { COAGULANT_ARMOR_FLOOR } from '../tuning/coagulants';
+import { COAGULANT_XP_RISK_PREMIUM, GEM_SHOWER_MAX_COUNT, gemValueFromRemoved } from '../tuning/xp';
 import { clearAt } from './clear';
 
 function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
@@ -239,6 +240,36 @@ describe('clearAt', () => {
 
       expect(removed).toBeGreaterThan(0);
       expect(state.gems.length).toBeGreaterThan(0);
+    });
+
+    it('applies the coagulant XP risk premium (Phase 3D, Decision 61) on a coagulant-only kill', () => {
+      const state = freshState();
+      state.grid = makeTestGrid(); // empty grid — nothing but the coagulant to hit
+      // Large enough that the premium survives Math.round rather than
+      // getting lost in it at trivial removed amounts.
+      state.coagulants = [makeCoagulant({ mass: 200, radius: 15 })];
+
+      const removed = clearAt(state, 105, 105, 5000, { radiusPx: 50 });
+
+      const totalGemXp = state.gems.reduce((sum, g) => sum + g.xp, 0);
+      // With the grid empty, totalRemoved === coagulantRemoved, so the
+      // whole removed amount carries the premium — matching what
+      // grid/clear.ts computes internally.
+      expect(totalGemXp).toBe(gemValueFromRemoved(removed * (1 + COAGULANT_XP_RISK_PREMIUM)));
+      expect(totalGemXp).toBeGreaterThan(gemValueFromRemoved(removed)); // more than the no-premium value
+    });
+
+    it('showers into multiple gems, capped at GEM_SHOWER_MAX_COUNT, when a large coagulant kill crosses the shower unit', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ mass: 200, radius: 15 });
+      state.coagulants = [c];
+
+      clearAt(state, 105, 105, 5000, { radiusPx: 50 });
+
+      expect(c.mass).toBe(0);
+      expect(state.gems.length).toBeGreaterThan(1);
+      expect(state.gems.length).toBeLessThanOrEqual(GEM_SHOWER_MAX_COUNT);
     });
 
     it('splatters a small fixed bonus and leaves the body dead once a hit brings mass to 0', () => {

@@ -1203,6 +1203,93 @@ gathered, the platform did not actually cause.
 
 ---
 
+## Phase 3D — the XP economy
+
+> Decisions 61–62 came out of the 2026-08-07 session, which implemented
+> Phase 3D and closed Phase 3. Full reasoning, including the premise
+> correction that reshaped 61's second half, is in
+> **`docs/sessions/2026-08-07-xp-economy.md`**.
+
+**61. The XP economy's pacing lever is what a level *costs*, never what a
+kill *grants*.** ✅
+*2026-08-07.* Decision 31 said the level curve goes superlinear and left
+the shape open. The project owner supplied the governing principle:
+*"balance the levels not by how much XP is given, but by how much XP is
+needed to level up."*
+
+**This is load-bearing, not stylistic.** Granted XP must stay honest to
+destroyed mass or Decision 31's anti-farming guarantee collapses — the
+moment grant value becomes a tunable pacing dial, "which mass is worth
+more" becomes a strategy, and deliberately letting the field mature to
+farm behemoths becomes optimal play. Putting the entire pacing lever on
+*cost* leaves the grant side physically honest. Four parts:
+
+**(a) `xpToNext` is quadratic**, `12 + 6.5·L + 0.45·L²`. Identical to the
+old linear curve at level 1 by construction, so §12's intended early rush
+(soft slime → wide `clearAt` radius → fast early XP) is untouched; it bends
+from there — ~1.6× the old cost by level 10, ~2.3× by level 20. Geometric
+(`base · rᴸ`) was the alternative, rejected for hard-coupling the whole
+curve to one growth constant where quadratic gives one legible coefficient.
+
+**(b) The risk premium is 15%**, applied to **only the coagulant share** of
+a `clearAt` call's removed mass. Decision 31 floated 25–50%; the owner went
+lower, correctly — the farming failure mode gets worse the higher this
+goes, and the honest-grant rule above removes every alternative defence
+against it. `clearAt` now tracks `coagulantRemoved` alongside
+`totalRemoved`, exactly as Decision 42 anticipated (*"one multiplier on the
+coagulant portion"*); `totalRemoved` stays the honest physical figure its
+return value and the gem-drop threshold use.
+
+**(c) Gem showers are a rate limiter, not juice.** The problem the owner
+named — *"one behemoth kill can cause 3 level ups"* — cannot be fixed by
+the curve alone: at low level a threshold is ~19–30 XP while a behemoth
+pays hundreds, and no plausible curve closes that. The fix was already in
+§12 unrecognised: **gems are the XP delivery mechanism, and delivery takes
+time.** A behemoth dying 600px out showers gems that drift in over several
+seconds, so XP arrives as a stream and the level-ups spread themselves
+rather than stacking into one modal queue. `dropGemShower` splits large
+values into up to `GEM_SHOWER_MAX_COUNT` gems.
+
+**Per-gem drift jitter (`Gem.driftJitter`) is required, not decorative** —
+without it a behemoth killed *at the perimeter* has no drift distance and
+its whole shower lands simultaneously, reintroducing the clump in the exact
+case where it matters most. Each shower gem samples its own 0.7–1.3× speed
+multiplier; ordinary single drops default to 1 and are unaffected.
+
+**(d) No fast first level.** `freshState()`'s hardcoded `xpToNext: 10` —
+prototype parity that bypassed the formula for level 1 only — is removed;
+level 1 comes from the curve like every other level.
+
+**Deliberately not done:** removing the modal pause on level-up. That is
+the real fix if showers prove insufficient, but it belongs with Phase 5's
+card-pool restructure rather than being pre-empted here.
+
+**62. Behemoth formation stays ungated — the "behemoths too early"
+question is deferred until the full system set exists.** 📋
+*2026-08-07.* The owner reported that an early-run behemoth is
+unstoppable, and it's a real observation: a vein injects mass far faster
+than ambient growth, so it can manufacture a dense enough patch to spark
+one early.
+
+**Raised as a conflict rather than implemented**, per the ground-truth
+override protocol (#22). A level- or time-gate on behemoth formation
+contradicts **Rule 4** (#27): size is emergent from available mass, never
+scripted, which is precisely what makes coagulant size *an automatic
+readout of how badly the player is losing*. A spawn gate is the scripted
+difficulty lever the whole rework exists to delete.
+
+Non-scripted levers reaching the same outcome already exist —
+`MASS_BEHEMOTH`, `FORMATION_RADIUS_CAP`, and per #28 the intended one,
+event frequency and reach. It is also possible the previous session's speed
+halving already largely addressed it.
+
+**Owner's call: defer entirely** until the remaining systems (maturity,
+arsenal) exist, since the answer likely changes once the player has real
+counterplay. Recorded so a future session re-derives neither the problem
+nor the objection. See BACKLOG.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

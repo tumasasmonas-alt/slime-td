@@ -5,8 +5,8 @@ import {
   COAGULANT_DAMAGE_SCALE,
   COAGULANT_RESISTANCE,
 } from '../tuning/coagulants';
-import { gemValueFromRemoved } from '../tuning/xp';
-import { dropGem } from '../systems/gems';
+import { COAGULANT_XP_RISK_PREMIUM, gemValueFromRemoved } from '../tuning/xp';
+import { dropGemShower } from '../systems/gems';
 import { splatterOnDeath } from '../systems/coagulants';
 import { spawnParticles } from '../systems/particles';
 import { cellBucket, gIdx, worldToCell } from './grid';
@@ -41,6 +41,10 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   const radiusCells = Math.max(1, Math.round(radiusPx / grid.cellSize));
   const freezeDuration = opts.freezeDuration ?? 0;
   let totalRemoved = 0;
+  // Tracked separately so only this portion carries the risk premium into
+  // XP (Decision 31/61) — totalRemoved itself stays the honest physical
+  // mass-removed figure the return value and the gem-drop threshold use.
+  let coagulantRemoved = 0;
 
   for (let oy = -radiusCells; oy <= radiusCells; oy++) {
     const gy = cy + oy;
@@ -95,12 +99,17 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     if (removeAmt <= 0) continue;
     c.mass -= removeAmt;
     totalRemoved += removeAmt;
+    coagulantRemoved += removeAmt;
     if (c.mass <= 0) splatterOnDeath(state, c);
   }
 
   if (totalRemoved > GEM_DROP_THRESHOLD) {
-    const xpVal = gemValueFromRemoved(totalRemoved);
-    if (xpVal >= 1) dropGem(state, x + rand(-10, 10), y + rand(-10, 10), xpVal);
+    // Risk premium applies only to the coagulant share of what was
+    // removed this hit — a horde kill pays a little more per unit mass
+    // than the same mass cleared loose in the field (Decision 31/61).
+    const xpBasis = totalRemoved + coagulantRemoved * COAGULANT_XP_RISK_PREMIUM;
+    const xpVal = gemValueFromRemoved(xpBasis);
+    if (xpVal >= 1) dropGemShower(state, x + rand(-10, 10), y + rand(-10, 10), xpVal);
     spawnParticles(state, x, y, '#ff5d8a', Math.min(10, Math.round(totalRemoved * 3)), 70);
   }
   return totalRemoved;

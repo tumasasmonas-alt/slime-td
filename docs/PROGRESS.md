@@ -48,32 +48,30 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-06 (post-3C playtest — first round of fixes in,
-second playtest promising)
+**Last updated:** 2026-08-07 (Phase 3D shipped — **Phase 3 is complete**)
 
-**The rework's identity change is built and has survived two playtests.**
-Phases 3A (teardown), 3B (Infection Events), and 3C (Coagulants Wave 1) are
-built and tested; the first playtest of 3C found four real bugs (coagulant
-insta-formation, a vein reaching the core, slime speed, a 5–10fps stretch),
-all now fixed (Decisions 54–59), plus a direct question about whether the
-browser was the wrong platform (answered no — Decision 60, staying on
-Canvas 2D). A second playtest on the fixed build read as "nice" but still
-too fast at the very start, so `AMBIENT_BASE`/`CREEP_RAMP` and the
-coagulant speed constants were both cut a second time (Decision 57).
-**Balance itself is explicitly not yet gradeable** — the project owner's
-own observation: there's no arsenal to tune pacing against yet (Phase
-5/6), so every number here is still a playability floor, not a tuned
-result.
+**Phase 3 is done, end to end, and playtested.** 3A (teardown), 3B
+(Infection Events), 3C (Coagulants Wave 1) and 3D (XP economy) are all
+built, tested, and confirmed in play by the project owner — verdict on the
+3D build: *"it plays much better now."* The 3C playtest gate produced one
+round of real fixes (Decisions 54–59) plus a platform question answered no
+(Decision 60, staying on Canvas 2D); 3D then closed the reward economy
+(Decision 61).
+
+**Balance itself is still explicitly not gradeable** — the owner's own
+scoping: weapon damage numbers, slime speed and overall game feel need the
+remaining systems in place before they can be tuned honestly. That is
+Phase 8 (Decision 13's supersession), not a reason to reorder anything.
 
 | | |
 |---|---|
-| Tests | 231 passing (32 test files) — one known flake, see BACKLOG |
+| Tests | 241 passing (32 test files) — one known flake, see BACKLOG |
 | Source | 61 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main` |
-| Code state | **Phases 3A–3C complete**, plus a first round of playtest fixes on top of 3C. Everything past this gate (3D onward) is still design-only. |
-| Blockers | **None hard.** The real balance pass still waits on the arsenal (Phase 5/6) existing to tune against — see BACKLOG. |
+| Code state | **Phase 3 complete (3A–3D).** Phase 4 onward is still design-only. |
+| Blockers | **None.** Next is Phase 4A (maturity), linearly. |
 
 **What works today:** the horde-economy loop, end to end, playtested
 twice. Infection grows as a density field across a **fixed perimeter**,
@@ -106,40 +104,50 @@ and coagulant speed were cut a second time (Decision 57's second half).
 
 ### ⚠️ Read this before writing any code
 
-**Nothing should be built past this point until the arsenal exists to
-balance against.** The 3C playtest gate found real bugs, not a verdict on
-numbers — the project owner's own read is that pacing can't be honestly
-tuned with only the starting weapon and no arsenal (Phase 5/6) to test
-against. The next phase (3D, XP economy — mostly already pulled forward
-into 3C, see below) is small; 4A (maturity) is not, and building terrain
-on top of an unverified horde is exactly the ordering mistake Decision 36
-already argued against once.
+**Go phase by phase. Don't skip ahead.** This was settled explicitly on
+2026-08-07, when the previous session's docs and the plan of record
+disagreed about whether to jump to the arsenal. The owner's rule, which is
+a sharper statement of the design principle than the design record itself
+manages:
+
+> **Don't add answers that there are no questions for yet.**
+
+**Phase 4 adds questions** (armor, penetration, range-vs-callus, the whole
+maturity axis). **Phases 5/6 add answers** (gems, extensions, 20 weapons).
+Building answers before the questions exist means authoring content against
+a threat model that isn't there — which §13 of the design record already
+warns against, and which is the same ordering mistake Decision 36 argued
+down once before.
 
 The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
-gem system, and the tier table is demoted to flavour. **Phases 3A, 3B, and
-3C are done, and have been through one playtest-and-fix round.**
+gem system, and the tier table is demoted to flavour. **All of Phase 3 is
+done and playtested.**
 
 **Start here, in order:**
 
 1. **`docs/sessions/2026-08-05-slime-and-arsenal-rework.md`** — *what the
    game is.* The full design, the reasoning, the numbers, and §16 *"Ideas
    considered and rejected"*, which will save re-proposing something
-   already tested and found broken.
+   already tested and found broken. **§4 (the no-aim premise) is the one
+   section to re-read even if you think you know it** — it was violated
+   again on 2026-08-07 and needed correcting.
 2. **`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md`** —
    *how it works.* The layer below: what a coagulant is in code, how
    formation is computed, how armor and the card pool are structured. Also
    has a rejected-ideas table.
-3. **`docs/DECISIONS.md` #23–#60** — the load-bearing calls in short form.
-   23–37 are the design; 38–53 are the mechanism; 54–60 are the first
-   playtest-and-fix round on top of 3C. #47–60 are implementation-time
-   findings, not from either design session — see the notes at the top of
-   each of those sections.
-4. **`docs/BACKLOG.md`** *Now* section — the arsenal (Phase 5/6) is the
-   concrete next step before a real balance pass is possible. 3A/3B/3C's
-   own follow-ups (coral-biased vein geometry, spontaneous coagulation, the
-   orbital trade ship) are noted in *Done* and *Ideas*.
+3. **`docs/sessions/2026-08-07-xp-economy.md`** — Phase 3D, the premise
+   correction, and why behemoth timing was deferred rather than gated.
+4. **`docs/DECISIONS.md` #23–#62** — the load-bearing calls in short form.
+   23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
+   playtest-and-fix round; 61–62 are Phase 3D. #47–62 are
+   implementation-time findings, not from a design session — see the notes
+   at the top of each of those sections.
+5. **`docs/BACKLOG.md`** *Now* section — Phase 4A (maturity) is the
+   concrete next step. Phase 3's own follow-ups (coral-biased vein
+   geometry, spontaneous coagulation, early event frequency, behemoth
+   timing) are in *Ideas* and *Bugs*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -209,6 +217,87 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-07 — Phase 3D: the XP economy. **Phase 3 closes.**
+
+**Implementation, with a short design pass at the front.** Full record:
+**`docs/sessions/2026-08-07-xp-economy.md`**.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Phase 3D — `tuning/xp.ts` (quadratic curve, 15% risk premium, shower constants), `grid/clear.ts` (coagulant-share tracking, shower routing), `systems/gems.ts` (`dropGemShower`, per-gem drift jitter), `state.ts` (`Gem.driftJitter`, fast-first-level shim removed) |
+
+**Discussed**
+
+- **The ordering question got settled permanently, and not the way the
+  previous session left it.** Claude opened with a three-way fork (3D vs.
+  4A/4B vs. jumping to the arsenal), since last session's docs pointed at
+  Phase 5/6 while the plan of record said 3D. **The owner rejected the
+  fork:** *"we shouldn't jump or skip phases, let's be linear, clear and
+  focused. Let's not add answers that there are no questions for yet."*
+  That second sentence is a better statement of the design principle than
+  the design record's own §4 — **Phase 4 adds questions, Phases 5/6 add
+  answers** — and it's now quoted at the top of this file. The owner also
+  clarified that "we can't balance yet" had meant *scope* (weapon damage,
+  slime speed, game feel — Phase 8 work), never *sequencing*.
+- **The owner caught Claude reasoning as though the player aims.** Claude
+  had described stacked level-up cards as landing "right when the arena is
+  most dangerous" — a phrase that only carries weight if the player has
+  moment-to-moment agency being denied. They don't; weapons fire and target
+  themselves, and a modal pause interrupts nothing. Recorded at length in
+  the session file because **the error recurred despite §4 existing
+  specifically to prevent it**, which is the argument for keeping the
+  premise written down rather than assumed. Restating the problem correctly
+  is also what made its fix findable (below).
+- **The curve's shape came with the owner's own reasoning attached:**
+  *"balance the levels not by how much XP is given, but by how much XP is
+  needed to level up."* This is load-bearing rather than stylistic —
+  granted XP has to stay honest to destroyed mass or Decision 31's
+  anti-farming guarantee collapses. Landed on quadratic
+  (`12 + 6.5·L + 0.45·L²`), identical to the old linear curve at level 1
+  so the intended early rush survives, ~2.3× its cost by level 20.
+  Geometric was the alternative, rejected for hard-coupling the curve to
+  one growth constant.
+- **The risk premium landed at 15%, below the 25–50% Decision 31 floated
+  and below Claude's own 25% recommendation.** The owner's instinct was
+  right: the field-neglect farming failure mode gets worse the higher this
+  goes, and the honest-grant rule above deliberately removes every
+  alternative defence against it.
+- **"One behemoth kill can cause 3 level ups" turned out to have its fix
+  already sitting in the plan, unrecognised.** The curve alone can't solve
+  it — at low level a threshold is ~19–30 XP against a behemoth paying
+  hundreds. But §12's two separate notes (gem showers on big kills; gems
+  stay physical and drifting) read together are a **rate limiter**: gems
+  are the XP delivery mechanism and delivery takes time, so a shower
+  arrives as a stream and the level-ups spread themselves. One refinement
+  was genuinely needed on top — per-gem drift jitter, because a behemoth
+  killed *at the perimeter* has no drift distance and would clump anyway,
+  in exactly the case that matters most.
+- **Behemoth timing was raised, pushed back on, and deferred.** The owner
+  reported early-run behemoths as unstoppable; Claude flagged that a
+  level/time gate contradicts Rule 4 (Decision 27), which makes coagulant
+  size an emergent readout of player performance rather than a script, and
+  offered the non-scripted levers instead. **Owner's call: defer until all
+  the systems exist** — *"thank you for reminding and pushing back."*
+  Decision 62. Recorded because the value is in the decision having been
+  *tested* rather than quietly overwritten, which is what Decision 22
+  exists for.
+
+**Decided** — Decisions 61 (XP pacing lives on level cost, never grant
+value; quadratic curve, 15% coagulant-only premium, showers as rate
+limiter, no fast first level) and 62 (behemoth formation stays ungated,
+question deferred).
+
+**Verified**: 241/241 tests passing (up from 231 — 10 new covering the
+curve's *shape* rather than its coefficients, the premium's coagulant-only
+scope, and shower splitting/capping/conservation/jitter), typecheck and
+build clean. **Playtested by the owner: "it plays much better now."**
+
+**Planned** — **Phase 4A, the maturity field.** Phase 3 is closed. One new
+item from the 3D playtest went to BACKLOG rather than being fixed here:
+infection events fire too often at the start of a run.
 
 ### 2026-08-06 (post-3C playtest) — Pacing fixes, a lag investigation, and the browser-viability question
 
@@ -803,28 +892,29 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: the arsenal (Phase 5/6) — not another pacing pass.** Phases 3A,
-3B, and 3C shipped 2026-08-06 and have now been through one full
-playtest-and-fix round (also 2026-08-06 by the owner's dating, second
-playtest 2026-08-07 — see the *Session log* entry above). The project
-owner's own read after the second playtest: pacing genuinely cannot be
-balanced further with only the starting weapon and no arsenal to build
-against, so the honest next step is Phase 5/6, not more tuning on the
-current one-weapon loadout.
+**Next: Phase 4A, the maturity field. Phase 3 is complete.** 3A/3B/3C
+shipped 2026-08-06 (plus a playtest-and-fix round), 3D on 2026-08-07 —
+see the *Session log* above.
 
-The design is settled end to end, and as of 2026-08-06 so is the
-mechanism — all the way through the horde's first playable form. Full
-detail in the 2026-08-05 record §17; the concrete next step is in
-`docs/BACKLOG.md`'s *Now* section.
+**Go linearly.** Settled 2026-08-07: no skipping ahead to the arsenal.
+Phase 4 adds the *questions* (armor, penetration, range-vs-callus); Phases
+5/6 add the *answers*. Content authored before its threat model exists is
+the ordering mistake §13 and Decision 36 both warn about.
+
+The design is settled end to end and so is the mechanism, all the way
+through the horde's first playable form. Full detail in the 2026-08-05
+record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 
 | Phase | Content |
 |---|---|
 | **3A** | ✅ Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
 | **3B** | ✅ Infection Events — vein (acts on density) + bloom (acts on maturity — payload deferred to 4A), full lifecycle |
-| **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth. **First playtest-and-fix round done** (Decisions 54–60); pacing is a floor, not a tuned result — real balance waits on the arsenal. |
-| **3D** | XP economy — mass-based (value cap removal already pulled into 3C), superlinear curve, gem showers, risk premium → **playtest gate** |
-| **4A–4C** | Maturity field · two-axis visuals · Coagulants Wave 2 → **playtest gate** |
-| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved → **next up** |
+| **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth. Playtest-and-fix round done (Decisions 54–60). |
+| **3D** | ✅ XP economy — quadratic level curve, 15% coagulant risk premium, gem showers as rate limiter (Decision 61). Playtested: *"plays much better now."* |
+| **4A** | Maturity field — scar accumulation from `clearAt`, slow age with a low ceiling, decay, cap; effects on clear resistance and regrowth ceiling → **next up** |
+| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture. Fixes the palette collapse. |
+| **4C** | Coagulants Wave 2 — bloom's maturity role activates; Blastoma, Carrier, Sclerotic, Bulwark → **playtest gate** |
+| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase · real balance pass · leaderboard |

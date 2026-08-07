@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freshState } from './state';
+import { xpToNext } from './tuning/xp';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './tuning/world';
 
 describe('freshState', () => {
@@ -9,8 +10,8 @@ describe('freshState', () => {
     expect(state.tower.y).toBe(WORLD_HEIGHT / 2);
   });
 
-  it('starts xpToNext at the prototype\'s literal 10, not the level-up formula', () => {
-    expect(freshState().tower.xpToNext).toBe(10);
+  it('starts xpToNext from the level-up formula, not a fast-first-level special case (Decision 61)', () => {
+    expect(freshState().tower.xpToNext).toBe(xpToNext(1));
   });
 
   it('has no grid yet — built at run start in a later phase', () => {

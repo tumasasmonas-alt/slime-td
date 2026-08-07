@@ -20,33 +20,41 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 The arsenal (Phase 5/6) — the actual next step
+### 🟡 Phase 4A — the maturity field
 
-Phase 3C's playtest gate has now been through one full round: first
-playtest found four real bugs (all fixed, Decisions 54–59), a fifth
-question about the browser as a platform (answered no, Decision 60), and
-a second playtest on the fixed build read as promising but still fast at
-the very start (fixed, Decision 57's second half). See BACKLOG's Done
-section and `docs/PROGRESS.md`'s session log for the full round.
+**Phase 3 is complete** (3A–3D, all playtested; 3D's verdict:
+*"plays much better now"*). Next is Phase 4A, linearly.
 
-**Not blocking, but the honest next step per the project owner's own
-diagnosis:** pacing cannot be meaningfully tuned further with only the
-starting weapon and no arsenal to build against. Further pacing passes on
-the current one-weapon loadout would be guessing. Phase 5 (arsenal
-framework — slots, gems, inventory UI) and Phase 6 (arsenal content, its
-own design session first) are what unblock a real balance pass, not more
-tuning here. The design rework is agreed end to end (DECISIONS.md
-#23–#60). Reasoning lives in three places:
-`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is),
+**Go phase by phase — settled 2026-08-07.** The owner's rule:
+*"don't add answers that there are no questions for yet."* Phase 4 adds
+the questions (armor, penetration, range-vs-callus); Phases 5/6 add the
+answers. Jumping to the arsenal means authoring content against a threat
+model that doesn't exist yet, which §13 of the design record and Decision
+36 both warn against.
+
+4A's content, per the 2026-08-05 record §7 and §17: a `maturity`
+`Float32Array` alongside `growth`; scar accumulation from `clearAt`
+(**you scar what you clear** — the battlefield hardens, the wilderness
+stays soft); a slow age component with a low ceiling (~⅓ of max); passive
+decay when a cell isn't being hit; a cap. Effects: maturity multiplies
+clear resistance, and mature ground regrows *slower to a higher ceiling*
+— a durability threat, not a speed threat, deliberately, since the kill
+zone is the one place the player is forced to fight.
+
+**Read §7 in full before starting** — the first version of this mechanic
+was wrong (age-based), and the reasoning for the inversion is the whole
+point of that section.
+
+Reasoning lives in four places: `docs/sessions/2026-08-05-slime-and-arsenal-rework.md`
+(what the game is — **§4's no-aim premise especially**),
 `docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
-works), and DECISIONS.md #54–60 plus PROGRESS.md's most recent session log
-entry (the first playtest-and-fix round).
+works), `docs/sessions/2026-08-07-xp-economy.md` (Phase 3D), and
+DECISIONS.md #23–#62.
 
 **Still open, not urgent:** whether a behemoth crossing the arena reads as
 dramatic or tedious, and whether the conservation rules feel right in
-practice (motes shouldn't chain into behemoths — Rule 4) — both need more
-playtesting than one round to judge, but neither blocks moving on to the
-arsenal.
+practice (motes shouldn't chain into behemoths — Rule 4). Both need more
+playtesting than we've done to judge; neither blocks 4A.
 
 ### The rest of the phase plan
 
@@ -54,10 +62,10 @@ Full detail in the session record §17.
 
 | Phase | Content |
 |---|---|
-| **3B** | ✅ Infection Events framework — vein + bloom, full lifecycle |
-| **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth → **playtest gate, awaiting the owner** |
-| **3D** | XP economy rework (the value-cap removal already landed in 3C — see BACKLOG Done) → **playtest gate** |
-| **4A–4C** | Maturity field, two-axis visuals, Coagulants Wave 2 → **playtest gate** |
+| **3A–3D** | ✅ Complete — teardown, Infection Events, Coagulants Wave 1, XP economy |
+| **4A** | Maturity field — scar accumulation, slow age, decay, resistance/regrowth effects → **next up** |
+| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture |
+| **4C** | Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark → **playtest gate** |
 | **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |
@@ -107,6 +115,40 @@ is part of the weapon, not polish." Ward Pulse slipped through because
 it's classed as a *passive*, and freeze slipped through because it's a
 *field state*. **The rule should be scoped to any mechanic with a
 world-space effect, not just weapons.**
+
+### 🟡 Infection events fire too often at the start of a run
+*Found in the 2026-08-07 Phase 3D playtest.* The owner's read: the opening
+minute has more veins/blooms than it should. Not fixed in 3D, which was
+deliberately kept to the XP economy only.
+
+The lever is `eventSpawnInterval()` in `tuning/events.ts` — currently a
+straight lerp from `EVENT_INTERVAL_BASE` (26s) down to
+`EVENT_INTERVAL_FLOOR` (10s) over `EVENT_INTERVAL_RAMP_TIME` (420s), plus
+`EVENT_INITIAL_DELAY` (8s) before the first one. Raising the base and/or
+the initial delay is the obvious fix; note per Decision 28 that event
+frequency is *the* single pacing lever the design deliberately concentrates
+everything into, so changes here move the whole game's rhythm, not just
+its opening.
+
+Worth doing alongside the Phase 4C playtest gate rather than alone —
+maturity changes what an early event actually produces.
+
+### 🟡 Behemoths can form too early in a run — deferred by decision
+*Raised by the owner in the 2026-08-07 session; deferred deliberately —
+see DECISIONS.md #62.* An early-run behemoth is effectively unstoppable,
+and a vein injects mass fast enough to manufacture one before the player
+has any answer to it.
+
+**Do not fix this with a level gate or a time gate.** That contradicts
+Rule 4 (Decision 27) — coagulant size is meant to be an emergent readout
+of how badly the player is losing, never a script, and a spawn gate is
+exactly the scripted difficulty lever the rework exists to remove.
+
+Non-scripted levers if it's still a problem later: `MASS_BEHEMOTH`,
+`FORMATION_RADIUS_CAP`, and per Decision 28 event frequency and reach
+(which overlaps with the item above). Revisit once maturity and the
+arsenal exist, since the answer likely changes once the player has real
+counterplay.
 
 ### 🟡 Difficulty plateaus after Apocalypse (t = 560s)
 `tuning/tiers.ts` has five tiers and stops escalating at the last one. A
@@ -276,8 +318,16 @@ minute one. That arithmetic does not change because the trigger is random.
 - A **bias toward distant sites**, so it reads as a long dramatic charge
   rather than an ambush the player could not have anticipated.
 
-Cheap to add once Decision 43's coarse density index exists. Revisit after
-the 3C playtest, when it's clear whether dead air is actually a problem.
+Cheap to add once Decision 43's coarse density index exists.
+
+**Update, 2026-08-07 — the 3C/3D playtests have now happened, and they
+found the opposite problem.** No dead air was reported; the owner's note
+was that events fire *too often* early (see the Bugs section above). So the
+floor this idea exists to provide isn't currently needed, and adding it now
+would push in the wrong direction. Not rejected — the underlying concern
+(timer-driven systems have dead air by construction) is still sound and may
+resurface once event frequency is retuned downward. Just no longer waiting
+on a trigger that has already fired.
 
 ### 💭 "Orbital trade ship" — buying specific gems with score points
 *Raised by the project owner, 2026-08-06.*
@@ -503,3 +553,37 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
   t=1:29 with core integrity still full and two active coagulants on
   screen not threatening the core — a different outcome from the first
   playtest's early death on a comparable loadout.
+
+- **Phase 3D — the XP economy. Phase 3 closes.** *(2026-08-07, Decision
+  61)* The pacing lever for levelling is what a level **costs**, never what
+  a kill **grants** — the project owner's framing, and load-bearing rather
+  than stylistic: granted XP has to stay honest to destroyed mass or
+  Decision 31's anti-farming guarantee collapses the moment "which mass is
+  worth more" becomes tunable. `xpToNext` went quadratic
+  (`12 + 6.5·L + 0.45·L²`), identical to the old linear curve at level 1 so
+  the intended early rush survives, ~2.3× its cost by level 20. The risk
+  premium landed at **15%** — below Decision 31's floated 25–50% and below
+  Claude's own recommendation, because the field-neglect farming failure
+  mode gets worse the higher it goes — and applies to the coagulant share
+  of a hit only, exactly as Decision 42 anticipated.
+
+  **The "one behemoth kill = three level-ups" problem had its fix already
+  in the plan, unrecognised.** The curve alone can't solve it (at low level
+  a threshold is ~19–30 XP against a behemoth paying hundreds), but §12's
+  two separate notes — gem showers on big kills, and gems staying physical
+  and drifting — read together are a *rate limiter*: gems are the XP
+  delivery mechanism and delivery takes time, so a shower arrives as a
+  stream and level-ups spread themselves. One genuine addition on top:
+  per-gem drift jitter, since a behemoth killed *at the perimeter* has no
+  drift distance and would otherwise clump in exactly the case that matters
+  most. The `freshState()` fast-first-level shim (`xpToNext: 10`) is gone.
+
+  241/241 tests passing (up from 231 — 10 new, written against the curve's
+  *shape* rather than its coefficients so a retune doesn't break them),
+  typecheck and build clean. **Playtested by the owner: "it plays much
+  better now."**
+
+  **Deliberately not done:** removing the modal level-up pause (the real
+  fix if showers prove insufficient — belongs with Phase 5's card-pool
+  restructure), and gating behemoth formation (Decision 62, deferred; see
+  Bugs above).

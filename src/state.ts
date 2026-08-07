@@ -1,4 +1,5 @@
 import { EVENT_INITIAL_DELAY } from './tuning/events';
+import { xpToNext } from './tuning/xp';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './tuning/world';
 import type { PassiveKey, WeaponKey } from './types';
 
@@ -127,6 +128,12 @@ export interface Gem {
   y: number;
   xp: number;
   radius: number;
+  // Per-gem drift speed multiplier, sampled once at drop time. Defaults to
+  // 1 (dropGem) so ordinary single-gem drops are unaffected; a shower
+  // (systems/gems.ts's dropGemShower) randomizes it so gems spawned at the
+  // same point and moment separate over their flight instead of arriving
+  // at the core in one simultaneous clump — see Decision 61.
+  driftJitter: number;
 }
 
 export interface NovaFx {
@@ -291,10 +298,11 @@ export function freshState(): GameState {
       maxHp: 100,
       level: 1,
       xp: 0,
-      // Deliberately not xpToNext(1) (which is 19) — the prototype
-      // hardcodes 10 as the level-1 requirement and only switches to the
-      // formula on subsequent level-ups. Preserved for parity.
-      xpToNext: 10,
+      // Level 1 uses the curve like every other level (Decision 61) — no
+      // fast-first-level special case. The prototype hardcoded 10 here and
+      // only switched to the formula on subsequent level-ups; that parity
+      // shim is gone now that the curve itself is the thing being tuned.
+      xpToNext: xpToNext(1),
       shake: 0,
     },
 

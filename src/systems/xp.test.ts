@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freshState } from '../state';
+import { xpToNext } from '../tuning/xp';
 import { grantXp } from './xp';
 
 describe('grantXp', () => {
@@ -13,7 +14,9 @@ describe('grantXp', () => {
 
   it('levels up once and queues exactly one pending level-up', () => {
     const state = freshState();
-    grantXp(state, 10); // freshState() hardcodes 10 as the level-1 requirement
+    // Level 1 comes from the curve like every other level (Decision 61) —
+    // no hardcoded fast-first-level requirement.
+    grantXp(state, xpToNext(1));
     expect(state.tower.level).toBe(2);
     expect(state.tower.xp).toBe(0);
     expect(state.pendingLevelUps).toBe(1);
