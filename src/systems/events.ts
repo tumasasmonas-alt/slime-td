@@ -10,6 +10,8 @@ import type {
 import { cellBucket, gIdx, worldToCell } from '../grid/grid';
 import {
   BLOOM_ACTIVE_RATE,
+  BLOOM_MATURITY_ACTIVE_RATE,
+  BLOOM_MATURITY_PEAK_RATE,
   BLOOM_PEAK_RATE,
   BLOOM_RADIUS,
   EVENT_ACTIVE_DURATION,
@@ -20,11 +22,13 @@ import {
   VEIN_ACTIVE_RATE,
   VEIN_FORMATION_INTERVAL,
   VEIN_PEAK_RATE,
+  VEIN_SPARK_CANDIDATES,
   VEIN_STOP_MARGIN,
   VEIN_WEIGHT,
   VEIN_WIDTH,
   eventSpawnInterval,
 } from '../tuning/events';
+import { MATURITY_MAX, ageFloorAt, maturityBucket } from '../tuning/maturity';
 import { clamp, dist, lerp, pick, rand } from '../util/math';
 import { attemptFormation } from './formation';
 import { generateVeinPath } from './veinPath';
@@ -135,9 +139,47 @@ function bloomInjectionRate(event: BloomInfectionEvent): number {
   return 0;
 }
 
-function applyBloomGrowth(grid: Grid, event: BloomInfectionEvent, dt: number, dirty: Set<number>): void {
-  const rate = bloomInjectionRate(event);
-  if (rate <= 0) return;
+// Phase 4C-1 (Decision 68): bloom's real job, deferred since Phase 3B —
+// "blooms let armour appear mid-field, earlier, as a discrete event"
+// (§11) — rather than every armoured coagulant coming from the ring.
+// Same "read, converge toward a cap, update bucket/dirty" shape as every
+// other injection in this file; a separate function from injectAt purely
+// because it writes a different array with a different cap and its own
+// quantization (Decision 67 — anything feeding the render must be
+// bucketed, or the dirty set silently becomes the whole grid every tick).
+function bloomMaturityRate(event: BloomInfectionEvent): number {
+  if (event.phase === 'active') return BLOOM_MATURITY_ACTIVE_RATE;
+  if (event.phase === 'peak') return BLOOM_MATURITY_PEAK_RATE;
+  return 0;
+}
+
+function injectMaturityAt(
+  grid: Grid,
+  cx: number,
+  cy: number,
+  rate: number,
+  dt: number,
+  dirty: Set<number>,
+  ageFloor: number,
+): void {
+  if (cx < 0 || cx >= grid.cols || cy < 0 || cy >= grid.rows) return;
+  const i = gIdx(grid, cx, cy);
+  const m = grid.maturity[i]!;
+  const newM = Math.min(MATURITY_MAX, m + rate * dt);
+  if (newM !== m) {
+    grid.maturity[i] = newM;
+    const nb = maturityBucket(newM, ageFloor);
+    if (nb !== grid.matBucket[i]) {
+      grid.matBucket[i] = nb;
+      dirty.add(i);
+    }
+  }
+}
+
+function applyBloomGrowth(grid: Grid, event: BloomInfectionEvent, dt: number, dirty: Set<number>, ageFloor: number): void {
+  const densityRate = bloomInjectionRate(event);
+  const maturityRate = bloomMaturityRate(event);
+  if (densityRate <= 0 && maturityRate <= 0) return;
   const radiusCells = Math.ceil(event.radius / grid.cellSize);
   const { cx: ecx, cy: ecy } = worldToCell(grid, event.x, event.y);
   for (let oy = -radiusCells; oy <= radiusCells; oy++) {
@@ -152,7 +194,8 @@ function applyBloomGrowth(grid: Grid, event: BloomInfectionEvent, dt: number, di
       if (d > event.radius) continue;
       // Same falloff shape as the old node influence.
       const falloff = Math.pow(1 - d / event.radius, 1.4);
-      injectAt(grid, cx, cy, rate * falloff, dt, dirty);
+      if (densityRate > 0) injectAt(grid, cx, cy, densityRate * falloff, dt, dirty);
+      if (maturityRate > 0) injectMaturityAt(grid, cx, cy, maturityRate * falloff, dt, dirty, ageFloor);
     }
   }
 }
@@ -204,15 +247,35 @@ function advancePhase(event: InfectionEvent, dt: number): boolean {
   return true;
 }
 
-// Picks a random point along a fully-revealed trunk (peak-only, so this
-// is always safe) — occasionally off a branch instead, so buds show up
-// on the lattice too, not just the spine.
-function randomVeinPoint(event: VeinInfectionEvent): { x: number; y: number } {
-  const useBranch = event.branches.length > 0 && Math.random() < 0.3;
-  const segments = useBranch ? pick(event.branches).segments : event.trunk;
-  const seg = pick(segments);
-  const t = Math.random();
-  return { x: lerp(seg.x1, seg.x2, t), y: lerp(seg.y1, seg.y2, t) };
+// Picks a point along a fully-revealed trunk (peak-only, so this is always
+// safe) — occasionally off a branch instead, so buds show up on the
+// lattice too, not just the spine.
+//
+// Phase 4C-1 (Decision 68): biased toward high-maturity ground rather than
+// picked uniformly — "a vein reaching the scar ring... wakes Sclerotics
+// from the player's own callus" (§11). Samples VEIN_SPARK_CANDIDATES
+// points and keeps whichever sits on the most-scarred cell, rather than
+// always picking the single most-mature point on the whole
+// trunk/branches — still just terrain deciding what burns (§11's
+// organising principle), nudged rather than forced toward the ring.
+function randomVeinPoint(grid: Grid, event: VeinInfectionEvent): { x: number; y: number } {
+  let best = { x: event.trunk[0]!.x1, y: event.trunk[0]!.y1 };
+  let bestMaturity = -1;
+  for (let i = 0; i < VEIN_SPARK_CANDIDATES; i++) {
+    const useBranch = event.branches.length > 0 && Math.random() < 0.3;
+    const segments = useBranch ? pick(event.branches).segments : event.trunk;
+    const seg = pick(segments);
+    const t = Math.random();
+    const x = lerp(seg.x1, seg.x2, t);
+    const y = lerp(seg.y1, seg.y2, t);
+    const { cx, cy } = worldToCell(grid, x, y);
+    const maturity = grid.maturity[gIdx(grid, cx, cy)]!;
+    if (maturity > bestMaturity) {
+      bestMaturity = maturity;
+      best = { x, y };
+    }
+  }
+  return best;
 }
 
 // Phase 3C: coagulant formation is triggered here, and only here — events
@@ -220,13 +283,13 @@ function randomVeinPoint(event: VeinInfectionEvent): { x: number; y: number } {
 // A vein sheds repeatedly across peak ("coagulants bud off along its
 // length," §10); a bloom is one discrete spark, so formationTimer is set
 // to Infinity after its single attempt rather than repeating.
-function updateFormation(state: GameState, event: InfectionEvent, dt: number): void {
+function updateFormation(state: GameState, grid: Grid, event: InfectionEvent, dt: number): void {
   if (event.phase !== 'peak') return;
   event.formationTimer -= dt;
   if (event.formationTimer > 0) return;
   if (event.kind === 'vein') {
     event.formationTimer = VEIN_FORMATION_INTERVAL * rand(0.7, 1.3);
-    const point = randomVeinPoint(event);
+    const point = randomVeinPoint(grid, event);
     attemptFormation(state, point.x, point.y);
   } else {
     event.formationTimer = Infinity;
@@ -237,13 +300,14 @@ function updateFormation(state: GameState, event: InfectionEvent, dt: number): v
 export function updateEvents(state: GameState, dt: number): void {
   const grid = state.grid;
   if (!grid) return;
+  const ageFloor = ageFloorAt(state.time);
   const remaining: InfectionEvent[] = [];
   for (const event of state.events) {
     const alive = advancePhase(event, dt);
     if (!alive) continue;
     if (event.kind === 'vein') applyVeinGrowth(grid, event, dt, state.dirty);
-    else applyBloomGrowth(grid, event, dt, state.dirty);
-    updateFormation(state, event, dt);
+    else applyBloomGrowth(grid, event, dt, state.dirty, ageFloor);
+    updateFormation(state, grid, event, dt);
     remaining.push(event);
   }
   state.events = remaining;

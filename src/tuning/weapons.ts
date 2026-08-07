@@ -16,8 +16,19 @@ export interface WeaponDef {
   readonly coagulantMult: number;
 }
 
+// Phase 4C-1 (Decision 68): armour lands before Phase 5's penetration
+// counter exists to answer it, so damage is raised across the board
+// rather than gating the gate on numbers already known to be wrong — the
+// project owner's tuning posture: "tune it gently and tune up the damage
+// the weapons do by 50%, so we can see our things implemented working but
+// also not be overwhelmed [within] 30 seconds of gameplay." One dial,
+// multiplied into every *Damage() function below rather than editing six
+// sets of coefficients by hand — trivially revertible, and reads as what
+// it is: a balance-pass knob, not a rebalanced curve.
+export const WEAPON_DAMAGE_SCALE = 1.5;
+
 export function boltDamage(lvl: number): number {
-  return 10 + (lvl - 1) * 5;
+  return (10 + (lvl - 1) * 5) * WEAPON_DAMAGE_SCALE;
 }
 
 export function boltCooldown(lvl: number): number {
@@ -29,7 +40,7 @@ export function bladeCount(lvl: number): number {
 }
 
 export function bladeDamage(lvl: number): number {
-  return 7 + (lvl - 1) * 3.2;
+  return (7 + (lvl - 1) * 3.2) * WEAPON_DAMAGE_SCALE;
 }
 
 export function chainCount(lvl: number): number {
@@ -37,7 +48,7 @@ export function chainCount(lvl: number): number {
 }
 
 export function chainDamage(lvl: number): number {
-  return 11 + (lvl - 1) * 4;
+  return (11 + (lvl - 1) * 4) * WEAPON_DAMAGE_SCALE;
 }
 
 export function chainCooldown(lvl: number): number {
@@ -45,7 +56,7 @@ export function chainCooldown(lvl: number): number {
 }
 
 export function frostDamage(lvl: number): number {
-  return 9 + (lvl - 1) * 3.4;
+  return (9 + (lvl - 1) * 3.4) * WEAPON_DAMAGE_SCALE;
 }
 
 const FROST_REACH: TowerCenteredReach = { margin: 20, base: 115, perLevel: 12 };
@@ -60,7 +71,7 @@ export function frostCooldown(lvl: number): number {
 }
 
 export function poisonDamage(lvl: number): number {
-  return 6 + (lvl - 1) * 2.4;
+  return (6 + (lvl - 1) * 2.4) * WEAPON_DAMAGE_SCALE;
 }
 
 export function poisonRadius(lvl: number): number {
@@ -72,7 +83,7 @@ export function poisonCooldown(lvl: number): number {
 }
 
 export function missileDamage(lvl: number): number {
-  return 30 + (lvl - 1) * 10;
+  return (30 + (lvl - 1) * 10) * WEAPON_DAMAGE_SCALE;
 }
 
 export function missileRadius(lvl: number): number {

@@ -1,6 +1,6 @@
 import type { GameState } from '../state';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
-import { dist } from '../util/math';
+import { coagulantSurfaceDist } from './coagulants';
 
 export const FRONTIER_SECTORS = 48;
 
@@ -76,7 +76,10 @@ export function nearestFrontierPoint(state: GameState): FrontierPoint | null {
     // 'forming' coagulants haven't detached from the field yet — nothing
     // aims at them any more than it aims at ordinary ground.
     if (c.mass <= 0 || c.phase === 'forming') continue;
-    const surfaceDist = Math.max(0, dist(t.x, t.y, c.x, c.y) - c.radius);
+    // Phase 4C-2 (Decision 69): nearest-part surface distance, not just
+    // the bounding circle — a wide Bulwark reads as exactly as close as
+    // it visibly is, not as close as a naive centre-radius estimate.
+    const surfaceDist = coagulantSurfaceDist(c, t.x, t.y);
     if (best === null || surfaceDist < best.dist) {
       best = { x: c.x, y: c.y, dist: surfaceDist };
     }

@@ -1,9 +1,56 @@
 import type { Coagulant, GameState, Grid } from '../state';
 import { cellBucket, gIdx, worldToCell } from '../grid/grid';
-import { COAGULANT_ARRIVAL_DAMAGE_MULT, COAGULANT_SPLATTER } from '../tuning/coagulants';
-import { dist } from '../util/math';
+import {
+  CARRIER_FEED_RADIUS,
+  CARRIER_FEED_RATE,
+  CARRIER_MASS_CAP_MULT,
+  COAGULANT_ARRIVAL_DAMAGE_MULT,
+  COAGULANT_SPLATTER,
+  coagulantKindFromMass,
+  coagulantRadius,
+  coagulantSpeed,
+} from '../tuning/coagulants';
+import { circleOverlapArea, clamp, dist } from '../util/math';
+import { generateSeeds } from './formation';
 import { spawnParticles } from './particles';
 import { damageTower } from './tower';
+
+// Phase 4C-2 (Decision 69): distance from (x, y) to a coagulant's actual
+// surface — the nearest part's surface when `parts` is populated
+// (Bulwark), otherwise the bounding circle every other kind already used.
+// Shared by findCoagulantHit below and systems/frontier.ts's targeting, so
+// a non-circular body reads as exactly as close as it visibly is in both
+// places, not as close as its bounding circle alone would suggest.
+export function coagulantSurfaceDist(c: Coagulant, x: number, y: number): number {
+  if (c.parts.length === 0) return Math.max(0, dist(x, y, c.x, c.y) - c.radius);
+  let best = Infinity;
+  for (const part of c.parts) {
+    const d = Math.max(0, dist(x, y, c.x + part.dx, c.y + part.dy) - part.r);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+// Phase 4C-2 (Decision 69): area of overlap between a hit disc and a
+// coagulant's actual body — sums per-part overlap when `parts` is
+// populated, otherwise the single circleOverlapArea call every other kind
+// already used. grid/clear.ts's damage formula scales directly with this.
+//
+// Known simplification, accepted for a first pass: overlapping parts (a
+// tightly-packed Bulwark's neighbours share some of the same physical
+// area) aren't de-duplicated, so a hit landing where two parts overlap can
+// be counted slightly more than once. BULWARK_PART_RADIUS_FRACTION and
+// BULWARK_SPAN_FRACTION (tuning/coagulants.ts) keep that overlap modest;
+// proper silhouette-union math would be real added complexity for a body
+// shape this simple.
+export function coagulantOverlapArea(c: Coagulant, hitX: number, hitY: number, hitRadius: number): number {
+  if (c.parts.length === 0) return circleOverlapArea(hitX, hitY, hitRadius, c.x, c.y, c.radius);
+  let total = 0;
+  for (const part of c.parts) {
+    total += circleOverlapArea(hitX, hitY, hitRadius, c.x + part.dx, c.y + part.dy, part.r);
+  }
+  return total;
+}
 
 // Adds as much of `remaining` as the cell has capacity for, returns
 // what's left. Shared by every ring step in depositMass below.
@@ -97,6 +144,98 @@ export function splatterOnDeath(state: GameState, c: Coagulant): void {
   state.nodesPurged += 1;
 }
 
+// Blastoma fractures once its mass drops to c.splitAtMass (Phase 4C-1,
+// Decision 68) — checked here in the update pass, not in grid/clear.ts,
+// for the same reason Decisions 4/7 exist: clearAt is mid-iteration over
+// state.coagulants when it deals damage, and pushing new entities onto
+// that array mid-iteration is the same mutate-during-iteration hazard as
+// mutating state during a draw call.
+//
+// Splits at a mass threshold rather than at death: by death, mass is 0,
+// so there is nothing left to give children, and inventing some would
+// break Rule 2 (killing is a sink). A threshold split conserves exactly —
+// the parent's remaining mass divides evenly between exactly two
+// fragments, offset perpendicular to its current heading so they visibly
+// separate rather than overlapping in place.
+//
+// Each fragment's kind is derived from its own (smaller) mass via
+// coagulantKindFromMass, per Rule 4 — not inherited from the parent, and
+// never re-evaluated as Blastoma/Sclerotic (that needs the full
+// maturity/fillRatio reading formation.ts has and this function doesn't).
+// splitAtMass: 0 on both fragments guarantees neither re-splits, however
+// far it's damaged afterward. Armor and sourceMaturity ARE inherited —
+// fragments of hardened ground are still made of hardened ground.
+function splitCoagulant(c: Coagulant, towardX: number, towardY: number): [Coagulant, Coagulant] {
+  const angle = Math.atan2(towardY - c.y, towardX - c.x);
+  const perp = angle + Math.PI / 2;
+  const fragmentMass = c.mass / 2;
+  const offset = c.radius * 0.6;
+  const fragmentKind = coagulantKindFromMass(fragmentMass);
+  const make = (sign: 1 | -1): Coagulant => ({
+    x: c.x + Math.cos(perp) * offset * sign,
+    y: c.y + Math.sin(perp) * offset * sign,
+    mass: fragmentMass,
+    armor: c.armor,
+    kind: fragmentKind,
+    radius: coagulantRadius(fragmentMass),
+    speed: coagulantSpeed(fragmentMass),
+    phase: 'active', // already mid-fight, not a fresh spark — no re-telegraph
+    phaseTimer: 0,
+    seeds: generateSeeds(fragmentMass, fragmentKind),
+    splitAtMass: 0,
+    sourceMaturity: c.sourceMaturity,
+    parts: [], // a fragment is always a plain circle, even splitting off a Bulwark someday
+    startMass: fragmentMass,
+  });
+  return [make(1), make(-1)];
+}
+
+// Phase 4C-2 (Decision 69): Decision 42's hook, left in place since Wave 1
+// — "a seam where the Wave 2 Carrier can feed off the field it crosses."
+// Consumes revealed growth in a small radius around the Carrier's current
+// position each tick and adds it to its own mass, leaving a visibly
+// thinned trail (§10's "worm track," which doubles as its own tell).
+// Capped relative to its own starting mass, never absolute, so the cap
+// scales with however large the corridor that spawned it already was.
+function feedCarrier(state: GameState, c: Coagulant, dt: number): void {
+  const grid = state.grid;
+  if (!grid) return;
+  const cap = c.startMass * CARRIER_MASS_CAP_MULT;
+  if (c.mass >= cap) return;
+
+  const radiusCells = Math.ceil(CARRIER_FEED_RADIUS / grid.cellSize);
+  const { cx: ccx, cy: ccy } = worldToCell(grid, c.x, c.y);
+  let gained = 0;
+  for (let oy = -radiusCells; oy <= radiusCells; oy++) {
+    const cy = ccy + oy;
+    if (cy < 0 || cy >= grid.rows) continue;
+    for (let ox = -radiusCells; ox <= radiusCells; ox++) {
+      const cx = ccx + ox;
+      if (cx < 0 || cx >= grid.cols) continue;
+      const wx = cx * grid.cellSize + grid.cellSize / 2;
+      const wy = cy * grid.cellSize + grid.cellSize / 2;
+      if (dist(wx, wy, c.x, c.y) > CARRIER_FEED_RADIUS) continue;
+      const i = gIdx(grid, cx, cy);
+      const avail = grid.growth[i]!;
+      if (avail <= 0) continue;
+      const take = Math.min(avail, CARRIER_FEED_RATE * dt, cap - c.mass - gained);
+      if (take <= 0) continue;
+      grid.growth[i] = avail - take;
+      gained += take;
+      const nb = cellBucket(grid, i);
+      if (nb !== grid.bucket[i]) {
+        grid.bucket[i] = nb;
+        state.dirty.add(i);
+      }
+    }
+  }
+  if (gained > 0) {
+    c.mass = clamp(c.mass + gained, c.mass, cap);
+    c.radius = coagulantRadius(c.mass);
+    c.speed = coagulantSpeed(c.mass);
+  }
+}
+
 // Straight line to the core at a per-mass speed (Decision 42, Decision
 // 2026-08-06-B). `speed` lives on the entity rather than being computed
 // from `mass` here — the seam left for the Wave 2 Carrier, which needs to
@@ -121,6 +260,13 @@ export function updateCoagulants(state: GameState, dt: number): void {
       continue;
     }
 
+    if (c.splitAtMass > 0 && c.mass <= c.splitAtMass) {
+      remaining.push(...splitCoagulant(c, t.x, t.y));
+      continue;
+    }
+
+    if (c.kind === 'carrier') feedCarrier(state, c, dt);
+
     const d = dist(c.x, c.y, t.x, t.y);
     if (d <= t.radius + c.radius) {
       arriveAtCore(state, c);
@@ -140,15 +286,22 @@ export function updateCoagulants(state: GameState, dt: number): void {
 // through a blob sitting in an already-cleared area. Skips 'forming'
 // coagulants — they haven't detached from the field yet, so nothing can
 // hit them any more than it could hit ordinary ground.
+//
+// Phase 4C-2 (Decision 69): the bounding circle (`c.radius`) is still the
+// cheap first reject, but ranking among survivors uses
+// coagulantSurfaceDist — nearest *part*, not centre distance — so a point
+// between two ends of a wide Bulwark doesn't falsely register as a hit
+// just because it's within the bounding circle.
 export function findCoagulantHit(state: GameState, x: number, y: number, hitRadius: number): Coagulant | null {
   let best: Coagulant | null = null;
   let bestDist = Infinity;
   for (const c of state.coagulants) {
     if (c.mass <= 0 || c.phase === 'forming') continue;
-    const d = dist(x, y, c.x, c.y);
-    if (d > c.radius + hitRadius) continue;
-    if (d < bestDist) {
-      bestDist = d;
+    if (dist(x, y, c.x, c.y) > c.radius + hitRadius) continue;
+    const surfaceDist = coagulantSurfaceDist(c, x, y);
+    if (surfaceDist > hitRadius) continue;
+    if (surfaceDist < bestDist) {
+      bestDist = surfaceDist;
       best = c;
     }
   }

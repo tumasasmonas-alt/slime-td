@@ -15,6 +15,10 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     phase: 'active',
     phaseTimer: 0,
     seeds: [],
+    splitAtMass: 0,
+    sourceMaturity: 0,
+    parts: [],
+    startMass: 50,
     ...overrides,
   };
 }

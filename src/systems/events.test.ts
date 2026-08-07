@@ -299,6 +299,70 @@ describe('updateEvents — bloom growth injection', () => {
     updateEvents(decay, 0.5);
     expect(densityAt(decay.grid, 300, 300)).toBe(0);
   });
+
+  describe('maturity payload (Phase 4C-1, Decision 68)', () => {
+    function maturityAt(grid: Grid, x: number, y: number): number {
+      const { cx, cy } = worldToCell(grid, x, y);
+      return grid.maturity[gIdx(grid, cx, cy)]!;
+    }
+
+    it('raises maturity near its center, falling off toward the edge, same shape as density', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.events = [makeBloom()];
+
+      updateEvents(state, 1);
+
+      const center = maturityAt(state.grid, 300, 300);
+      const edge = maturityAt(state.grid, 300 + BLOOM_RADIUS - 5, 300);
+      expect(center).toBeGreaterThan(0);
+      expect(center).toBeGreaterThan(edge);
+    });
+
+    it('injects no maturity outside its radius', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.events = [makeBloom()];
+
+      updateEvents(state, 1);
+
+      expect(maturityAt(state.grid, 300 + BLOOM_RADIUS + 20, 300)).toBe(0);
+    });
+
+    it('injects no maturity during telegraph or decay', () => {
+      const telegraph = freshState();
+      telegraph.grid = makeTestGrid();
+      telegraph.events = [makeBloom({ phase: 'telegraph', phaseTimer: EVENT_TELEGRAPH_DURATION })];
+      updateEvents(telegraph, 0.5);
+      expect(maturityAt(telegraph.grid, 300, 300)).toBe(0);
+
+      const decay = freshState();
+      decay.grid = makeTestGrid();
+      decay.events = [makeBloom({ phase: 'decay', phaseTimer: EVENT_DECAY_DURATION })];
+      updateEvents(decay, 0.5);
+      expect(maturityAt(decay.grid, 300, 300)).toBe(0);
+    });
+
+    it('does not touch a vein event — only bloom carries the maturity payload', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.events = [
+        {
+          kind: 'vein',
+          phase: 'peak',
+          phaseTimer: EVENT_PEAK_DURATION,
+          age: 0,
+          formationTimer: Infinity,
+          trunk: [{ x1: 300, y1: 300, x2: 310, y2: 300 }],
+          branches: [],
+        },
+      ];
+
+      updateEvents(state, 1);
+
+      expect(maturityAt(state.grid, 300, 300)).toBe(0);
+    });
+  });
 });
 
 describe('updateEventSpawn', () => {

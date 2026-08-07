@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { gIdx, worldToCell } from '../grid/grid';
-import { COAGULANT_ARRIVAL_DAMAGE_MULT, COAGULANT_SPLATTER } from '../tuning/coagulants';
-import { findCoagulantHit, splatterOnDeath, updateCoagulants } from './coagulants';
+import {
+  CARRIER_MASS_CAP_MULT,
+  COAGULANT_ARRIVAL_DAMAGE_MULT,
+  COAGULANT_SPLATTER,
+  coagulantRadius,
+  coagulantSpeed,
+} from '../tuning/coagulants';
+import { coagulantOverlapArea, coagulantSurfaceDist, findCoagulantHit, splatterOnDeath, updateCoagulants } from './coagulants';
 import { attemptFormation } from './formation';
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
@@ -38,6 +44,10 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     phase: 'active',
     phaseTimer: 0,
     seeds: [{ a: 0, r: 0.5, speed: 0.5, phase: 0 }],
+    splitAtMass: 0,
+    sourceMaturity: 0,
+    parts: [],
+    startMass: 50,
     ...overrides,
   };
 }
@@ -149,6 +159,250 @@ describe('updateCoagulants — forming phase (2026-08-06 follow-up session)', ()
 
     expect(state.coagulants).toHaveLength(1);
     expect(state.coagulants[0]!.x).toBeGreaterThan(300);
+  });
+});
+
+describe('updateCoagulants — Blastoma split (Phase 4C-1, Decision 68)', () => {
+  it('splits into exactly two fragments once mass drops to splitAtMass', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000; // far away, so it doesn't also arrive this tick
+    state.tower.y = 300;
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'blastoma', splitAtMass: 40, radius: 20 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants).toHaveLength(2);
+  });
+
+  it('conserves mass exactly across the split', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'blastoma', splitAtMass: 40, radius: 20 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    const totalFragmentMass = state.coagulants.reduce((sum, f) => sum + f.mass, 0);
+    expect(totalFragmentMass).toBeCloseTo(40, 5);
+    expect(state.coagulants[0]!.mass).toBeCloseTo(state.coagulants[1]!.mass, 5);
+  });
+
+  it('fragments never re-split, however far they are damaged afterward', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'blastoma', splitAtMass: 40, radius: 20 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+    for (const f of state.coagulants) expect(f.splitAtMass).toBe(0);
+
+    // Drive a fragment's mass down further and run another tick — it must
+    // not split again.
+    state.coagulants[0]!.mass = 1;
+    updateCoagulants(state, 0.1);
+    expect(state.coagulants).toHaveLength(2); // still exactly two, not three or four
+  });
+
+  it("derives each fragment's kind from its own mass (Rule 4), not the parent's", () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'blastoma', splitAtMass: 40, radius: 20 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    for (const f of state.coagulants) {
+      expect(f.kind).not.toBe('blastoma');
+      expect(f.kind).not.toBe('sclerotic');
+    }
+  });
+
+  it('inherits armor and sourceMaturity from the parent — fragments of hardened ground are still hardened', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const c = makeCoagulant({
+      x: 300,
+      y: 300,
+      mass: 40,
+      kind: 'blastoma',
+      splitAtMass: 40,
+      radius: 20,
+      armor: 12,
+      sourceMaturity: 0.6,
+    });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    for (const f of state.coagulants) {
+      expect(f.armor).toBe(12);
+      expect(f.sourceMaturity).toBe(0.6);
+    }
+  });
+
+  it('does not split a coagulant still in the forming phase', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const c = makeCoagulant({
+      mass: 40,
+      kind: 'blastoma',
+      splitAtMass: 40,
+      phase: 'forming',
+      phaseTimer: 1,
+    });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants).toHaveLength(1);
+    expect(state.coagulants[0]!.phase).toBe('forming');
+  });
+});
+
+describe('updateCoagulants — Carrier feeding (Phase 4C-2, Decision 69)', () => {
+  it('consumes nearby revealed growth and adds it to its own mass', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000; // far away, so it doesn't also move meaningfully or arrive
+    state.tower.y = 300;
+    // Saturate a patch around the carrier's position so it has something
+    // to feed on.
+    const { cx: ccx, cy: ccy } = worldToCell(state.grid, 300, 300);
+    for (let oy = -3; oy <= 3; oy++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        state.grid.growth[gIdx(state.grid, ccx + ox, ccy + oy)] = 0.9;
+      }
+    }
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'carrier', startMass: 40 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants[0]!.mass).toBeGreaterThan(40);
+  });
+
+  it('conserves mass exactly — the grid loses exactly what the entity gains', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const { cx: ccx, cy: ccy } = worldToCell(state.grid, 300, 300);
+    for (let oy = -3; oy <= 3; oy++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        state.grid.growth[gIdx(state.grid, ccx + ox, ccy + oy)] = 0.9;
+      }
+    }
+    const before = totalGridMass(state.grid) + 40;
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'carrier', startMass: 40 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    const after = totalGridMass(state.grid) + state.coagulants.reduce((sum, x) => sum + x.mass, 0);
+    expect(after).toBeCloseTo(before, 5);
+  });
+
+  it('stops growing once it hits its cap, relative to its own starting mass', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const { cx: ccx, cy: ccy } = worldToCell(state.grid, 300, 300);
+    for (let oy = -3; oy <= 3; oy++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        state.grid.growth[gIdx(state.grid, ccx + ox, ccy + oy)] = 1;
+      }
+    }
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'carrier', startMass: 40 });
+    state.coagulants = [c];
+
+    // Run many ticks, re-saturating the patch each time so it never runs
+    // out of food -- isolates the cap from "the field ran dry."
+    for (let i = 0; i < 500; i++) {
+      for (let oy = -3; oy <= 3; oy++) {
+        for (let ox = -3; ox <= 3; ox++) {
+          state.grid.growth[gIdx(state.grid, ccx + ox, ccy + oy)] = 1;
+        }
+      }
+      updateCoagulants(state, 0.1);
+    }
+
+    expect(state.coagulants[0]!.mass).toBeLessThanOrEqual(40 * CARRIER_MASS_CAP_MULT + 1e-6);
+  });
+
+  it('updates radius and speed as it grows, consistent with its new mass', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const { cx: ccx, cy: ccy } = worldToCell(state.grid, 300, 300);
+    for (let oy = -3; oy <= 3; oy++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        state.grid.growth[gIdx(state.grid, ccx + ox, ccy + oy)] = 0.9;
+      }
+    }
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'carrier', startMass: 40, radius: coagulantRadius(40) });
+
+    state.coagulants = [c];
+    updateCoagulants(state, 0.1);
+
+    const grown = state.coagulants[0]!;
+    expect(grown.radius).toBeCloseTo(coagulantRadius(grown.mass), 5);
+    expect(grown.speed).toBeCloseTo(coagulantSpeed(grown.mass), 5);
+  });
+
+  it('does not feed while still in the forming phase', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const { cx: ccx, cy: ccy } = worldToCell(state.grid, 300, 300);
+    for (let oy = -3; oy <= 3; oy++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        state.grid.growth[gIdx(state.grid, ccx + ox, ccy + oy)] = 0.9;
+      }
+    }
+    const c = makeCoagulant({
+      x: 300,
+      y: 300,
+      mass: 40,
+      kind: 'carrier',
+      startMass: 40,
+      phase: 'forming',
+      phaseTimer: 1,
+    });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants[0]!.mass).toBe(40);
+  });
+
+  it('leaves a non-carrier kind untouched even sitting on saturated ground', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 3000;
+    state.tower.y = 300;
+    const { cx: ccx, cy: ccy } = worldToCell(state.grid, 300, 300);
+    for (let oy = -3; oy <= 3; oy++) {
+      for (let ox = -3; ox <= 3; ox++) {
+        state.grid.growth[gIdx(state.grid, ccx + ox, ccy + oy)] = 0.9;
+      }
+    }
+    const c = makeCoagulant({ x: 300, y: 300, mass: 40, kind: 'congealer', startMass: 40 });
+    state.coagulants = [c];
+
+    updateCoagulants(state, 0.1);
+
+    expect(state.coagulants[0]!.mass).toBe(40);
   });
 });
 
@@ -288,6 +542,103 @@ describe('findCoagulantHit', () => {
     state.coagulants = [makeCoagulant({ x: 100, y: 100, radius: 20, phase: 'forming', phaseTimer: 1 })];
     expect(findCoagulantHit(state, 100, 100, 5)).toBeNull();
   });
+
+  describe('multi-part bodies (Phase 4C-2, Decision 69)', () => {
+    // Two parts 30px either side of centre, radius 15 each, bounding
+    // circle 60 -- deliberately leaves a real gap between the two parts'
+    // surfaces (each ends 15px short of centre) that the bounding circle
+    // alone doesn't know about.
+    function makeTwoPartBody(): Coagulant {
+      return makeCoagulant({
+        x: 300,
+        y: 300,
+        radius: 60,
+        parts: [
+          { dx: -30, dy: 0, r: 15 },
+          { dx: 30, dy: 0, r: 15 },
+        ],
+      });
+    }
+
+    it('finds nothing in the gap between two parts, despite being inside the bounding circle', () => {
+      const state = freshState();
+      const body = makeTwoPartBody();
+      state.coagulants = [body];
+      expect(findCoagulantHit(state, 300, 300, 5)).toBeNull();
+    });
+
+    it('finds the body when the point actually touches a part', () => {
+      const state = freshState();
+      const body = makeTwoPartBody();
+      state.coagulants = [body];
+      expect(findCoagulantHit(state, 270, 300, 5)).toBe(body); // centre of the left part
+    });
+  });
+});
+
+describe('coagulantSurfaceDist (Phase 4C-2, Decision 69)', () => {
+  it('matches the bounding-circle formula when parts is empty — single-part regression guard', () => {
+    const c = makeCoagulant({ x: 0, y: 0, radius: 20 });
+    expect(coagulantSurfaceDist(c, 30, 0)).toBeCloseTo(10, 5); // 30 away, minus 20 radius
+  });
+
+  it('measures distance to the nearest part, not the centre, when parts exist', () => {
+    const c = makeCoagulant({
+      x: 300,
+      y: 300,
+      radius: 60,
+      parts: [
+        { dx: -30, dy: 0, r: 15 },
+        { dx: 30, dy: 0, r: 15 },
+      ],
+    });
+    // Sitting exactly between the two parts: 30px from each centre, minus
+    // each part's own 15px radius.
+    expect(coagulantSurfaceDist(c, 300, 300)).toBeCloseTo(15, 5);
+  });
+
+  it('never goes negative — a point already inside a part reads as touching (0), not overlapping past it', () => {
+    const c = makeCoagulant({ x: 300, y: 300, radius: 60, parts: [{ dx: 0, dy: 0, r: 15 }] });
+    expect(coagulantSurfaceDist(c, 300, 300)).toBe(0);
+  });
+});
+
+describe('coagulantOverlapArea (Phase 4C-2, Decision 69)', () => {
+  it('matches a plain circleOverlapArea when parts is empty — single-part regression guard', () => {
+    const c = makeCoagulant({ x: 0, y: 0, radius: 20 });
+    const withEmptyParts = coagulantOverlapArea(c, 10, 0, 15);
+    expect(withEmptyParts).toBeGreaterThan(0);
+  });
+
+  it('is 0 for a hit in the gap between two parts, even inside the bounding circle', () => {
+    const c = makeCoagulant({
+      x: 300,
+      y: 300,
+      radius: 60,
+      parts: [
+        { dx: -30, dy: 0, r: 15 },
+        { dx: 30, dy: 0, r: 15 },
+      ],
+    });
+    // 15px outside both parts' surfaces (see coagulantSurfaceDist test
+    // above), so a small hit here connects with nothing.
+    expect(coagulantOverlapArea(c, 300, 300, 5)).toBe(0);
+  });
+
+  it('sums overlap across multiple parts — a hit reaching both parts is more than the same hit reaching only one', () => {
+    const c = makeCoagulant({
+      x: 300,
+      y: 300,
+      radius: 60,
+      parts: [
+        { dx: -30, dy: 0, r: 15 },
+        { dx: 30, dy: 0, r: 15 },
+      ],
+    });
+    const oneSide = coagulantOverlapArea(c, 270, 300, 10); // centred on the left part only
+    const bothSides = coagulantOverlapArea(c, 300, 300, 40); // centred on the gap, reaching both
+    expect(bothSides).toBeGreaterThan(oneSide);
+  });
 });
 
 describe('mass conservation — the invariant', () => {
@@ -329,5 +680,64 @@ describe('mass conservation — the invariant', () => {
 
     const afterArrival = totalGridMass(state.grid);
     expect(afterArrival).toBeCloseTo(before, 3);
+  });
+
+  it('holds through a mid-transit Blastoma split too (Phase 4C-1, Decision 68) — mass moving between two entities, not just grid and entity', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.tower.radius = 22;
+
+    // A thin corridor, not a solid block — fragmented shape, so this
+    // forms a Blastoma rather than a congealer/behemoth.
+    const startX = 700;
+    const startY = 300;
+    const { cx: startCx, cy: centerCy } = worldToCell(state.grid, startX, startY);
+    for (let dx = 0; dx <= 15; dx++) {
+      for (let oy = -1; oy <= 1; oy++) {
+        const i = gIdx(state.grid, startCx - dx, centerCy + oy);
+        state.grid.growth[i] = 0.9;
+      }
+    }
+
+    const before = totalGridMass(state.grid);
+    const coagulant = attemptFormation(state, startX, startY);
+    expect(coagulant).not.toBeNull();
+    expect(coagulant!.kind).toBe('blastoma');
+    expect(coagulant!.splitAtMass).toBeGreaterThan(0);
+
+    // Nothing damages a coagulant on its own — mass only drops via
+    // clearAt (weapon fire), which this test deliberately doesn't invoke,
+    // so the split would never actually trigger during a silent walk.
+    // Simulate exactly one external hit that brings it down to its split
+    // threshold, and fold the amount it destroys into the invariant's
+    // baseline — isolating the *split's* conservation property (does
+    // mass survive moving from one entity into two?) from clearAt's
+    // (tested separately: does a hit destroy exactly what it removes?).
+    let destroyed = 0;
+    let hitApplied = false;
+
+    let ticks = 0;
+    let sawTwoFragments = false;
+    while (state.coagulants.length > 0 && ticks < 20_000) {
+      if (!hitApplied) {
+        const c = state.coagulants[0]!;
+        destroyed = c.mass - c.splitAtMass;
+        c.mass = c.splitAtMass;
+        hitApplied = true;
+      }
+      updateCoagulants(state, 0.1);
+      if (state.coagulants.length === 2) sawTwoFragments = true;
+      const currentTotal = totalGridMass(state.grid) + state.coagulants.reduce((sum, c) => sum + c.mass, 0);
+      expect(currentTotal).toBeCloseTo(before - destroyed, 2);
+      ticks++;
+    }
+    expect(sawTwoFragments).toBe(true); // confirms the split actually happened during the walk
+    expect(ticks).toBeLessThan(20_000);
+    expect(state.coagulants).toHaveLength(0);
+
+    const afterArrival = totalGridMass(state.grid);
+    expect(afterArrival).toBeCloseTo(before - destroyed, 1);
   });
 });

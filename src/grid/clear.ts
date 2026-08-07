@@ -1,5 +1,5 @@
 import type { GameState } from '../state';
-import { circleOverlapArea, clamp, dist, rand } from '../util/math';
+import { clamp, dist, rand } from '../util/math';
 import {
   COAGULANT_ARMOR_FLOOR,
   COAGULANT_DAMAGE_SCALE,
@@ -8,7 +8,7 @@ import {
 import { MATURITY_MAX, SCAR_PER_DENSITY, ageFloorAt, maturityBucket, maturityYieldMult } from '../tuning/maturity';
 import { COAGULANT_XP_RISK_PREMIUM, gemValueFromRemoved } from '../tuning/xp';
 import { dropGemShower } from '../systems/gems';
-import { splatterOnDeath } from '../systems/coagulants';
+import { coagulantOverlapArea, splatterOnDeath } from '../systems/coagulants';
 import { spawnParticles } from '../systems/particles';
 import { cellBucket, gIdx, worldToCell } from './grid';
 
@@ -113,11 +113,16 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   // instead of by a flat per-weapon constant. A coagulant's local
   // "density" is fixed at 1 — it IS the densest slime in the game
   // (Decision 46) — so resistance is a constant, not sampled.
+  //
+  // Phase 4C-2 (Decision 69): `c.radius` is still the cheap bounding-circle
+  // reject below, but the overlap area itself goes through
+  // coagulantOverlapArea, which sums per-part overlap for a non-circular
+  // body (Bulwark) instead of treating it as one big circle.
   const weaponMult = opts.coagulantMult ?? 1;
   for (const c of state.coagulants) {
     if (c.mass <= 0) continue;
     if (dist(x, y, c.x, c.y) > radiusPx + c.radius) continue; // cheap reject before the trig
-    const overlap = circleOverlapArea(x, y, radiusPx, c.x, c.y, c.radius);
+    const overlap = coagulantOverlapArea(c, x, y, radiusPx);
     if (overlap <= 0) continue;
     const cellsEquivalent = overlap / (grid.cellSize * grid.cellSize);
     const effectivePower = Math.max(power - c.armor, power * COAGULANT_ARMOR_FLOOR);

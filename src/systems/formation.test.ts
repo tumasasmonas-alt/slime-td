@@ -3,12 +3,20 @@ import type { Grid } from '../state';
 import { freshState } from '../state';
 import { cellBucket, gIdx, worldToCell } from '../grid/grid';
 import {
+  ARMOR_AT_FULL_MATURITY,
+  BLASTOMA_SPLIT_FRACTION,
+  CORRIDOR_DENSITY_THRESHOLD,
   FORMATION_MIN_DISTANCE,
   FORMATION_RADIUS_CAP,
   FORMATION_RISE_DURATION,
+  FRAGMENTATION_THRESHOLD,
   MASS_BEHEMOTH,
+  MASS_BULWARK,
   MASS_CONGEALER,
   MASS_MIN_FORMATION,
+  MATURITY_SCLEROTIC_THRESHOLD,
+  coagulantArmor,
+  coagulantKindFrom,
   coagulantKindFromMass,
   coagulantRadius,
   coagulantSpeed,
@@ -55,6 +63,44 @@ function fillSquare(grid: Grid, centerX: number, centerY: number, halfWidthPx: n
       // it here too, so a synthetic fixture doesn't leave a stale
       // "everything defaults to bucket 0" array that makes every drain
       // look like a no-op transition regardless of what actually changed.
+      grid.bucket[i] = cellBucket(grid, i);
+    }
+  }
+}
+
+// Sets maturity (not growth) over the same footprint fillSquare would
+// cover, for controlled identity scenarios — Wave 2 kinds (Phase 4C-1)
+// read maturity alongside mass.
+function fillMaturity(grid: Grid, centerX: number, centerY: number, halfWidthPx: number, maturity: number): void {
+  const { cx: ccx, cy: ccy } = worldToCell(grid, centerX, centerY);
+  const half = Math.ceil(halfWidthPx / grid.cellSize);
+  for (let oy = -half; oy <= half; oy++) {
+    const cy = ccy + oy;
+    if (cy < 0 || cy >= grid.rows) continue;
+    for (let ox = -half; ox <= half; ox++) {
+      const cx = ccx + ox;
+      if (cx < 0 || cx >= grid.cols) continue;
+      grid.maturity[gIdx(grid, cx, cy)] = maturity;
+    }
+  }
+}
+
+// A thin revealed corridor reaching far from its start, rather than a
+// solid block — for the fragmentation metric (Phase 4C-1): it should
+// reach far (high maxDist) while visiting few cells (low fillRatio),
+// exactly the shape §10 describes a vein having "webbed through an area."
+function fillCorridor(grid: Grid, startX: number, startY: number, lengthPx: number, widthPx: number, density: number): void {
+  const { cx: startCx, cy: centerCy } = worldToCell(grid, startX, startY);
+  const lengthCells = Math.round(lengthPx / grid.cellSize);
+  const halfWidthCells = Math.max(1, Math.round(widthPx / grid.cellSize / 2));
+  for (let dx = 0; dx <= lengthCells; dx++) {
+    const cx = startCx + dx;
+    if (cx < 0 || cx >= grid.cols) continue;
+    for (let oy = -halfWidthCells; oy <= halfWidthCells; oy++) {
+      const cy = centerCy + oy;
+      if (cy < 0 || cy >= grid.rows) continue;
+      const i = gIdx(grid, cx, cy);
+      grid.growth[i] = density;
       grid.bucket[i] = cellBucket(grid, i);
     }
   }
@@ -220,6 +266,235 @@ describe('attemptFormation', () => {
     expect(result!.phaseTimer).toBe(FORMATION_RISE_DURATION);
   });
 
+  describe('Wave 2 identity (Phase 4C-1, Decision 68)', () => {
+    it('forms a sclerotic when the source ground is highly matured, regardless of mass tier', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      // A modest patch — mass alone would land as a mote or congealer —
+      // but scarred well above MATURITY_SCLEROTIC_THRESHOLD. Comfortably
+      // above MASS_MIN_FORMATION (10), not right at the boundary.
+      fillSquare(state.grid, 400, 400, 20, 0.5);
+      fillMaturity(state.grid, 400, 400, 20, MATURITY_SCLEROTIC_THRESHOLD + 0.1);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.kind).toBe('sclerotic');
+    });
+
+    it('leaves virgin-ground kinds alone — maturity 0 never triggers sclerotic', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      fillSquare(state.grid, 400, 400, 30, 0.9);
+      // maturity stays 0 -- untouched
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.kind).not.toBe('sclerotic');
+    });
+
+    it('forms a blastoma from a thin, far-reaching corridor — fragmented mass, not a solid patch', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      // Reaches far (high maxDist) while visiting few cells (low
+      // fillRatio) -- the "webbed through an area" shape from §10, not
+      // MATURITY_SCLEROTIC_THRESHOLD-scarred, so identity has to come
+      // from shape, not maturity.
+      fillCorridor(state.grid, 400, 400, 150, 20, 0.9);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.mass).toBeGreaterThanOrEqual(MASS_CONGEALER);
+      expect(result!.kind).toBe('blastoma');
+    });
+
+    it('does NOT form a blastoma from an equivalent-mass solid patch — shape, not just mass, must be fragmented', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      // A solid square with comparable total mass to the corridor case
+      // above (~44 vs ~43), but filling its own footprint almost
+      // completely rather than reaching far through a thin path.
+      fillSquare(state.grid, 400, 400, 30, 0.9);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.mass).toBeGreaterThanOrEqual(MASS_CONGEALER);
+      expect(result!.kind).not.toBe('blastoma');
+    });
+
+    it('sets armor from source maturity via coagulantArmor, and ~0 on virgin ground', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      fillSquare(state.grid, 400, 400, 20, 0.9);
+      fillMaturity(state.grid, 400, 400, 20, 0.6);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.armor).toBeCloseTo(coagulantArmor(result!.sourceMaturity), 5);
+      expect(result!.armor).toBeGreaterThan(0);
+
+      const virgin = freshState();
+      virgin.grid = makeTestGrid();
+      fillSquare(virgin.grid, 400, 400, 20, 0.9);
+      const virginResult = attemptFormation(virgin, 400, 400);
+      expect(virginResult!.armor).toBe(0);
+    });
+
+    it('gives a blastoma a positive splitAtMass at BLASTOMA_SPLIT_FRACTION of its starting mass; every other kind gets 0', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      fillCorridor(state.grid, 400, 400, 150, 20, 0.9);
+
+      const blastoma = attemptFormation(state, 400, 400);
+
+      expect(blastoma).not.toBeNull();
+      expect(blastoma!.kind).toBe('blastoma');
+      expect(blastoma!.splitAtMass).toBeCloseTo(blastoma!.mass * BLASTOMA_SPLIT_FRACTION, 5);
+
+      const solid = freshState();
+      solid.grid = makeTestGrid();
+      fillSquare(solid.grid, 400, 400, 30, 0.9);
+      const congealer = attemptFormation(solid, 400, 400);
+      expect(congealer!.splitAtMass).toBe(0);
+    });
+
+    it('drains mass into the coagulant but leaves maturity on the grid, even for a sclerotic (Decision 25/63 still holds)', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      fillSquare(state.grid, 400, 400, 20, 0.9);
+      fillMaturity(state.grid, 400, 400, 20, 0.6);
+      const { cx, cy } = worldToCell(state.grid, 400, 400);
+      const idx = gIdx(state.grid, cx, cy);
+
+      attemptFormation(state, 400, 400);
+
+      expect(state.grid.growth[idx]).toBe(0);
+      expect(state.grid.maturity[idx]).toBeCloseTo(0.6, 5);
+    });
+  });
+
+  describe('Carrier and Bulwark (Phase 4C-2, Decision 69)', () => {
+    it('forms a carrier when the corridor to the core is thick, even though the spark point itself is an ordinary patch', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 400;
+      const sparkX = 650;
+      const sparkY = 400;
+      // Dense corridor spanning tower -> spark (500px). FORMATION_RADIUS_CAP
+      // (180px) only lets the flood-fill drain the spark-end portion of it,
+      // so most of the corridor -- and most of sampleCorridorDensity's
+      // sample points -- stay at full density for the reading.
+      fillCorridor(state.grid, state.tower.x, sparkY, 500, 30, 0.9);
+
+      const result = attemptFormation(state, sparkX, sparkY);
+
+      expect(result).not.toBeNull();
+      expect(result!.kind).toBe('carrier');
+    });
+
+    it('does NOT form a carrier when the field near the spark is dense but the corridor back to the core is clear', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 400;
+      const sparkX = 650;
+      const sparkY = 400;
+      // Mass only at the spark point -- a clean corridor the rest of the
+      // way, exactly the "a good player never meets one" case (§10).
+      fillSquare(state.grid, sparkX, sparkY, 30, 0.9);
+
+      const result = attemptFormation(state, sparkX, sparkY);
+
+      expect(result).not.toBeNull();
+      expect(result!.kind).not.toBe('carrier');
+    });
+
+    it('a carrier starts with no extra parts and startMass equal to its formation mass', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 400;
+      fillCorridor(state.grid, state.tower.x, 400, 500, 30, 0.9);
+
+      const result = attemptFormation(state, 650, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.kind).toBe('carrier');
+      expect(result!.parts).toHaveLength(0);
+      expect(result!.startMass).toBeCloseTo(result!.mass, 5);
+    });
+
+    it('forms a bulwark at high maturity AND high mass — the table cell 4C-1 left falling through to sclerotic', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      fillSquare(state.grid, 400, 400, 60, 1.0); // mass well above MASS_BULWARK
+      fillMaturity(state.grid, 400, 400, 60, MATURITY_SCLEROTIC_THRESHOLD + 0.1);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.mass).toBeGreaterThanOrEqual(MASS_BULWARK);
+      expect(result!.kind).toBe('bulwark');
+    });
+
+    it("a bulwark's body is a multi-part line, and its bounding radius actually encloses every part", () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      fillSquare(state.grid, 400, 400, 60, 1.0);
+      fillMaturity(state.grid, 400, 400, 60, MATURITY_SCLEROTIC_THRESHOLD + 0.1);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.kind).toBe('bulwark');
+      expect(result!.parts.length).toBeGreaterThan(1);
+      for (const part of result!.parts) {
+        const reach = Math.hypot(part.dx, part.dy) + part.r;
+        expect(reach).toBeLessThanOrEqual(result!.radius + 1e-6);
+      }
+    });
+
+    it("a bulwark's parts are arranged perpendicular to its direction of travel toward the core", () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 400;
+      state.tower.y = 900; // due south of the spark, at (400, 400)
+      fillSquare(state.grid, 400, 400, 60, 1.0);
+      fillMaturity(state.grid, 400, 400, 60, MATURITY_SCLEROTIC_THRESHOLD + 0.1);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.kind).toBe('bulwark');
+      // Travel is along y (south); parts perpendicular to that should be
+      // spread along x, with negligible y offset.
+      for (const part of result!.parts) {
+        expect(Math.abs(part.dy)).toBeLessThan(1);
+      }
+      const xs = result!.parts.map((p) => p.dx);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0);
+    });
+
+    it('does not form a bulwark below MASS_BULWARK, even at full maturity — falls through to sclerotic', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      fillSquare(state.grid, 400, 400, 20, 0.5); // modest mass, well under MASS_BULWARK
+      fillMaturity(state.grid, 400, 400, 20, MATURITY_SCLEROTIC_THRESHOLD + 0.1);
+
+      const result = attemptFormation(state, 400, 400);
+
+      expect(result).not.toBeNull();
+      expect(result!.mass).toBeLessThan(MASS_BULWARK);
+      expect(result!.kind).toBe('sclerotic');
+      expect(result!.parts).toHaveLength(0);
+    });
+  });
+
   describe('the perimeter distance gate (2026-08-06 follow-up session)', () => {
     it('refuses to form within perimeter + FORMATION_MIN_DISTANCE of the core, however much mass is available', () => {
       const state = freshState();
@@ -283,6 +558,67 @@ describe('coagulantKindFromMass', () => {
   it('is a behemoth at/above the behemoth threshold', () => {
     expect(coagulantKindFromMass(MASS_BEHEMOTH)).toBe('behemoth');
     expect(coagulantKindFromMass(MASS_BEHEMOTH * 10)).toBe('behemoth');
+  });
+
+  it('never returns a Wave 2 kind — sclerotic/blastoma need coagulantKindFrom, not this', () => {
+    for (const mass of [0, MASS_MIN_FORMATION, MASS_CONGEALER, MASS_BEHEMOTH, MASS_BEHEMOTH * 50]) {
+      const kind = coagulantKindFromMass(mass);
+      expect(kind).not.toBe('sclerotic');
+      expect(kind).not.toBe('blastoma');
+    }
+  });
+});
+
+describe('coagulantKindFrom (Phase 4C-1/4C-2, Decision 68/69)', () => {
+  it('is sclerotic at/above MATURITY_SCLEROTIC_THRESHOLD when mass is below MASS_BULWARK, regardless of fill ratio or corridor', () => {
+    expect(coagulantKindFrom(MASS_MIN_FORMATION, MATURITY_SCLEROTIC_THRESHOLD, 1, 0)).toBe('sclerotic');
+    expect(coagulantKindFrom(MASS_BULWARK - 0.01, MATURITY_SCLEROTIC_THRESHOLD, 0.01, 1)).toBe('sclerotic');
+  });
+
+  it('is bulwark at/above MATURITY_SCLEROTIC_THRESHOLD and at/above MASS_BULWARK — the high-mass, scarred table cell', () => {
+    expect(coagulantKindFrom(MASS_BULWARK, MATURITY_SCLEROTIC_THRESHOLD, 1, 0)).toBe('bulwark');
+    expect(coagulantKindFrom(MASS_BULWARK * 3, MATURITY_SCLEROTIC_THRESHOLD, 0.01, 1)).toBe('bulwark');
+  });
+
+  it('is carrier when the corridor is thick, below the maturity threshold — pure failure-gate, independent of mass or shape', () => {
+    expect(coagulantKindFrom(MASS_MIN_FORMATION, 0, 1, CORRIDOR_DENSITY_THRESHOLD)).toBe('carrier');
+    expect(coagulantKindFrom(MASS_BEHEMOTH, 0, 0.01, CORRIDOR_DENSITY_THRESHOLD + 0.1)).toBe('carrier');
+  });
+
+  it('maturity beats corridor — a thick corridor through scarred ground still yields sclerotic/bulwark, not carrier', () => {
+    expect(coagulantKindFrom(MASS_MIN_FORMATION, MATURITY_SCLEROTIC_THRESHOLD, 1, 1)).toBe('sclerotic');
+  });
+
+  it('is blastoma below the maturity threshold and below the corridor threshold, when mass clears MASS_CONGEALER and fillRatio is fragmented', () => {
+    expect(coagulantKindFrom(MASS_CONGEALER, 0, FRAGMENTATION_THRESHOLD - 0.01, 0)).toBe('blastoma');
+  });
+
+  it('is never blastoma when fillRatio is solid, even at high mass', () => {
+    expect(coagulantKindFrom(MASS_BEHEMOTH, 0, 1, 0)).toBe('behemoth');
+  });
+
+  it('is never blastoma below MASS_CONGEALER, however fragmented', () => {
+    expect(coagulantKindFrom(MASS_CONGEALER - 0.01, 0, 0, 0)).toBe('mote');
+  });
+
+  it('falls back to the ordinary mass tiers when maturity, shape, and corridor are all unremarkable', () => {
+    expect(coagulantKindFrom(MASS_MIN_FORMATION, 0, 1, 0)).toBe(coagulantKindFromMass(MASS_MIN_FORMATION));
+    expect(coagulantKindFrom(MASS_BEHEMOTH, 0, 1, 0)).toBe(coagulantKindFromMass(MASS_BEHEMOTH));
+  });
+});
+
+describe('coagulantArmor (Phase 4C-1, Decision 68)', () => {
+  it('is 0 at zero maturity and ARMOR_AT_FULL_MATURITY at maturity 1', () => {
+    expect(coagulantArmor(0)).toBe(0);
+    expect(coagulantArmor(1)).toBeCloseTo(ARMOR_AT_FULL_MATURITY, 5);
+  });
+
+  it('is monotonically increasing with maturity', () => {
+    expect(coagulantArmor(0.7)).toBeGreaterThan(coagulantArmor(0.3));
+  });
+
+  it('clamps out-of-range maturity rather than exceeding ARMOR_AT_FULL_MATURITY', () => {
+    expect(coagulantArmor(5)).toBeCloseTo(ARMOR_AT_FULL_MATURITY, 5);
   });
 });
 

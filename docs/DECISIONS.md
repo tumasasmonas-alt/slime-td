@@ -1462,6 +1462,134 @@ quiet: correct output, gradually worse frame time.
 
 ---
 
+## Phase 4C — Coagulants Wave 2. Phase 4 closes.
+
+> Decisions 68–69 came out of the 2026-08-07 session that planned and built
+> both halves of Phase 4C back to back. Plans, scoping conversation, and
+> as-built deltas: **`docs/plans/phase-4c1-wave2-armour.md`** and
+> **`docs/plans/phase-4c2-carrier-bulwark.md`**; the full account, including
+> two balance bugs found live, is
+> **`docs/sessions/2026-08-07-phase-4c-wave2.md`**. The design is §10/§11 of
+> the 2026-08-05 record.
+
+**68. Coagulant identity gains a third reading — mass shape — and armour
+finally derives from source maturity. Sclerotic and Blastoma ship.** ✅
+*2026-08-07.* §10 names four identity readings; 3C only wired up the first
+(mass). This is the second and third: **maturity** (already legible since
+4B) and **mass shape**, measured for free off the existing flood-fill
+traversal:
+
+```
+fillRatio = cells actually reached / (π · maxDist² / cellSize²)
+```
+
+Near 1 for a solid saturated patch; low for a thin corridor that reaches
+far while visiting few cells — §10's "webbed through an area." Identity
+checks in a fixed order: maturity beats mass or shape (*"my own kill zone
+got up and walked at me"* should hold regardless of size), split by mass
+into Bulwark vs. plain Sclerotic (the high-mass+scarred table cell falls
+through to Sclerotic until #69 exists to claim it); then shape at
+sufficient mass makes a Blastoma; then the ordinary Wave 1 tiers.
+
+**Armour is a function of source maturity, never a per-kind table** — a
+Sclerotic is armoured *because* it formed from hardened ground, so no
+separate balancing pass is needed as kinds are added. Decision 44's
+consumption path has been live since 3C at `armor: 0`; this is what
+finally feeds it, deliberately gentle (~20 max flat reduction) since its
+counter (Phase 5's penetration) doesn't exist yet — paired with a **+50%
+weapon damage pass** (`WEAPON_DAMAGE_SCALE`, one dial multiplied into all
+six weapons' damage functions) so the mechanic is visible without ending a
+run in 30 seconds. The project owner's tuning posture, explicitly: *"tune
+it gently... so we can see our things implemented working but also not be
+overwhelmed."*
+
+**Blastoma fractures at 50% of its starting mass**, into two fragments
+sharing the remainder, rather than at death — by death mass is 0, so
+there's nothing left to give children, and inventing some would break Rule
+2 (killing is a sink). Each fragment's kind derives from its own
+(smaller) mass via the plain Wave 1 function, per Rule 4, not inherited or
+hard-coded — confirmed with the owner after the plan flagged that "two
+little motes" isn't guaranteed at realistic split masses: *"I agree with
+deriving it from the mass."*
+
+**Two constants were wrong on first write, both caught by the same
+debug-harness methodology as Decision 59, neither any other way:**
+
+- Bloom's own formation attempt fires at the *instant* peak begins, not
+  after peak's own duration — so only its 4s active-phase window had
+  actually accumulated maturity by the time it tried to spark itself. The
+  first-pass rate reached ~0.16 at the epicenter; retuned ~4x to reach
+  ~0.6, restoring §11's *"blooms let armour appear mid-field, earlier."*
+- `MATURITY_SCLEROTIC_THRESHOLD` (0.55) was never reached in practice.
+  Formation reads *mean* maturity over the whole flood-filled footprint,
+  which dilutes hard toward the surrounding region's average — the
+  highest mean any coagulant sparked at across a 500s max-weapons run was
+  ~0.46, even though individual cells scarred past 0.9. Lowered to 0.4.
+  Zero Sclerotics formed before this fix; roughly 5 of 8 active coagulants
+  were Sclerotic after it, in the same test conditions.
+
+**69. Carrier and Bulwark complete the roster. Non-circular bodies are
+modelled as a cluster of circles.** ✅
+*2026-08-07.* The last two of §10's seven kinds, shipped together as the
+design requires (*"Carrier and Bulwark should ship as a pair"*) even
+though the reason given — both making Threat Priority a real decision —
+names a Phase 5 gem that doesn't exist yet. Building them anyway is
+correct under the project's own ordering rule: Phase 4 asks the questions
+Phase 5 answers, and Carrier/Bulwark *are* that question.
+
+**Carrier feeds off the field it crosses** — Decision 42's hook, left in
+place since 3C for exactly this (*"cheap to leave, annoying to
+retrofit"*). Consumes revealed growth in a small radius each tick, adds it
+to its own mass, updates its own radius/speed to match, capped relative to
+its own starting mass so it can't compound unbounded. Its formation gate —
+§10's fourth and last identity reading — is mean revealed density sampled
+along the straight line from the spark point to the core: a pure
+failure-gate, unaffected by mass or maturity at the spark point itself.
+*"Keep the field clear and there is no corridor... a good player never
+meets one."* Verified live: forms correctly against hand-calculated
+corridor geometry in tests; none formed under a max-weapons run, which is
+the mechanic working as designed rather than a defect.
+
+**Bulwark is "wide and flat rather than round," and every existing
+coagulant system assumed a circle** — `clearAt`'s damage loop, hit
+detection, targeting, the renderer. **Chosen: a body is a cluster of
+circles offset from a centre**, not true ellipse geometry. `radius` stays
+the bounding circle for every existing cheap broad-phase reject,
+unchanged; when `parts` is populated, narrow-phase iterates the actual
+parts. Absent/empty `parts` (every other kind, unchanged) is exactly
+today's single-circle behaviour.
+
+Rejected alternatives, both in the plan before building: approximating
+Bulwark as one bigger circle loses the "wall" read entirely, since the
+shape is what lets it screen whatever's behind it; true ellipse geometry
+needs a new overlap-area formula alongside the existing
+`circleOverlapArea`, real complexity for a first-pass body this simple.
+The cluster approach reuses every piece of circle math already written and
+tested, and composes for free with Blastoma's existing seed-based "bag of
+blobs" rendering.
+
+**One accepted simplification, documented in code rather than solved:**
+overlapping parts' damage areas aren't de-duplicated, so a hit landing
+where two parts overlap can be counted slightly more than once. Kept
+modest by the part-count/spacing constants; proper silhouette-union math
+would be real complexity for a body this simple to justify.
+
+Two shared primitives (`systems/coagulants.ts`) replace what four call
+sites used to compute inline — `coagulantSurfaceDist` (nearest-part
+distance, feeding both `findCoagulantHit` and `nearestFrontierPoint`) and
+`coagulantOverlapArea` (summed per-part overlap, feeding `clearAt`'s
+damage formula). Verified live: a 600s max-weapons run produced 7
+Bulwarks with correct armour, 4-part bodies whose bounding radius actually
+enclosed every part, rendering as visually distinct pale, elongated shapes
+against round pink Behemoths.
+
+**Phase 4 is complete** as of this decision — the terrain layer (4A), its
+visual system (4B), and the full coagulant roster reading all four of its
+identity signals (4C-1/4C-2) — with no further sub-phases planned before
+the design record's own next milestone, Phase 5.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

@@ -1,6 +1,8 @@
 # Phase 4C-1 — armour, Sclerotic and Blastoma
 
-**Status:** planned, awaiting greenlight. Written 2026-08-07.
+**Status:** ✅ implemented and verified live 2026-08-07, same day as written
+and greenlit — Decision 68. Two constants changed after live verification;
+see §10.
 **Source design:** `docs/sessions/2026-08-05-slime-and-arsenal-rework.md`
 §10 (the coagulant roster) and §11 (infection events); Decisions 30, 44, 48.
 **Scoping conversation:** 2026-08-07, with the project owner.
@@ -138,14 +140,12 @@ its travel direction, gets `splitAtMass = 0` so nothing splits twice, and
 derives radius/speed/kind from its own mass like any other coagulant.
 Conservation is exact: parent mass in, same mass out, in two containers.
 
-> **One open detail flagged rather than assumed.** The owner said "two
-> little **motes**." Deriving fragment kind from mass (Rule 4) usually
-> gives *congealers*, not motes — a 200-mass Blastoma splitting at 100
-> yields two 50-mass fragments, and `MASS_CONGEALER` is 25. Hard-coding
-> `kind: 'mote'` would be the design's first spawn-table exception.
-> **Recommendation: derive from mass**, and if the fragments read as too
-> chunky in play, lower the split fraction rather than override the kind.
-> Cheap either way — say which you prefer.
+> **Resolved:** derive from mass, as recommended. The owner's "two little
+> motes" was describing the fantasy, not a hard requirement — *"I agree
+> with deriving it from the mass."* Confirmed as-built: fragments call
+> `coagulantKindFromMass`, the same Wave 1 function every fragment always
+> used, and read as congealers or motes depending on the parent's size at
+> the moment it split, matching Rule 4 rather than a hard-coded kind.
 
 ---
 
@@ -280,3 +280,37 @@ tuned without it. One constant, easily walked back.
 | The formation drain/tell visual | BACKLOG — a known §10 gap, own item |
 | Event frequency and vein/bloom weighting | BACKLOG — best judged at the 4C gate |
 | More AoE weapons (Blastoma's stated counter) | Phase 6 arsenal session |
+
+---
+
+## 14. What changed during implementation
+
+Two constants, both found via the debug-harness methodology (Decision 59)
+— neither showed up any other way, since both required watching Sclerotic
+actually appear (or fail to) across a real multi-hundred-second run.
+
+**(a) `BLOOM_MATURITY_ACTIVE_RATE`/`PEAK_RATE` raised roughly 4x (0.04/0.07
+→ 0.15/0.2).** A bloom's own formation attempt fires at the *instant* peak
+begins (`advancePhase` arms `formationTimer` to 0 exactly then), so only
+the 4s active-phase window has actually accumulated maturity by the time a
+bloom tries to spark itself — not active+peak combined, which the first
+pass assumed. At the original rate, a bloom's own epicenter reached only
+~0.16 maturity by its own spark moment, nowhere near
+`MATURITY_SCLEROTIC_THRESHOLD`. §11's "blooms let armour appear mid-field,
+earlier" wasn't happening at all until this was caught and fixed.
+
+**(b) `MATURITY_SCLEROTIC_THRESHOLD` lowered from 0.55 to 0.4.** Formation
+reads *mean* maturity over the whole flood-filled footprint, and that mean
+dilutes hard toward the surrounding region's average — a single grid cell
+can scar up to ~0.97 under sustained combat, but the highest mean any
+coagulant actually sparked at, across a 500s max-weapons run even after
+fix (a), was ~0.46. 0.55 was simply never reachable in practice. 0.4 sits
+with real headroom above `AGE_CEILING` (0.33, so passive aging still can't
+trigger it alone) and below what was empirically observed as reachable.
+Verified after both fixes: Sclerotics formed regularly (5 of 8 active
+coagulants in one run), with armor scaling correctly and rendering in the
+correct pale palette.
+
+Everything else — the identity function's structure, the fragmentation
+metric, the split mechanics, the +50% weapon damage — shipped as planned
+with no changes.

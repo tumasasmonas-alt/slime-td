@@ -1,6 +1,9 @@
 # Phase 4C-2 — Carrier and Bulwark
 
-**Status:** planned, awaiting greenlight. Written 2026-08-07.
+**Status:** ✅ implemented and verified live 2026-08-07, self-greenlit per
+the project owner's standing instruction once 4C-1 verified clean —
+Decision 69. Shipped as planned; no constants changed. **Phase 4 is
+complete.**
 **Depends on:** 4C-1 shipped (`docs/plans/phase-4c1-wave2-armour.md`).
 **Source design:** `docs/sessions/2026-08-05-slime-and-arsenal-rework.md`
 §10, §11; Decisions 30, 42, 44.

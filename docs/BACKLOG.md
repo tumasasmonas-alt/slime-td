@@ -20,81 +20,61 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 Phase 4C — Coagulants Wave 2
+### 🟡 Phase 5 — Arsenal framework
 
-**Phase 4A and 4B shipped 2026-08-07** (Decisions 63–67) — maturity exists
-and is now readable on screen. 4C is what finally *uses* it: the terrain
-layer stops being scenery and starts picking what the horde sends.
+**Phase 4 is fully shipped as of 2026-08-07** (4A/4B: Decisions 63–67;
+4C-1/4C-2: Decisions 68–69) — the full coagulant roster from the 2026-08-05
+design record §10 exists and forms from field state alone (mass, maturity,
+mass-shape, corridor density), armour is live, and Carrier/Bulwark shipped
+as the pair §10 asked for. Both 4C-1 and 4C-2 were self-greenlit per the
+owner's standing 2026-08-07 instruction once each was tested and verified
+live; see `docs/sessions/2026-08-07-phase-4c-wave2.md` for the full
+account, including the two balance bugs the live debug-harness caught that
+no unit test would have (bloom maturity rates too low to ever form a
+Sclerotic; the mean-over-footprint dilution that made the original
+threshold unreachable).
 
-Content, per the 2026-08-05 record §10/§11:
-- **Bloom's maturity payload activates** — deferred here from 3B
-  specifically so 4A's global resistance change could be read on its own
-  (Decision 48, corrected).
-- **Four new coagulant types**, identity derived from field state rather
-  than a spawn table: **Blastoma** (high but fragmented mass — a bag of
-  blobs), **Carrier** (needs a dense corridor to the core; gated purely on
-  player failure), **Sclerotic** (high maturity — the player's own scar
-  ring gets up and walks), **Bulwark** (high maturity with soft mass
-  behind it — a moving wall).
-- **The vein-hits-scar-ring beat** — fresh short-runway chaff *plus* it
-  wakes Sclerotics out of the player's own callus.
+**Next up is Phase 5**, per the project's own go-linearly rule (below):
+weapon/extension/gem slots, an inventory UI, and dissolving the current
+flat passives into that slot system. See the session record §17 for scope.
 
-**Carrier and Bulwark should ship as a pair** (§10) — Carrier makes the
-Threat Priority gem meaningful, Bulwark makes it a genuine tradeoff.
-Without Bulwark it's a flat tax rather than a decision.
+### Phase 4C — done, for reference
 
-**Split into two on 2026-08-07**, along a real technical seam — 4C as
-written is bigger than 3C was, and 3C needed a playtest-and-fix round:
-
-- **4C-1** — bloom's maturity payload, armour from maturity, **Sclerotic**
-  and **Blastoma**. Identity rules over existing mechanics; no new movement,
-  no new body shape. Also carries a **+50% weapon damage** pass, so armour
-  can land without the game becoming unplayable. Plan:
-  `docs/plans/phase-4c1-wave2-armour.md`.
-- **4C-2** — **Carrier** and **Bulwark**, the pair §10 asks for, plus the
-  multi-part body model both need. Plan:
-  `docs/plans/phase-4c2-carrier-bulwark.md`.
-
-**Ends in a playtest gate** after 4C-2.
-
-**The standing risk to watch:** §7's counters — penetration, range — are
-Phase 5/6 gems that still don't exist. 4A was tuned gently for exactly this
-reason. 4C adds *armoured* enemies on top of that, so it is the point where
-"the scar ring might feel oppressive" (the design record's own risk #4)
-actually gets tested. Owner's call on posture: **tune gently and raise
-weapon damage**, so the mechanics are visible without the run ending in 30
-seconds.
-
-Projectile-blocking (open question 4) was scoped **out** of 4C and moved to
-*Ideas* below.
-
-### Phases 4A / 4B — done, for reference
-
-4A's scoping conversation and as-built delta (four constants and two
-formula shapes changed during implementation, all found by running the
-game) are in `docs/plans/phase-4a-maturity.md`; the debugging account is in
+Plans: `docs/plans/phase-4c1-wave2-armour.md` (Sclerotic, Blastoma, armour
+from maturity, bloom's maturity payload, +50% weapon damage) and
+`docs/plans/phase-4c2-carrier-bulwark.md` (Carrier's corridor-gated
+identity and field-feeding, Bulwark's multi-part cluster-of-circles body).
+Both carry "What changed during implementation" sections documenting the
+as-built deltas. 4A's scoping conversation and as-built delta are in
+`docs/plans/phase-4a-maturity.md`; the debugging account is in
 `docs/sessions/2026-08-07-phase-4a-maturity.md`. 4B's plan and its single
 as-built delta are in `docs/plans/phase-4b-two-axis-visuals.md`.
+
+Projectile-blocking (an open question raised during 4C scoping) was scoped
+**out** and moved to *Ideas* below.
 
 ### Standing rule — go phase by phase
 
 Settled 2026-08-07, the owner's words: *"don't add answers that there are
-no questions for yet."* Phase 4 adds the **questions** (armor, penetration,
-range-vs-callus); Phases 5/6 add the **answers**. Jumping to the arsenal
-means authoring content against a threat model that doesn't exist yet,
-which §13 of the design record and Decision 36 both warn against.
+no questions for yet."* Phase 4 was the **questions** (armor, penetration,
+range-vs-callus, the full threat roster); Phases 5/6 are the **answers**,
+now with a settled threat model to author against. Jumping to the arsenal
+before Phase 4 closed would have been the ordering mistake §13 of the
+design record and Decision 36 both warn against — which is exactly why 4C
+wasn't compressed or skipped despite five sub-phases landing in one day.
 
 **Where the reasoning lives:**
 `docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is —
 **§4's no-aim premise especially; it has been violated twice and needed
 correcting both times**), `2026-08-06-arsenal-and-coagulant-mechanism.md`
 (how it works), `2026-08-07-xp-economy.md` (Phase 3D),
-`2026-08-07-phase-4a-maturity.md` (Phase 4A), and DECISIONS.md #23–#65.
+`2026-08-07-phase-4a-maturity.md` (Phase 4A),
+`2026-08-07-phase-4c-wave2.md` (Phase 4C), and DECISIONS.md #23–#69.
 
 **Still open, not urgent:** whether a behemoth crossing the arena reads as
 dramatic or tedious, and whether the conservation rules feel right in
 practice (motes shouldn't chain into behemoths — Rule 4). Both need more
-playtesting than we've done to judge; neither blocks 4B.
+playtesting than we've done to judge; neither blocks Phase 5.
 
 ### The rest of the phase plan
 
@@ -105,8 +85,8 @@ Full detail in the session record §17.
 | **3A–3D** | ✅ Complete — teardown, Infection Events, Coagulants Wave 1, XP economy |
 | **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay, resistance/regrowth/ceiling effects |
 | **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse and `frozen` visual both fixed |
-| **4C** | Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark → **playtest gate** |
-| **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved |
+| **4C** | ✅ Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark. **Phase 4 complete.** |
+| **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved → **next up** |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |

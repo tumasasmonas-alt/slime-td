@@ -208,7 +208,25 @@ export type InfectionEvent = VeinInfectionEvent | BloomInfectionEvent;
 // Coagulants: Phase 3C, Decision 42. No HP — `mass` IS the hit points,
 // the arrival damage, and the XP value, all at once. See
 // docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md §7.
-export type CoagulantKind = 'mote' | 'congealer' | 'behemoth';
+// 'sclerotic' and 'blastoma' added in Phase 4C-1 (Decision 68) — identity
+// derived from maturity and mass-shape, not a spawn table (§10, Rule 4).
+// 'carrier' and 'bulwark' added in Phase 4C-2 (Decision 69) — corridor
+// density and (maturity, mass) respectively.
+export type CoagulantKind = 'mote' | 'congealer' | 'behemoth' | 'sclerotic' | 'blastoma' | 'carrier' | 'bulwark';
+
+// Phase 4C-2 (Decision 69): a body part, offset from the coagulant's
+// centre. Absent/empty `parts` means "a single circle of radius `radius`
+// at the centre" — every Wave 1 kind and 4C-1's Sclerotic/Blastoma, none
+// of which need this. Bulwark is the first body that isn't a single
+// circle ("wide and flat rather than round," §10), modelled as a cluster
+// of circles rather than true ellipse geometry so every existing piece of
+// circle math (circleOverlapArea, distance checks) keeps working
+// unmodified — see docs/plans/phase-4c2-carrier-bulwark.md §2.
+export interface CoagulantPart {
+  dx: number;
+  dy: number;
+  r: number;
+}
 
 export interface CoagulantSeed {
   a: number;
@@ -231,8 +249,8 @@ export interface Coagulant {
   x: number;
   y: number;
   mass: number;
-  // Ships at ~0 for every Wave 1 kind — maturity, which picks a nonzero
-  // value, doesn't exist until Phase 4A (Decision 44).
+  // Ships at ~0 for every Wave 1 kind (Decision 44) — Phase 4C-1 (Decision
+  // 68) is what finally derives a nonzero value, from source maturity.
   armor: number;
   kind: CoagulantKind;
   radius: number;
@@ -243,6 +261,31 @@ export interface Coagulant {
   // inside a draw call — the bubbleSeeds/novaFx bug class again
   // (docs/DECISIONS.md #4, #7).
   seeds: CoagulantSeed[];
+  // Blastoma-only (Phase 4C-1, Decision 68): fractures into two fragments
+  // once mass drops to this value. 0 means "never splits" — the default
+  // for every other kind, and for a fragment itself, so nothing re-splits.
+  // Checked in the update pass, not in clearAt, for the same reason
+  // Decisions 4/7 exist: pushing new entities onto state.coagulants while
+  // clearAt is mid-iteration over that same array is the mutate-during-
+  // iteration hazard, not a draw call, but the same class of bug.
+  splitAtMass: number;
+  // The mean maturity of the ground this coagulant formed from — drives
+  // both armor (coagulantArmor()) and its render colour (Decision 68),
+  // sourced from the same two-axis palette terrain uses (Phase 4B).
+  sourceMaturity: number;
+  // Phase 4C-2 (Decision 69): non-circular bodies. `radius` remains the
+  // bounding circle for cheap broad-phase rejection everywhere it's
+  // already used; when `parts` is present, damage/collision/targeting
+  // narrow-phase against the actual parts instead. Empty/absent for every
+  // kind except Bulwark — see systems/coagulants.ts's coagulantSurfaceDist
+  // and coagulantOverlapArea.
+  parts: CoagulantPart[];
+  // Phase 4C-2 (Decision 69): Carrier-only — the mass it formed with,
+  // needed as a stable reference point for capping how much it can grow
+  // by feeding off the field it crosses (systems/coagulants.ts's
+  // feedCarrier). Equal to `mass` at formation for every kind; harmless
+  // and unused for anything that doesn't feed.
+  startMass: number;
 }
 
 export interface GameState {

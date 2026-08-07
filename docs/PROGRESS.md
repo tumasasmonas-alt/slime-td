@@ -48,21 +48,27 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-07 (Phase 4B shipped — the field is now readable)
+**Last updated:** 2026-08-07 (Phase 4C shipped — **Phase 4 is complete**)
 
-**Phase 3 is complete and Phase 4A/4B are built.** 3A (teardown), 3B
-(Infection Events), 3C (Coagulants Wave 1) and 3D (XP economy) are all
-playtested and confirmed — verdict on 3D: *"it plays much better now."*
-**4A added the maturity field**: the arena hardens where the player fights
-and stays soft where they can't reach (Decisions 63–65). **4B made both
-axes readable**: density → alpha, maturity → colour, on a pink → coral →
-clay → bone ramp, plus a rim for `frozen` (Decisions 66–67). Owner's
-verdict on 4B: *"looks nice, I like the more colour gradient."*
+**Phase 3 and all of Phase 4 are built.** 3A–3D are playtested and
+confirmed — verdict on 3D: *"it plays much better now."* **4A** added the
+maturity field (Decisions 63–65); **4B** made both axes readable, verdict
+*"looks nice, I like the more colour gradient"* (Decisions 66–67); **4C**
+completed the coagulant roster — Sclerotic, Blastoma (4C-1, Decision 68),
+Carrier, Bulwark (4C-2, Decision 69) — so all seven kinds from §10 now
+exist and all four of its identity readings (mass, maturity, mass shape,
+corridor density) are wired up. Weapon damage raised 50% alongside armour
+landing, at the owner's instruction, so the mechanic is visible without
+ending runs in 30 seconds.
 
-**4A took five bug-fix rounds after first build**, all found by running the
-game rather than by tests — including a regression that made 22% of the
-arena permanently invisible. Full account in the session record; the
-pattern is worth reading before trusting the suite on anything visual.
+**Every phase since 4A has found real bugs only by running the game**, not
+by the test suite — worth internalizing before trusting a formula's first
+draft. 4A took five rounds (one made 22% of the arena permanently
+invisible); 4C-1 found two — a bloom's own formation attempt fires before
+most of its maturity budget accumulates, and the Sclerotic threshold was
+set from a number (0.55) that mean-based flood-fill dilution made
+unreachable in practice (fixed to 0.4). Full accounts in the session
+records; the pattern, not just the fixes, is the thing worth reading.
 
 **Balance itself is still explicitly not gradeable** — the owner's own
 scoping: weapon damage numbers, slime speed and overall game feel need the
@@ -71,26 +77,36 @@ Phase 8 (Decision 13's supersession), not a reason to reorder anything.
 
 | | |
 |---|---|
-| Tests | 286 passing (35 test files) — one known flake, see BACKLOG |
+| Tests | 337 passing (35 test files) — one known flake, see BACKLOG |
 | Source | 64 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main` |
-| Code state | **Phase 3 complete (3A–3D) + Phase 4A + 4B.** 4C onward is still design-only. |
-| Blockers | **None.** Next is Phase 4C (Coagulants Wave 2), linearly. |
+| Code state | **Phase 3 complete (3A–3D) + Phase 4 complete (4A–4C).** Phase 5 onward is still design-only. |
+| Blockers | **None.** Next is Phase 5 (arsenal framework), linearly. |
 
 **What works today:** the horde-economy loop, end to end, playtested
-twice. Infection grows as a density field across a **fixed perimeter**,
-punctuated by **Infection Events** (branching veins, radial blooms) that
-inject growth and, at their peak, spark **coagulants** out of whatever
-contiguous mass a bounded flood-fill finds — now with a visible rise/fade
-telegraph before one can move or be targeted (Decision 54). A coagulant is
-pure mass with no separate HP — every weapon damages it through the same
-formula that clears grid tissue, scaled by how much of the hit actually
-overlaps its body. Kill one and it's gone, converted to XP; let one reach
-the core and it dumps its full remaining mass as tower damage and a field
-breach. Six auto-firing weapons, eight passives via level-up cards, contact
-damage, flavour-only tiers, game over, restart with a fresh maze.
+repeatedly. Infection grows as a density field across a **fixed
+perimeter**, hardening into a scar ring where the player fights while the
+wilderness stays soft (Decisions 63–65), rendered on two independent
+visual axes (Decisions 66–67). **Infection Events** (branching veins,
+radial blooms) inject growth and maturity and, at their peak, spark
+**coagulants** out of whatever contiguous mass a bounded flood-fill
+finds — with a visible rise/fade telegraph before one can move or be
+targeted (Decision 54). Identity now reads all four of §10's signals:
+**Mote/Congealer/Behemoth** from mass alone, **Sclerotic** from hardened
+ground, **Blastoma** from a fragmented mass shape (splitting into two
+fragments partway through a fight), **Carrier** from a thick corridor back
+to the core (and feeds off it as it travels), **Bulwark** from high mass
+*and* high maturity, rendered as a genuinely non-circular wall (Decisions
+68–69). A coagulant is pure mass with no separate HP — every weapon
+damages it through the same formula that clears grid tissue, scaled by how
+much of the hit actually overlaps its body, now armoured for kinds born of
+hardened ground. Kill one and it's gone, converted to XP; let one reach the
+core and it dumps its full remaining mass as tower damage and a field
+breach. Six auto-firing weapons (damage raised 50% alongside armour
+landing), eight passives via level-up cards, contact damage, flavour-only
+tiers, game over, restart with a fresh maze.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -110,26 +126,26 @@ and coagulant speed were cut a second time (Decision 57's second half).
 
 ### ⚠️ Read this before writing any code
 
-**Go phase by phase. Don't skip ahead.** This was settled explicitly on
-2026-08-07, when the previous session's docs and the plan of record
-disagreed about whether to jump to the arsenal. The owner's rule, which is
-a sharper statement of the design principle than the design record itself
-manages:
+**Go phase by phase. Don't skip ahead.** Settled 2026-08-07:
 
 > **Don't add answers that there are no questions for yet.**
 
-**Phase 4 adds questions** (armor, penetration, range-vs-callus, the whole
-maturity axis). **Phases 5/6 add answers** (gems, extensions, 20 weapons).
-Building answers before the questions exist means authoring content against
-a threat model that isn't there — which §13 of the design record already
-warns against, and which is the same ordering mistake Decision 36 argued
+**Phase 4 added the questions** (armor, penetration, range-vs-callus, the
+whole maturity axis, the full coagulant roster). **Phase 5/6 add the
+answers** (gems, extensions, 20 weapons) — and as of this session, **Phase
+4 is complete**, so those answers finally have a settled threat model to
+be authored against. Building them any earlier would have meant authoring
+content against a target that kept moving, which §13 of the design record
+warns against and which is the same ordering mistake Decision 36 argued
 down once before.
 
 The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
-gem system, and the tier table is demoted to flavour. **All of Phase 3 is
-done and playtested.**
+gem system, and the tier table is demoted to flavour. **All of Phase 3 and
+Phase 4 are done and (mostly) playtested** — 4C-2 specifically has only
+been verified via the debug harness, not yet by the project owner's own
+play; see the *Now* section of BACKLOG.
 
 **Start here, in order:**
 
@@ -138,22 +154,27 @@ done and playtested.**
    considered and rejected"*, which will save re-proposing something
    already tested and found broken. **§4 (the no-aim premise) is the one
    section to re-read even if you think you know it** — it was violated
-   again on 2026-08-07 and needed correcting.
+   twice already and needed correcting both times.
 2. **`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md`** —
    *how it works.* The layer below: what a coagulant is in code, how
    formation is computed, how armor and the card pool are structured. Also
    has a rejected-ideas table.
-3. **`docs/sessions/2026-08-07-xp-economy.md`** — Phase 3D, the premise
-   correction, and why behemoth timing was deferred rather than gated.
-4. **`docs/DECISIONS.md` #23–#62** — the load-bearing calls in short form.
+3. **`docs/sessions/2026-08-07-xp-economy.md`**,
+   **`2026-08-07-phase-4a-maturity.md`**, **`2026-08-07-phase-4c-wave2.md`**
+   (4B has no separate session file — its plan,
+   `docs/plans/phase-4b-two-axis-visuals.md`, carries the same
+   reasoning) — the rest of this project's most productive single day:
+   Phase 3D, 4A, 4B, and 4C, each with a real bug found only by running
+   the game. Read these before trusting a new formula's first draft.
+4. **`docs/DECISIONS.md` #23–#69** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
-   playtest-and-fix round; 61–62 are Phase 3D. #47–62 are
-   implementation-time findings, not from a design session — see the notes
-   at the top of each of those sections.
-5. **`docs/BACKLOG.md`** *Now* section — Phase 4A (maturity) is the
-   concrete next step. Phase 3's own follow-ups (coral-biased vein
-   geometry, spontaneous coagulation, early event frequency, behemoth
-   timing) are in *Ideas* and *Bugs*.
+   playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
+   68–69 are 4C. #47–69 are implementation-time findings, not from a
+   design session — see the notes at the top of each of those sections.
+5. **`docs/BACKLOG.md`** *Now* section — Phase 5 (arsenal framework) is
+   the concrete next step. Phase 3/4's own follow-ups (event tuning, the
+   coagulant formation drain visual, more AoE weapons, spontaneous
+   coagulation, behemoth timing) are in *Ideas* and *Bugs*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -223,6 +244,85 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-07 (latest) — Phase 4C: Coagulants Wave 2. **Phase 4 closes.**
+
+**Planning + implementation, two sub-phases built back to back.** Full
+record: **`docs/sessions/2026-08-07-phase-4c-wave2.md`**. Plans:
+**`docs/plans/phase-4c1-wave2-armour.md`**,
+**`docs/plans/phase-4c2-carrier-bulwark.md`**.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Phase 4C-1 — Sclerotic/Blastoma identity, armor from maturity, bloom's maturity payload, `WEAPON_DAMAGE_SCALE`. Phase 4C-2 — Carrier (corridor identity + feeding), Bulwark (mass-shape identity + multi-part bodies), `coagulantSurfaceDist`/`coagulantOverlapArea` shared across `grid/clear.ts`, `systems/frontier.ts`, `systems/coagulants.ts` |
+
+**Discussed**
+
+- **4C was split before any code, along a real technical seam.** As
+  scoped, 4C was bigger than 3C, which had needed its own
+  playtest-and-fix round. 4C-1 (identity rules on existing mechanics) and
+  4C-2 (Carrier/Bulwark, which need machinery the codebase didn't have)
+  split cleanly, keeping the pair together as §10 requires.
+- **The owner pre-authorized the whole arc in one instruction** — build
+  4C-1, verify live, self-greenlight 4C-2 if it read clean, then report on
+  the whole phase. Both sub-phases shipped in one sitting under that
+  standing authorization.
+- **Blastoma splits at 50% of starting mass, into two fragments deriving
+  their own kind from their own mass** — not inherited, not hard-coded.
+  The owner's "two little motes" was the fantasy, not a requirement:
+  *"what I meant wasn't supposed to read like a hardcode, but more like an
+  example... I agree with deriving it from the mass."* The owner also
+  flagged a real future idea while agreeing — the project may eventually
+  need something closer to a spawn table, or a merge of that with the
+  pure-spark model, once the roster grows further. Explicitly not now;
+  logged for whenever it's needed.
+- **Two balance bugs, same debug-harness methodology as every phase since
+  4A, neither visible any other way.** A bloom's own formation attempt
+  fires at the *instant* peak begins, so only its 4-second active-phase
+  window (not active+peak combined, which the first pass assumed) had
+  accumulated maturity by the time it tried to spark itself — retuned
+  ~4x. Separately, `MATURITY_SCLEROTIC_THRESHOLD` (0.55) was never reached
+  in practice: formation reads *mean* maturity over a whole flood-filled
+  footprint, which dilutes hard toward the region's average, so even
+  cells that scarred past 0.9 individually never pushed a formation's
+  *mean* past ~0.46 across a 500s run. Zero Sclerotics formed before
+  either fix; roughly 5 of 8 active coagulants were Sclerotic after both.
+- **Bulwark's "wide and flat, not round" body forced a real architecture
+  decision**, since every existing damage/collision/targeting/render path
+  assumed a circle. Modelled as a cluster of circles rather than true
+  ellipse geometry — `radius` stays the bounding circle for every
+  existing cheap reject, unchanged; `parts`, when populated, get
+  narrow-phase treatment through two new shared primitives
+  (`coagulantSurfaceDist`, `coagulantOverlapArea`). Reuses every piece of
+  circle math already written and tested, at the accepted cost of a
+  documented simplification (overlapping parts' damage isn't
+  de-duplicated).
+
+**Decided** — Decisions 68 (identity's third reading — mass shape;
+Sclerotic and Blastoma; armor from maturity; the two threshold retunes)
+and 69 (identity's fourth reading — corridor density; Carrier and
+Bulwark; the cluster-of-circles body architecture). **Phase 4 is
+complete.**
+
+**Verified**: 337/337 tests passing (up from 286 — 51 new, mostly written
+against invariants — identity function behaviour, conservation, geometry
+— rather than magic numbers), typecheck and build clean, debug harness
+removed both times. Verified live: after the two retunes, Sclerotics
+formed regularly with correct armor and pale rendering; a 600s max-weapons
+run produced 7 correctly-bodied Bulwarks (armor, 4 parts, a bounding
+radius that actually enclosed every part) rendering as visually distinct
+pale walls against round pink Behemoths; Carrier's mechanic is confirmed
+correct by hand-calculated-geometry integration tests, though it did not
+appear in either live run tested (plausible given how demanding the
+corridor bar is — no dead corridor under max weapons, none under a weak
+loadout either).
+
+**Planned** — **Phase 5, the arsenal framework.** No blockers. One
+open item for the project owner: 4C-2 has only been verified via the
+debug harness, not yet played directly — worth a look before treating the
+roster as fully settled.
 
 ### 2026-08-07 (later still) — Phase 4B: the two-axis visual system
 
@@ -1055,30 +1155,35 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 4C, Coagulants Wave 2. Phase 3, 4A and 4B are complete.**
-3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round), 3D/4A/4B on
-2026-08-07 — see the *Session log* above.
+**Next: Phase 5, the arsenal framework. Phase 3 and Phase 4 are both
+complete.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round),
+3D/4A/4B/4C-1/4C-2 all on 2026-08-07 — see the *Session log* above. That
+is five sub-phases in one day, each with at least one real bug found only
+by running the game — read the session records before assuming a new
+formula's first draft is right.
 
-**Go linearly.** Settled 2026-08-07: no skipping ahead to the arsenal.
-Phase 4 adds the *questions* (armor, penetration, range-vs-callus); Phases
-5/6 add the *answers*. Content authored before its threat model exists is
-the ordering mistake §13 and Decision 36 both warn about.
+**Go linearly — this just closed out.** Phase 4 was the *questions* (armor,
+penetration, range-vs-callus, the full coagulant roster); Phase 5/6 are
+the *answers*, and now have a settled threat model to be authored against.
+Content authored before that model existed would have been the ordering
+mistake §13 and Decision 36 both warn about — which is exactly why 4C
+wasn't skipped or compressed despite the temptation to jump ahead.
 
 The design is settled end to end and so is the mechanism, all the way
-through the horde's first playable form. Full detail in the 2026-08-05
+through the horde's complete threat model. Full detail in the 2026-08-05
 record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 
 | Phase | Content |
 |---|---|
 | **3A** | ✅ Delete nodes · rename `safeRadius` → `perimeter` (now a fixed constant) · demote `TIERS_LIST` to flavour |
-| **3B** | ✅ Infection Events — vein (acts on density) + bloom (acts on maturity — payload deferred to 4A), full lifecycle |
+| **3B** | ✅ Infection Events — vein (acts on density) + bloom (acts on maturity), full lifecycle |
 | **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth. Playtest-and-fix round done (Decisions 54–60). |
 | **3D** | ✅ XP economy — quadratic level curve, 15% coagulant risk premium, gem showers as rate limiter (Decision 61). Playtested: *"plays much better now."* |
-| **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay; clear-resistance, regrowth-rate and threshold-relative ceiling effects (Decisions 63–65). Neon-green placeholder visual. |
-| **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse fixed, `frozen` finally visible, 4A's placeholder replaced (Decisions 66–67). Texture deferred to Phase 9. |
-| **4C-1** | Wave 2 part one — bloom's maturity payload, armour from maturity, Sclerotic, Blastoma, +50% weapon damage → **next up** |
-| **4C-2** | Wave 2 part two — Carrier + Bulwark (the pair §10 requires), multi-part bodies → **playtest gate** |
-| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
+| **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay; clear-resistance, regrowth-rate and threshold-relative ceiling effects (Decisions 63–65). |
+| **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse fixed, `frozen` finally visible (Decisions 66–67). Texture deferred to Phase 9. |
+| **4C-1** | ✅ Sclerotic, Blastoma, armour from maturity, bloom's maturity payload, +50% weapon damage (Decision 68). |
+| **4C-2** | ✅ Carrier (corridor identity + feeding), Bulwark (multi-part body, the pair §10 requires) (Decision 69). **Phase 4 complete.** |
+| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved → **next up** |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase · real balance pass · leaderboard |
