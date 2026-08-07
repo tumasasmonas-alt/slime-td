@@ -15,6 +15,8 @@ function makeTestGrid(): Grid {
     growth: new Float32Array(size),
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
+    maturity: new Float32Array(size),
+    matBucket: new Int8Array(size),
     maxRange: 300,
     perimeter: 20,
   };
@@ -62,6 +64,8 @@ describe('updateWardPulse', () => {
       growth: new Float32Array(size),
       frozen: new Float32Array(size),
       bucket: new Int8Array(size),
+      maturity: new Float32Array(size),
+      matBucket: new Int8Array(size),
       maxRange: 500,
       perimeter: 200, // larger than the base+perLevel formula alone would give at level 1
     };

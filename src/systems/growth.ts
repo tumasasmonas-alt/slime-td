@@ -1,6 +1,7 @@
 import type { Grid, Tower } from '../state';
 import { cellBucket } from '../grid/grid';
 import { AMBIENT_BASE, CREEP_RAMP } from '../tuning/growth';
+import { growthCeiling, regrowthRateMult } from '../tuning/maturity';
 import { clamp, dist } from '../util/math';
 
 // Ambient infection growth. Two independent formulas rather than one
@@ -57,8 +58,40 @@ export function applyAmbientGrowth(
       }
       if (rate <= 0) continue;
 
+      // Phase 4A: mature ground regrows slower, to a higher ceiling — a
+      // durability threat, not a speed threat (§7: speeding up the kill
+      // zone would be unfair, since it's the one place the player is
+      // forced to fight). Virgin ground tops out short of full because it's
+      // undisturbed and has no reason to harden into anything.
+      //
+      // The ceiling is a fraction of this cell's headroom *above its own
+      // threshold*, never an absolute density — an absolute ceiling below
+      // grid.ts's 0.94 threshold cap left 22% of the arena permanently
+      // unrevealable. See tuning/maturity.ts's CEILING_VIRGIN_FRAC.
+      const maturity = grid.maturity[i]!;
+      const ceiling = growthCeiling(maturity, grid.threshold[i]!);
       const dens = grid.growth[i]!;
-      const newDens = Math.min(1, dens + rate * dt * (1 - dens));
+
+      // Ambient growth only ever *adds*. A cell already at or above its
+      // ceiling is left completely alone rather than being pulled back down
+      // to it — Infection Events inject full-thickness slime on purpose
+      // (2026-08-07, tuning/maturity.ts), and a ceiling that clawed that
+      // back would silently undo every vein and bloom a few ticks after it
+      // landed. The ceiling caps what ambient *grows to*, not what a cell
+      // is allowed to hold.
+      if (dens >= ceiling) continue;
+
+      // Rate and ceiling are deliberately independent levers: the logistic
+      // term stays normalized against full density (1 - dens) rather than
+      // against the remaining headroom (ceiling - dens), so
+      // regrowthRateMult alone controls *speed* and growthCeiling alone
+      // controls *where it stops*. Normalizing against headroom instead
+      // makes them cancel — mature ground's larger headroom exactly offsets
+      // its slower rate, and "slower, to a higher ceiling" (§7) collapses
+      // into "identical speed," which is measurably what happened before
+      // this shape.
+      const effRate = rate * regrowthRateMult(maturity);
+      const newDens = Math.min(ceiling, dens + effRate * dt * (1 - dens));
       if (newDens !== dens) {
         grid.growth[i] = newDens;
         const nb = cellBucket(grid, i);

@@ -20,41 +20,56 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 Phase 4A — the maturity field
+### 🟡 Phase 4B — the two-axis visual system
 
-**Phase 3 is complete** (3A–3D, all playtested; 3D's verdict:
-*"plays much better now"*). Next is Phase 4A, linearly.
+**Phase 4A shipped 2026-08-07** (Decisions 63–65) — maturity exists, the
+arena hardens where the player fights, and it's rendered with a
+deliberately crude **neon-green placeholder**. 4B is what makes it real.
 
-**Go phase by phase — settled 2026-08-07.** The owner's rule:
-*"don't add answers that there are no questions for yet."* Phase 4 adds
-the questions (armor, penetration, range-vs-callus); Phases 5/6 add the
-answers. Jumping to the arsenal means authoring content against a threat
-model that doesn't exist yet, which §13 of the design record and Decision
-36 both warn against.
+Content, per the 2026-08-05 record §6: **density → thickness/opacity,
+maturity → colour and texture.** 5 density steps × 4 maturity steps = 20
+visual states from two axes, none hand-authored. Also folds in the
+palette-collapse bug below, since it's the same code.
 
-4A's content, per the 2026-08-05 record §7 and §17: a `maturity`
-`Float32Array` alongside `growth`; scar accumulation from `clearAt`
-(**you scar what you clear** — the battlefield hardens, the wilderness
-stays soft); a slow age component with a low ceiling (~⅓ of max); passive
-decay when a cell isn't being hit; a cap. Effects: maturity multiplies
-clear resistance, and mature ground regrows *slower to a higher ceiling*
-— a durability threat, not a speed threat, deliberately, since the kill
-zone is the one place the player is forced to fight.
+**The constraint §6 is emphatic about:** the two channels must stay
+*strictly* separated. Thickness must mean only mass; colour/texture must
+mean only hardness. If they bleed into each other, 20 states read worse
+than 5.
 
-**Read §7 in full before starting** — the first version of this mechanic
-was wrong (age-based), and the reasoning for the inversion is the whole
-point of that section.
+Two things 4A leaves for 4B specifically:
+- **Replace the neon-green placeholder.** It's debug-visible on purpose and
+  shares a colour family with Caustic Cloud (`#c9ff8a`) — fine while it's
+  obviously temporary, wrong as shipped art.
+- **The top colour bucket now doubles as a scarred-ground signature**,
+  while Decision 46 renders coagulants in that same bucket. Probably a
+  legibility win, but worth a deliberate look when the palette is reworked.
 
-Reasoning lives in four places: `docs/sessions/2026-08-05-slime-and-arsenal-rework.md`
-(what the game is — **§4's no-aim premise especially**),
-`docs/sessions/2026-08-06-arsenal-and-coagulant-mechanism.md` (how it
-works), `docs/sessions/2026-08-07-xp-economy.md` (Phase 3D), and
-DECISIONS.md #23–#62.
+### Phase 4A — done, for reference
+
+The scoping conversation and a full as-built delta (four constants and two
+formula shapes changed during implementation, all found by running the
+game) are in `docs/plans/phase-4a-maturity.md`; the debugging account is in
+`docs/sessions/2026-08-07-phase-4a-maturity.md`.
+
+### Standing rule — go phase by phase
+
+Settled 2026-08-07, the owner's words: *"don't add answers that there are
+no questions for yet."* Phase 4 adds the **questions** (armor, penetration,
+range-vs-callus); Phases 5/6 add the **answers**. Jumping to the arsenal
+means authoring content against a threat model that doesn't exist yet,
+which §13 of the design record and Decision 36 both warn against.
+
+**Where the reasoning lives:**
+`docs/sessions/2026-08-05-slime-and-arsenal-rework.md` (what the game is —
+**§4's no-aim premise especially; it has been violated twice and needed
+correcting both times**), `2026-08-06-arsenal-and-coagulant-mechanism.md`
+(how it works), `2026-08-07-xp-economy.md` (Phase 3D),
+`2026-08-07-phase-4a-maturity.md` (Phase 4A), and DECISIONS.md #23–#65.
 
 **Still open, not urgent:** whether a behemoth crossing the arena reads as
 dramatic or tedious, and whether the conservation rules feel right in
 practice (motes shouldn't chain into behemoths — Rule 4). Both need more
-playtesting than we've done to judge; neither blocks 4A.
+playtesting than we've done to judge; neither blocks 4B.
 
 ### The rest of the phase plan
 
@@ -63,8 +78,8 @@ Full detail in the session record §17.
 | Phase | Content |
 |---|---|
 | **3A–3D** | ✅ Complete — teardown, Infection Events, Coagulants Wave 1, XP economy |
-| **4A** | Maturity field — scar accumulation, slow age, decay, resistance/regrowth effects → **next up** |
-| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture |
+| **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay, resistance/regrowth/ceiling effects, placeholder visual |
+| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture → **next up** |
 | **4C** | Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark → **playtest gate** |
 | **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
@@ -105,8 +120,8 @@ the phase that absorbs each.
 | **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — **killed at the root** by Decision 40: weapon *level* cards stop existing, so the failure mode has nowhere to live |
 | **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. | Phase 5/6 — Ward becomes a gem |
 | **Frost Nova's ring is nearly invisible.** 3px stroke, 0.4s life on a 3.6s cooldown (~11% uptime), fading alpha, low-contrast `#bfe9ff`. Also an expectation gap: it reads as an "aura" but is coded as an instantaneous pulse. | Phase 9 |
-| **Frozen cells have no visual at all.** Confirmed by grep — zero references to `frozen` in `src/render/` or `grid/slimeLayer.ts`. A 2-second growth-suppression mechanic the player can never see. | Phase 4B |
-| **Density palette collapses.** 5 buckets read as ~3: `#5c2430`/`#8a2f42` are both dark maroons, `#ff3f68`/`#ff7590` both bright pinks. Matters because density drives a ~10× resistance swing — it's a tactical readout the player can't read. | Phase 4B |
+| **Frozen cells have no visual at all.** Confirmed by grep — zero references to `frozen` in `src/render/` or `grid/slimeLayer.ts`. A 2-second growth-suppression mechanic the player can never see. **This is the precedent that forced 4A to ship a placeholder rather than shipping blind** (Decision 63) — it has now sat unfixed across three phases. | Phase 4B — **next up** |
+| **Density palette collapses.** 5 buckets read as ~3: `#5c2430`/`#8a2f42` are both dark maroons, `#ff3f68`/`#ff7590` both bright pinks. Matters because density drives a ~10× resistance swing — it's a tactical readout the player can't read. | Phase 4B — **next up**, same code as the two-axis system |
 | **Screen shake fires only on contact damage.** Nothing else in the game shakes. | Phase 9 |
 | **`pickThree` uses a biased shuffle** — `sort(() => Math.random() - 0.5)` is not a uniform permutation, so card appearance rates are skewed. | Phase 5 |
 
@@ -587,3 +602,39 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
   fix if showers prove insufficient — belongs with Phase 5's card-pool
   restructure), and gating behemoth formation (Decision 62, deferred; see
   Bugs above).
+
+- **Phase 4A — the maturity field.** *(2026-08-07, Decisions 63–65)* The
+  terrain layer exists: `growth` is quantity, `maturity` is quality, and
+  the arena now hardens exactly where the player fights while the
+  wilderness stays soft. `tuning/maturity.ts` + `systems/maturity.ts`, with
+  scar gain riding the loop `clearAt` already runs. §7's unspecified
+  age-vs-decay conflict resolved by making age a **floor** rather than a
+  gain — one scalar per tick, no per-cell age state.
+
+  **The reason this entry is long: five defects, all found by running the
+  game, none by the test suite — and three had passing tests written
+  against the broken behaviour.** The transferable lesson is the pattern,
+  not the fixes:
+  - Scar accumulation produced *literally zero* net maturity anywhere,
+    because decay ran flat every tick while gains arrive tiny and sparse.
+    The existing outcome test passed because it hit the same cell every
+    single tick — gain landing as often as decay always wins, whatever the
+    rates.
+  - An **absolute** virgin growth ceiling (0.85) sat below `grid.threshold`'s
+    0.94 cap, making **22.3% of the arena permanently unrevealable** —
+    caught in the owner's playtest ("top left area all black"). Now a
+    fraction of each cell's headroom above its own threshold, so the
+    failure is impossible by construction (Decision 64).
+  - Ambient growth was clawing density back down to the ceiling, which
+    would have silently undone every vein and bloom.
+  - Rate and ceiling cancelled each other exactly — "slower, to a higher
+    ceiling" had become "same speed."
+  - The placeholder was invisible by construction: scarring lives on
+    cleared ground, which has no slime beneath it, so 64% of it was black
+    drawn on black (Decision 65). Now neon green, kept deliberately garish
+    at the owner's request until 4B replaces it.
+
+  273/273 tests passing (up from 241), including replacements for the three
+  tests that had been passing against broken behaviour. Verified live: map
+  fills edge to edge with zero permanently-stuck cells, green scar ring
+  forms around the cleared combat zone.

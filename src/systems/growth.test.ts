@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid, Tower } from '../state';
+import { MATURITY_MAX, growthCeiling } from '../tuning/maturity';
 import { applyAmbientGrowth } from './growth';
 
 // Synthetic small grid, matching the fixture pattern used in grid.test.ts —
@@ -16,6 +17,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     growth: new Float32Array(size),
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
+    maturity: new Float32Array(size),
+    matBucket: new Int8Array(size),
     maxRange: 300,
     perimeter: 100,
     ...overrides,
@@ -156,5 +159,108 @@ describe('applyAmbientGrowth — inside the safe radius (the creep)', () => {
     const outside = grid.growth[justOutsideI]!;
     expect(inside).toBeGreaterThan(0);
     expect(Math.abs(inside - outside)).toBeLessThan(Math.max(inside, outside) * 0.5);
+  });
+});
+
+describe('applyAmbientGrowth — maturity ceiling and rate (Phase 4A, Decision 25/63)', () => {
+  // A large infectionMult forces convergence within a reasonable test loop
+  // — realistic rates take real-world minutes to approach the ceiling
+  // (that's the game's actual pacing, correctly), which a unit test
+  // shouldn't wait out. This is only testing the ceiling *clamp*, not
+  // real-time pacing.
+  const FAST = 500;
+
+  it('virgin ground converges toward its own threshold-relative ceiling and never exceeds it, however many ticks run', () => {
+    const grid = makeTestGrid(); // maturity stays 0 -- untouched
+    const tower = makeTower();
+    const i = 0; // outside the safe radius, so it's on the outer ramp
+    for (let k = 0; k < 200; k++) {
+      applyAmbientGrowth(grid, tower, FAST, 0.18, new Set());
+    }
+    const expected = growthCeiling(0, grid.threshold[i]!);
+    expect(grid.growth[i]).toBeCloseTo(expected, 2);
+    expect(grid.growth[i]).toBeLessThanOrEqual(expected + 1e-9);
+  });
+
+  it('fully mature ground converges all the way to full density', () => {
+    const grid = makeTestGrid();
+    grid.maturity[0] = MATURITY_MAX;
+    const tower = makeTower();
+    for (let k = 0; k < 200; k++) {
+      applyAmbientGrowth(grid, tower, FAST, 0.18, new Set());
+    }
+    expect(grid.growth[0]).toBeCloseTo(growthCeiling(MATURITY_MAX, grid.threshold[0]!), 2);
+  });
+
+  it('always grows a cell past its own reveal threshold, at every threshold value grid.ts can produce — no cell is ever permanently invisible', () => {
+    // The regression this guards: an absolute (threshold-blind) virgin
+    // ceiling below grid.ts's 0.94 threshold cap left 22.3% of the real
+    // arena unrevealable, since cellBucket renders nothing while
+    // growth <= threshold. Found in the project owner's playtest ("top left
+    // area all black, the slime never was there") and measured in-browser.
+    const grid = makeTestGrid();
+    // Span the full range grid.ts can actually produce.
+    for (let i = 0; i < grid.size; i++) {
+      grid.threshold[i] = 0.045 + (0.94 - 0.045) * (i / (grid.size - 1));
+    }
+    const tower = makeTower();
+    for (let k = 0; k < 400; k++) {
+      applyAmbientGrowth(grid, tower, FAST, 0.18, new Set());
+    }
+    // Scoped to cells outside the perimeter: inside it, growth is damped by
+    // proximity and reaches exactly 0 at the tower's own radius, which is
+    // deliberate (Decision 15) and unrelated to the ceiling.
+    let checked = 0;
+    let highestThresholdChecked = 0;
+    for (let cy = 0; cy < grid.rows; cy++) {
+      for (let cx = 0; cx < grid.cols; cx++) {
+        const i = cy * grid.cols + cx;
+        const wx = cx * grid.cellSize + grid.cellSize / 2;
+        const wy = cy * grid.cellSize + grid.cellSize / 2;
+        if (Math.hypot(wx - tower.x, wy - tower.y) < grid.perimeter) continue;
+        expect(grid.growth[i]).toBeGreaterThan(grid.threshold[i]!);
+        highestThresholdChecked = Math.max(highestThresholdChecked, grid.threshold[i]!);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(50); // the sweep actually covered ground
+    // And it reached the top of grid.ts's threshold range — the exact band
+    // the old absolute ceiling made permanently invisible.
+    expect(highestThresholdChecked).toBeGreaterThan(0.9);
+  });
+
+  it('never claws density back down to the ceiling — event-injected full-thickness slime survives (2026-08-07, Decision 63)', () => {
+    // Infection Events inject past the ambient ceiling on purpose. If
+    // ambient growth treated its ceiling as a target to converge *to*
+    // rather than a cap on what it adds, every vein and bloom would be
+    // silently undone a few ticks after it landed.
+    const grid = makeTestGrid(); // virgin: maturity 0, so a sub-1 ceiling
+    grid.threshold[0] = 0;
+    grid.growth[0] = 1; // as an event would leave it
+    const tower = makeTower();
+    const dirty = new Set<number>();
+
+    for (let k = 0; k < 100; k++) {
+      applyAmbientGrowth(grid, tower, FAST, 0.18, dirty);
+    }
+
+    expect(grid.growth[0]).toBe(1); // untouched, not pulled down to the virgin ceiling
+    expect(growthCeiling(0, 0)).toBeLessThan(1); // and the ceiling really is below it
+  });
+
+  it('regrows slower on mature ground than on virgin ground given the same starting density', () => {
+    const virgin = makeTestGrid();
+    virgin.growth[0] = 0.5;
+    const mature = makeTestGrid();
+    mature.growth[0] = 0.5;
+    mature.maturity[0] = MATURITY_MAX;
+    const tower = makeTower();
+
+    applyAmbientGrowth(virgin, tower, 1, 0.18, new Set());
+    applyAmbientGrowth(mature, tower, 1, 0.18, new Set());
+
+    const virginGain = virgin.growth[0]! - 0.5;
+    const matureGain = mature.growth[0]! - 0.5;
+    expect(matureGain).toBeLessThan(virginGain);
   });
 });

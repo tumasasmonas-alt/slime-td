@@ -30,6 +30,16 @@ export interface Grid {
   growth: Float32Array;
   frozen: Float32Array;
   bucket: Int8Array;
+  // Phase 4A (Decision 25): quality of ground, decoupled from `growth`'s
+  // quantity — consumed by nobody, only accrued by clearing and slowly by
+  // age. "The battlefield hardens, the wilderness stays soft." See
+  // tuning/maturity.ts and systems/maturity.ts.
+  maturity: Float32Array;
+  // Quantized read of `maturity` (0..MATURITY_BUCKETS-1), gating the
+  // dirty-set the same way `bucket` gates it for `growth` — maturity decays
+  // every cell every tick, so marking dirty on every float change would
+  // collapse the dirty-set optimization to the whole grid.
+  matBucket: Int8Array;
   maxRange: number;
   perimeter: number;
 }

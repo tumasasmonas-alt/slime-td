@@ -29,6 +29,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     growth: new Float32Array(size),
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
+    maturity: new Float32Array(size),
+    matBucket: new Int8Array(size),
     maxRange: 1000,
     perimeter: 100,
     ...overrides,
@@ -189,6 +191,21 @@ describe('attemptFormation', () => {
     attemptFormation(state, 400, 400);
 
     expect(state.dirty.size).toBeGreaterThan(0);
+  });
+
+  it('drains mass but leaves maturity untouched — the horde eats mass, not terrain (Decision 25/63)', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    fillSquare(state.grid, 400, 400, 30, 0.9);
+    const { cx, cy } = worldToCell(state.grid, 400, 400);
+    const idx = gIdx(state.grid, cx, cy);
+    state.grid.maturity[idx] = 0.4; // pre-scarred, as if the player had fought here before
+
+    const result = attemptFormation(state, 400, 400);
+
+    expect(result).not.toBeNull();
+    expect(state.grid.growth[idx]).toBe(0); // mass drained
+    expect(state.grid.maturity[idx]).toBeCloseTo(0.4, 5); // maturity untouched
   });
 
   it('starts in the forming phase, not immediately active', () => {

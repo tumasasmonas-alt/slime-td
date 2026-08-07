@@ -5,6 +5,7 @@ import {
   COAGULANT_DAMAGE_SCALE,
   COAGULANT_RESISTANCE,
 } from '../tuning/coagulants';
+import { MATURITY_MAX, SCAR_PER_DENSITY, ageFloorAt, maturityBucket, maturityYieldMult } from '../tuning/maturity';
 import { COAGULANT_XP_RISK_PREMIUM, gemValueFromRemoved } from '../tuning/xp';
 import { dropGemShower } from '../systems/gems';
 import { splatterOnDeath } from '../systems/coagulants';
@@ -40,6 +41,10 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   const radiusPx = (opts.radiusPx ?? 30) * clamp(1.25 - baseDensity, 0.4, 1.25);
   const radiusCells = Math.max(1, Math.round(radiusPx / grid.cellSize));
   const freezeDuration = opts.freezeDuration ?? 0;
+  // Bucketing (not the yield formula above) needs the current age floor —
+  // see tuning/maturity.ts's maturityBucket for why a fixed 0..1 split
+  // can't stay legible as the floor itself rises over a run.
+  const ageFloor = ageFloorAt(state.time);
   let totalRemoved = 0;
   // Tracked separately so only this portion carries the risk premium into
   // XP (Decision 31/61) — totalRemoved itself stays the honest physical
@@ -62,22 +67,38 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       if (dens <= 0.001) continue;
       const falloff = 1 - d / radiusPx;
       const resistance = clamp(1.3 - dens, 0.12, 1.3);
-      const removeAmt = clamp(power * DAMAGE_COEFF * falloff * resistance, 0, dens);
+      // Phase 4A: maturity further reduces yield, floored so nothing is
+      // ever unclearable (Decision 44's guarantee restated for terrain).
+      const matYield = maturityYieldMult(grid.maturity[i]!);
+      const removeAmt = clamp(power * DAMAGE_COEFF * falloff * resistance * matYield, 0, dens);
       if (removeAmt <= 0) continue;
       const newDens = Math.max(0, dens - removeAmt);
-      totalRemoved += dens - newDens;
+      const removedHere = dens - newDens;
+      totalRemoved += removedHere;
       grid.growth[i] = newDens;
       const nb = cellBucket(grid, i);
       if (nb !== grid.bucket[i]) {
         grid.bucket[i] = nb;
         state.dirty.add(i);
       }
+
+      // "You scar what you clear" (Decision 25/63) — the only place
+      // maturity is ever gained. Capped, never consumed by anything else.
+      const newMaturity = Math.min(MATURITY_MAX, grid.maturity[i]! + removedHere * SCAR_PER_DENSITY);
+      if (newMaturity !== grid.maturity[i]) {
+        grid.maturity[i] = newMaturity;
+        const nmb = maturityBucket(newMaturity, ageFloor);
+        if (nmb !== grid.matBucket[i]) {
+          grid.matBucket[i] = nmb;
+          state.dirty.add(i);
+        }
+      }
     }
   }
 
   // Coagulants aren't in the grid (Decision 42's one hard constraint —
-  // putting them there would let them scar terrain as they walk, once
-  // Phase 4A adds maturity). So they get their own loop here rather than
+  // putting them there would let them scar terrain as they walk, now that
+  // Phase 4A's maturity exists). So they get their own loop here rather than
   // falling out of the cell loop above: same falloff/resistance shape,
   // scaled by how much of the hit disc actually overlaps the blob
   // instead of by a flat per-weapon constant. A coagulant's local

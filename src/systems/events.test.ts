@@ -6,11 +6,13 @@ import {
   BLOOM_RADIUS,
   EVENT_ACTIVE_DURATION,
   EVENT_DECAY_DURATION,
+  EVENT_PEAK_DURATION,
   EVENT_TELEGRAPH_DURATION,
   MAX_CONCURRENT_EVENTS,
   VEIN_STOP_MARGIN,
   VEIN_WEIGHT,
 } from '../tuning/events';
+import { growthCeiling } from '../tuning/maturity';
 import { updateEvents, updateEventSpawn, veinRevealCount } from './events';
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
@@ -25,6 +27,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     growth: new Float32Array(size),
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
+    maturity: new Float32Array(size),
+    matBucket: new Int8Array(size),
     maxRange: 300,
     perimeter: 100,
     ...overrides,
@@ -175,6 +179,23 @@ describe('updateEvents — vein growth injection', () => {
     expect(densityAt(state.grid, 500, 500)).toBe(0);
     expect(densityAt(state.grid, 100, 500)).toBe(0);
     expect(densityAt(state.grid, 500, 100)).toBe(0);
+  });
+
+  it('injects past the virgin growth ceiling — events bring full-thickness slime regardless of maturity (2026-08-07 follow-up session, Decision 63)', () => {
+    const state = freshState();
+    state.grid = makeTestGrid(); // maturity stays 0 -- virgin
+    state.events = [makeVein({ phase: 'peak', phaseTimer: EVENT_PEAK_DURATION })];
+
+    for (let k = 0; k < 50; k++) {
+      updateEvents(state, 0.5);
+    }
+
+    // Ambient growth on virgin ground would converge to this cell's own
+    // threshold-relative ceiling and never cross it
+    // (systems/growth.test.ts) — injectAt deliberately ignores that ceiling.
+    const { cx, cy } = worldToCell(state.grid, 100, 100);
+    const virginCeiling = growthCeiling(0, state.grid.threshold[gIdx(state.grid, cx, cy)]!);
+    expect(densityAt(state.grid, 100, 100)).toBeGreaterThan(virginCeiling);
   });
 
   it('injects nothing during telegraph', () => {

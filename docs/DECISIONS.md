@@ -908,9 +908,13 @@ of a `Tier` object — growth math no longer depends on the tier table at
 all, which is the cleaner shape now that tiers are pure flavour.
 
 **48. Bloom ships in Phase 3B, alongside vein, despite its real payload
-waiting for Phase 4A.** 📋 ✅
+waiting for Phase 4C.** 📋 ✅
 *2026-08-06, during the 3B review — the project owner's call: "build it
-now."* Bloom's design job (§11) is accelerating maturity, which doesn't
+now."* (Corrected 2026-08-07 — this originally said 4A; scoping Phase 4A
+made clear the payload belongs in 4C, since 4A already changes clear
+resistance globally and stacking bloom-hardening on top would make that
+gate unreadable. See Decision 63.) Bloom's design job (§11) is
+accelerating maturity, which doesn't
 exist until 4A; in 3B alone it is elevated growth in a radius and little
 else, nearly invisible against the field.
 
@@ -1287,6 +1291,95 @@ halving already largely addressed it.
 arsenal) exist, since the answer likely changes once the player has real
 counterplay. Recorded so a future session re-derives neither the problem
 nor the objection. See BACKLOG.
+
+---
+
+## Phase 4A — the maturity field
+
+> Decisions 63–65 came out of the 2026-08-07 session that planned and built
+> Phase 4A. The plan, its scope conversation, and a full as-built delta are
+> in **`docs/plans/phase-4a-maturity.md`**; the design they implement is
+> §6/§7 of the 2026-08-05 record plus Decisions 25 and 26.
+
+**63. Maturity ships as a second grid layer — accrued by clearing, decayed
+toward a capped global age floor, never consumed.** ✅
+*2026-08-07.* Decision 25's split made real: `growth` is quantity (the
+horde's fuel, eaten by weapons and formation), `maturity` is quality
+(terrain, consumed by nobody). Three mechanical effects, all reading the
+cell's maturity: clear yield drops (floored, so nothing is ever
+unclearable — Decision 44's guarantee restated for terrain), ambient
+regrowth slows, and the ambient growth ceiling rises.
+
+**The age floor is the one piece of design the record didn't specify.**
+§7 wants both a slow global age drift *and* passive decay of scarring, and
+those fight if age is a per-cell gain — every cell settles wherever the two
+rates happen to cross. Resolved by making age a **floor** rather than a
+gain: `maturity = max(ageFloor(t), maturity - decay·dt)`. Scarring pushes a
+cell above the floor, decay returns it to the floor rather than to zero.
+Needs no per-cell age state and costs one scalar per tick.
+
+**Scope, agreed with the project owner before building:** 4A ships a
+deliberately crude placeholder visual rather than shipping blind (a field
+state with no visual is the mistake `frozen` still represents); events
+inject full-thickness slime regardless of maturity; bloom's maturity
+payload stays in 4C; maturity is bucketed for the dirty set; and every
+constant is tuned gently, because §7's designed counters (penetration,
+range) don't exist until Phase 5, so the player's only answer to their own
+callus in 4A is raw DPS.
+
+**64. The growth ceiling is a fraction of a cell's headroom above its own
+threshold — never an absolute density.** ✅
+*2026-08-07, found in the project owner's playtest.* The first
+implementation used absolute values (0.85 virgin / 1.0 mature). But
+`grid.threshold` runs up to 0.94 (`clamp(1 - vein, 0.045, 0.94)`) and
+`cellBucket` renders nothing at all while `growth <= threshold` — so an
+absolute 0.85 virgin ceiling made **22.3% of the arena, 2,876 cells,
+permanently unrevealable.** That is exactly the *"top left area all black,
+the slime never was there"* the playtest reported: the field traced the
+coral pattern and never filled between the veins.
+
+Expressed as a fraction of headroom, `ceiling > threshold` holds for every
+cell at any positive fraction, so **the failure mode is impossible by
+construction rather than avoided by picking a lucky number.** 0.75 rather
+than higher because `cellBucket` quantizes that same headroom into 5 steps
+— at 0.8+ virgin ground lands in the top bucket anyway and the mechanic is
+visually inert.
+
+**Two corollaries fell out of the same fix, both load-bearing:**
+
+- **Ambient growth may only ever add.** Treating the ceiling as a target to
+  converge *to* would claw vein- and bloom-injected full-thickness slime
+  back down within a few ticks, silently undoing every event. A cell at or
+  above its ceiling is now skipped entirely — the ceiling caps what ambient
+  *grows to*, not what a cell may hold.
+- **Rate and ceiling must be independent levers.** With the logistic term
+  normalized against remaining headroom, mature ground's larger headroom
+  exactly cancelled its slower rate — measured as *identical* regrowth
+  speed, collapsing §7's "slower, to a higher ceiling" into "same speed."
+  Normalizing against full density instead separates them cleanly.
+
+**65. A world-state placeholder must be legible against the empty
+background, not just against the thing it overlays.** ✅
+*2026-08-07.* The maturity placeholder shipped as a dark overlay and was
+invisible — for a structural reason, not a tuning one. Scarring
+concentrates exactly where the player clears, and cleared cells have growth
+bucket 0, so nothing is drawn underneath them: **64% of all scarred cells
+were black drawn on black**, measured on a max-weapons run. The rest was
+dark-on-dark maroon.
+
+Now neon green, a colour used nowhere else in the game so it cannot be
+mistaken for finished art. Kept at the project owner's request — *"we can
+keep it green for a placeholder to identify it's working."* (Caustic Cloud
+is `#c9ff8a`, the same family; distinguishable in practice — blocky grid
+cells vs. a smooth rimmed circle — but noted in BACKLOG in case it
+confuses.)
+
+**The generalisable rule**, and the reason this is a decision rather than a
+bug note: BACKLOG's existing process finding says a signature visual is
+part of any mechanic with a world-space effect, not just weapons. This
+sharpens it — **it isn't enough for the visual to exist; it has to be
+legible in the state the mechanic actually produces.** Scarring's natural
+habitat is cleared ground, so that is what it had to be readable against.
 
 ---
 

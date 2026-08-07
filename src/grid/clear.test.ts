@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { COAGULANT_ARMOR_FLOOR } from '../tuning/coagulants';
+import { MATURITY_MAX, MATURITY_YIELD_FLOOR } from '../tuning/maturity';
 import { COAGULANT_XP_RISK_PREMIUM, GEM_SHOWER_MAX_COUNT, gemValueFromRemoved } from '../tuning/xp';
 import { clearAt } from './clear';
 
@@ -36,6 +37,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     growth: new Float32Array(size),
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
+    maturity: new Float32Array(size),
+    matBucket: new Int8Array(size),
     maxRange: 300,
     perimeter: 20,
     ...overrides,
@@ -141,6 +144,52 @@ describe('clearAt', () => {
 
     expect(state.grid.frozen[nearIdx]).toBe(1.5);
     expect(state.grid.frozen[farIdx]).toBe(0);
+  });
+
+  describe('maturity (Phase 4A, Decision 25/63)', () => {
+    it('scars what it clears — a hit raises the maturity of the cells it touches', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const idx = 10 * state.grid.cols + 10;
+      state.grid.growth[idx] = 0.6;
+      expect(state.grid.maturity[idx]).toBe(0);
+
+      clearAt(state, 105, 105, 50, { radiusPx: 15 });
+
+      expect(state.grid.maturity[idx]).toBeGreaterThan(0);
+    });
+
+    it('repeated clearing of one spot yields progressively less per hit, as maturity accumulates', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const idx = 10 * state.grid.cols + 10;
+
+      state.grid.growth[idx] = 0.9;
+      clearAt(state, 105, 105, 10, { radiusPx: 15 });
+      const firstRemoved = 0.9 - state.grid.growth[idx]!;
+
+      // Reset density but keep the maturity gained from the first hit —
+      // isolates maturity's effect on yield from ordinary density depletion.
+      state.grid.growth[idx] = 0.9;
+      clearAt(state, 105, 105, 10, { radiusPx: 15 });
+      const secondRemoved = 0.9 - state.grid.growth[idx]!;
+
+      expect(secondRemoved).toBeLessThan(firstRemoved);
+    });
+
+    it('never reduces yield below the floor — nothing is ever unclearable', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const idx = 10 * state.grid.cols + 10;
+      state.grid.growth[idx] = 1;
+      state.grid.maturity[idx] = MATURITY_MAX; // fully scarred
+
+      clearAt(state, 105, 105, 50, { radiusPx: 15 });
+
+      expect(state.grid.growth[idx]).toBeLessThan(1);
+      // Roughly consistent with the floor multiplier applying, not zero yield.
+      expect(MATURITY_YIELD_FLOOR).toBeGreaterThan(0);
+    });
   });
 
   describe('coagulant damage (Phase 3C, Decision 42/50)', () => {

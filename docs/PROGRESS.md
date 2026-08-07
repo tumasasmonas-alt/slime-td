@@ -48,15 +48,20 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-07 (Phase 3D shipped — **Phase 3 is complete**)
+**Last updated:** 2026-08-07 (Phase 4A shipped — the terrain layer exists)
 
-**Phase 3 is done, end to end, and playtested.** 3A (teardown), 3B
+**Phase 3 is complete and Phase 4A is built.** 3A (teardown), 3B
 (Infection Events), 3C (Coagulants Wave 1) and 3D (XP economy) are all
-built, tested, and confirmed in play by the project owner — verdict on the
-3D build: *"it plays much better now."* The 3C playtest gate produced one
-round of real fixes (Decisions 54–59) plus a platform question answered no
-(Decision 60, staying on Canvas 2D); 3D then closed the reward economy
-(Decision 61).
+playtested and confirmed — verdict on 3D: *"it plays much better now."*
+**4A adds the maturity field**: the arena now hardens where the player
+fights and stays soft where they can't reach (Decisions 63–65). Rendered
+with a deliberately crude **neon-green placeholder** — the real two-axis
+visual system is 4B.
+
+**4A took five bug-fix rounds after first build**, all found by running the
+game rather than by tests — including a regression that made 22% of the
+arena permanently invisible. Full account in the session record; the
+pattern is worth reading before trusting the suite on anything visual.
 
 **Balance itself is still explicitly not gradeable** — the owner's own
 scoping: weapon damage numbers, slime speed and overall game feel need the
@@ -65,13 +70,13 @@ Phase 8 (Decision 13's supersession), not a reason to reorder anything.
 
 | | |
 |---|---|
-| Tests | 241 passing (32 test files) — one known flake, see BACKLOG |
-| Source | 61 modules under `src/` |
+| Tests | 273 passing (34 test files) — one known flake, see BACKLOG |
+| Source | 63 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main` |
-| Code state | **Phase 3 complete (3A–3D).** Phase 4 onward is still design-only. |
-| Blockers | **None.** Next is Phase 4A (maturity), linearly. |
+| Code state | **Phase 3 complete (3A–3D) + Phase 4A.** 4B onward is still design-only. |
+| Blockers | **None.** Next is Phase 4B (two-axis visuals), linearly. |
 
 **What works today:** the horde-economy loop, end to end, playtested
 twice. Infection grows as a density field across a **fixed perimeter**,
@@ -217,6 +222,92 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-07 (later) — Phase 4A: the maturity field
+
+**Planning + implementation.** Full record:
+**`docs/sessions/2026-08-07-phase-4a-maturity.md`**. Plan and as-built
+delta: **`docs/plans/phase-4a-maturity.md`**.
+
+**Shipped**
+
+| Commit | What |
+|---|---|
+| *(this one)* | Phase 4A — `tuning/maturity.ts`, `systems/maturity.ts`; `Grid.maturity`/`Grid.matBucket`; scar gain + yield multiplier in `grid/clear.ts`; threshold-relative ceiling and rate in `systems/growth.ts`; neon-green placeholder in `grid/slimeLayer.ts`; decay pass wired into `systems/tick.ts` |
+
+**Discussed**
+
+- **Scoping settled five questions before any code.** The load-bearing one:
+  4A ships a **crude placeholder visual** rather than shipping blind,
+  because a field state with no visual is precisely the `frozen` mistake —
+  still an open bug two phases later — and without it neither party could
+  playtest 4A at all. Also settled: virgin ground's ceiling drops below
+  full (owner: *"undisturbed slime has no reason to harden, it never had to
+  fight"*), events inject full-thickness slime regardless of maturity,
+  bloom's maturity payload stays in **4C** (Decision 48 and
+  `tuning/events.ts` both said 4A and were corrected), and every constant
+  is tuned gently since §7's counters — penetration, range — don't exist
+  until Phase 5.
+- **Claude corrected its own framing mid-scoping.** The ceiling had been
+  pitched as a kill-zone durability lever. It isn't: the kill zone is
+  cleared constantly and never sits *at* its ceiling, so only undisturbed
+  ground reaches one. It's really a **behemoth-size dial** (formation sums
+  `growth` over its footprint) — fine, and incidentally a non-scripted
+  lever on the behemoths-too-early problem deferred as Decision 62, but it
+  needed saying honestly rather than being sold as something else.
+- **§7 left one thing genuinely unspecified: how slow global ageing and
+  passive scar decay coexist.** Naively they fight — decay pulls every cell
+  to 0, age pushes it up, and the wilderness settles wherever the rates
+  happen to cross. Resolved by making age a **floor** rather than a gain,
+  so scarring pushes a cell above it and decay returns the cell *to* it.
+  One scalar per tick, no per-cell age state.
+- **Five defects, all found by running the game, none by the test suite —
+  and three had passing tests written against the broken behaviour.** This
+  is the session's real content:
+  1. **The mechanic did nothing at all.** Max grid-wide maturity came back
+     *exactly equal to the age floor* under every loadout. Decay ran flat
+     every tick while scar gains arrive tiny and sparse (and a cleared cell
+     goes quiet immediately — it drops below `threshold` and stops being a
+     frontier target). Decay won by an order of magnitude. **The existing
+     outcome test passed anyway, because it hit the same cell every single
+     tick** — gain landing as often as decay always wins.
+  2. **22% of the arena went permanently black** — the owner's playtest
+     finding (*"top left area all black... it followed initial coral
+     structure but never actually filled"*). `grid.threshold` runs to 0.94
+     and `cellBucket` renders nothing while `growth <= threshold`, so an
+     **absolute** 0.85 virgin ceiling made 2,876 cells unrevealable
+     forever. Fixed by making the ceiling a fraction of each cell's
+     headroom *above its own threshold* — impossible by construction rather
+     than avoided by a lucky number (Decision 64).
+  3. **Ambient growth was clawing density back down**, which would have
+     silently undone every vein and bloom within a few ticks of landing.
+  4. **Rate and ceiling cancelled each other out** — mature ground's larger
+     headroom exactly offset its slower rate, measured *identical*,
+     collapsing §7's "slower, to a higher ceiling" into "same speed."
+  5. **The placeholder was invisible by construction**, not by tuning:
+     scarring lives on cleared ground, which has no slime beneath it, so
+     **64% of scarred cells were black drawn on black** (Decision 65).
+- **The owner's Decision 59 harness methodology paid for itself a third
+  time.** Every one of the five was diagnosed with the deterministic
+  max-weapons/no-XP harness rather than hunted through real-time play.
+
+**Decided** — Decisions 63 (maturity ships: scar gain, capped age floor,
+three effects), 64 (threshold-relative ceiling, plus its two corollaries —
+ambient only ever adds, and rate/ceiling stay independent levers), 65 (a
+world-state placeholder must be legible against the *empty* background, not
+just against the thing it overlays).
+
+**Verified**: 273/273 tests passing (up from 241 — including replacements
+for the three tests that had been passing against broken behaviour: the
+scar test now leaves realistic gaps between hits, and the ceiling tests now
+assert the invariant *every cell eventually crosses its own reveal
+threshold* rather than convergence to a named constant). Typecheck and
+build clean, debug harness removed. Verified live in-browser: map fills
+edge to edge with **zero** permanently-stuck cells, and a green scar ring
+visibly forms around the cleared combat zone.
+
+**Planned** — **Phase 4B, the two-axis visual system.** No blockers. Note
+the neon-green placeholder is deliberately temporary and 4B replaces it.
 
 ### 2026-08-07 — Phase 3D: the XP economy. **Phase 3 closes.**
 
@@ -892,9 +983,9 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 4A, the maturity field. Phase 3 is complete.** 3A/3B/3C
-shipped 2026-08-06 (plus a playtest-and-fix round), 3D on 2026-08-07 —
-see the *Session log* above.
+**Next: Phase 4B, the two-axis visual system. Phase 3 and 4A are
+complete.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round),
+3D and 4A on 2026-08-07 — see the *Session log* above.
 
 **Go linearly.** Settled 2026-08-07: no skipping ahead to the arsenal.
 Phase 4 adds the *questions* (armor, penetration, range-vs-callus); Phases
@@ -911,8 +1002,8 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **3B** | ✅ Infection Events — vein (acts on density) + bloom (acts on maturity — payload deferred to 4A), full lifecycle |
 | **3C** | ✅ Coagulants Wave 1 — conservation rules, Mote/Congealer/Behemoth. Playtest-and-fix round done (Decisions 54–60). |
 | **3D** | ✅ XP economy — quadratic level curve, 15% coagulant risk premium, gem showers as rate limiter (Decision 61). Playtested: *"plays much better now."* |
-| **4A** | Maturity field — scar accumulation from `clearAt`, slow age with a low ceiling, decay, cap; effects on clear resistance and regrowth ceiling → **next up** |
-| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture. Fixes the palette collapse. |
+| **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay; clear-resistance, regrowth-rate and threshold-relative ceiling effects (Decisions 63–65). Neon-green placeholder visual. |
+| **4B** | Two-axis visuals — density → thickness, maturity → colour/texture. Fixes the palette collapse, replaces 4A's placeholder → **next up** |
 | **4C** | Coagulants Wave 2 — bloom's maturity role activates; Blastoma, Carrier, Sclerotic, Bulwark → **playtest gate** |
 | **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |

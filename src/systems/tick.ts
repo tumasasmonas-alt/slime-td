@@ -6,6 +6,7 @@ import { tickContactDamage } from './contact';
 import { updateEvents, updateEventSpawn } from './events';
 import { computeFrontier } from './frontier';
 import { applyAmbientGrowth } from './growth';
+import { updateMaturity } from './maturity';
 
 // Tiers are flavour only (Decision 33) — this updates the name/color
 // announcement, nothing mechanical. The perimeter no longer moves with it
@@ -28,6 +29,9 @@ function simulateTick(state: GameState, dt: number): void {
   updateEventSpawn(state, dt);
   updateEvents(state, dt);
   updateCoagulants(state, dt);
+  // Runs before ambient growth so this tick's decay is reflected in the
+  // maturity-scaled ceiling/rate growth reads below, not a tick stale.
+  updateMaturity(state, dt);
   applyAmbientGrowth(state.grid, state.tower, ambientInfectionMult(state.time), dt, state.dirty);
   computeFrontier(state);
   tickContactDamage(state, dt);

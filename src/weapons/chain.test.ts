@@ -16,6 +16,8 @@ function makeTestGrid(): Grid {
     growth: new Float32Array(size),
     frozen: new Float32Array(size),
     bucket: new Int8Array(size),
+    maturity: new Float32Array(size),
+    matBucket: new Int8Array(size),
     maxRange: 200,
     perimeter: 20,
   };

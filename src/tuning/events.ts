@@ -69,9 +69,10 @@ export const VEIN_STOP_MARGIN = 60;
 
 // Bloom: radial and local. In 3B this is elevated growth in its radius
 // only — its real job (accelerating maturity, per §11) waits for Phase
-// 4A; ships now so the event framework has one lifecycle, two variants,
-// rather than bolting a second variant on later (Decision, 2026-08-06
-// follow-up session).
+// 4C, not 4A: 4A already changes clear resistance globally, and stacking
+// bloom-hardening on top would make that gate unreadable. Ships now so the
+// event framework has one lifecycle, two variants, rather than bolting a
+// second variant on later (Decision, 2026-08-06 follow-up session).
 export const BLOOM_RADIUS = 110;
 export const BLOOM_ACTIVE_RATE = 0.5;
 export const BLOOM_PEAK_RATE = 0.8;

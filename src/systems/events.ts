@@ -34,6 +34,11 @@ import { generateVeinPath } from './veinPath';
 // applyAmbientGrowth and the old node influence — events are just another
 // source writing into the same grid, not a special case.
 
+// Deliberately converges toward a hard 1, not tuning/maturity.ts's
+// maturity-scaled growthCeiling() — the project owner's call, 2026-08-07:
+// events bring full-thickness slime regardless of the ground's maturity,
+// reinforcing veins as the mass pump (Decision 28) rather than being
+// softened by the same ceiling ambient growth respects.
 function injectAt(grid: Grid, cx: number, cy: number, rate: number, dt: number, dirty: Set<number>): void {
   if (cx < 0 || cx >= grid.cols || cy < 0 || cy >= grid.rows) return;
   const i = gIdx(grid, cx, cy);
