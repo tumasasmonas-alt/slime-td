@@ -43,17 +43,30 @@ Content, per the 2026-08-05 record §10/§11:
 Threat Priority gem meaningful, Bulwark makes it a genuine tradeoff.
 Without Bulwark it's a flat tax rather than a decision.
 
-**Ends in a playtest gate**, and it's the phase where the design's riskiest
-open question gets prototyped: **does calcified tissue block projectiles?**
-(open question 4 — high impact, would differentiate whole weapon families
-and revive the parked Scalpel/Lance, but a crust that neutralises your main
-weapon could feel awful).
+**Split into two on 2026-08-07**, along a real technical seam — 4C as
+written is bigger than 3C was, and 3C needed a playtest-and-fix round:
+
+- **4C-1** — bloom's maturity payload, armour from maturity, **Sclerotic**
+  and **Blastoma**. Identity rules over existing mechanics; no new movement,
+  no new body shape. Also carries a **+50% weapon damage** pass, so armour
+  can land without the game becoming unplayable. Plan:
+  `docs/plans/phase-4c1-wave2-armour.md`.
+- **4C-2** — **Carrier** and **Bulwark**, the pair §10 asks for, plus the
+  multi-part body model both need. Plan:
+  `docs/plans/phase-4c2-carrier-bulwark.md`.
+
+**Ends in a playtest gate** after 4C-2.
 
 **The standing risk to watch:** §7's counters — penetration, range — are
 Phase 5/6 gems that still don't exist. 4A was tuned gently for exactly this
 reason. 4C adds *armoured* enemies on top of that, so it is the point where
 "the scar ring might feel oppressive" (the design record's own risk #4)
-actually gets tested.
+actually gets tested. Owner's call on posture: **tune gently and raise
+weapon damage**, so the mechanics are visible without the run ending in 30
+seconds.
+
+Projectile-blocking (open question 4) was scoped **out** of 4C and moved to
+*Ideas* below.
 
 ### Phases 4A / 4B — done, for reference
 
@@ -157,8 +170,76 @@ frequency is *the* single pacing lever the design deliberately concentrates
 everything into, so changes here move the whole game's rhythm, not just
 its opening.
 
+**Extended 2026-08-07 by the project owner, after the 4B playtest:**
+*"we will have to tune the events, because I don't think the veins and
+blooms should happen from the get-go, it's too hard — and veins are
+significantly harder than blooms."*
+
+Two separate levers, and the second one doesn't exist yet:
+
+- **Delay the first event further.** `EVENT_INITIAL_DELAY` alone, cheap.
+- **Weight vein vs. bloom by elapsed time.** `VEIN_WEIGHT` is currently a
+  flat 0.6 for the whole run, so a vein is the *more likely* event from
+  second one. Since a vein delivers mass close and on a short runway
+  (§11) while a bloom is radial, local and further out, that ordering is
+  backwards for the opening minutes. Ramping the weight — blooms early,
+  veins increasingly likely later — is a new curve, not a constant tweak.
+
+This also gives Decision 62's deferred "behemoths form too early" problem a
+non-scripted lever, which is exactly the kind that decision asked for:
+event *reach and frequency* rather than a spawn gate.
+
 Worth doing alongside the Phase 4C playtest gate rather than alone —
 maturity changes what an early event actually produces.
+
+### 🟡 Coagulant formation has no drain — the crater appears instantly
+*Raised by the project owner after the 4B playtest, 2026-08-07:* the
+telegraph exists but is too weak, and *"when they do coagulate the crater
+appears instantly and it just looks bad — it should visibly concentrate
+slime towards a point and birth a coagulant, or some other way to smooth
+out the transition."*
+
+**This is a known gap, not a new idea** — §10 specifies a five-beat
+universal formation visual and only three of them were built in 3C:
+
+| Beat | State |
+|---|---|
+| **Tell** — region pulses, colour shifts | ❌ missing |
+| **Drain** — density visibly flows inward toward a point | ❌ missing — this is the one the owner is describing |
+| **Rise** — mass gathers and lifts out | ✅ (3C, `FORMATION_RISE_DURATION`) |
+| **Detach** — separates and begins moving | ✅ |
+| **Crater** — depleted hollow remains | ✅ but instant |
+
+The drain matters beyond looks: §10 calls it **"Rule 1 made visible"** —
+formation as a sink, shown rather than explained — *and* the entire
+telegraph system for free, since a behemoth draining a crater is visible
+from across the arena with no UI at all.
+
+Implementation sketch: `attemptFormation` currently zeroes every flood-fill
+cell in one frame. Instead it could stage the drain over
+`FORMATION_RISE_DURATION`, decaying the cells toward zero while the blob
+rises — the mass accounting is already correct, it's the *timing* that's
+instant. Needs care with the mass-conservation invariant (mass would be
+in-flight between containers for a second or so) and with the dirty set.
+
+Natural fit alongside 4C, since Wave 2 adds four more formation events to
+watch, or as part of the Phase 9 visual work.
+
+### 🟢 More AoE weapons
+*Project owner, 2026-08-07.* The current roster is thin on area damage:
+Frost Nova and Caustic Cloud are the only real AoE, and both are among the
+weakest (Frost is 17 DPS at level 8 against Blades' 534 — a 31× spread,
+2026-08-05 record §3).
+
+This matters more once Wave 2 lands: **Blastoma's stated counter is "AoE
+cleanup"** and Bulwark's is "AoE, orbitals, pierce" (§10). Shipping enemies
+whose counter barely exists is the same shape as the penetration problem
+4A/4C already carry.
+
+Belongs with **Phase 6's arsenal design session** rather than being bolted
+on early — that session authors the catalogue against a settled threat
+model, and Wave 2 is precisely what settles it. Noted here so the gap is
+on the record when that session happens.
 
 ### 🟡 Behemoths can form too early in a run — deferred by decision
 *Raised by the owner in the 2026-08-07 session; deferred deliberately —
@@ -302,6 +383,29 @@ it isn't a surprise on launch day.
 ---
 
 ## Ideas — not committed
+
+### 💭 Does calcified tissue block projectiles?
+*Open question 4 from the 2026-08-05 record §18. Its recommendation was
+"prototype in Phase 4 and decide from feel"; the project owner scoped it
+**out of 4C** on 2026-08-07 — recorded here rather than left dangling.*
+
+**High impact, and the riskiest single item in the design.** It would
+differentiate whole weapon families (projectile vs. orbital vs. aura) and
+revive the parked Scalpel/Lance, which lost its justification when the
+no-aim correction killed artery-cutting. It also directly answers §13's
+finding that the arsenal has **nothing that scales up against density** —
+every weapon is currently *worse* against dense tissue.
+
+**Why it's dangerous:** a crust that neutralises your main weapon could
+feel awful, and the player has no way to reposition around it (no aiming,
+no movement — §4). Decision 44's armor floor addresses the milder version
+of the same risk; there is no equivalent floor for "the shot doesn't
+arrive at all."
+
+Now more prototypeable than when it was written: 4A/4B mean calcified
+ground both exists and is visible, so a prototype can be judged on feel
+rather than imagined. Natural home is the Phase 4C playtest gate or Phase
+5, once penetration exists as a real counter.
 
 ### 💭 Genuine pathfinding for vein geometry
 *Raised by the project owner, 2026-08-06, during the 3B review.*

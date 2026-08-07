@@ -1076,7 +1076,8 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **3D** | ✅ XP economy — quadratic level curve, 15% coagulant risk premium, gem showers as rate limiter (Decision 61). Playtested: *"plays much better now."* |
 | **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay; clear-resistance, regrowth-rate and threshold-relative ceiling effects (Decisions 63–65). Neon-green placeholder visual. |
 | **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse fixed, `frozen` finally visible, 4A's placeholder replaced (Decisions 66–67). Texture deferred to Phase 9. |
-| **4C** | Coagulants Wave 2 — bloom's maturity role activates; Blastoma, Carrier, Sclerotic, Bulwark → **next up, ends in a playtest gate** |
+| **4C-1** | Wave 2 part one — bloom's maturity payload, armour from maturity, Sclerotic, Blastoma, +50% weapon damage → **next up** |
+| **4C-2** | Wave 2 part two — Carrier + Bulwark (the pair §10 requires), multi-part bodies → **playtest gate** |
 | **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved |
 | **6** | Arsenal content — **own design session first**, then toward 20 weapons |
 | **7** | Meta — currency, unlocks, deck builder |
@@ -1095,14 +1096,16 @@ behind the largest visual system (Decision 36).
 unlocks only (Decision 39). Two remain, both deliberately deferred:
 
 **1. What happens to `frozen`?** Frost's growth-suppression probably
-becomes a gem effect rather than a weapon-specific mechanic. Phase 5.
+becomes a gem effect rather than a weapon-specific mechanic. Phase 5. (Its
+*visual* half is done as of 4B — a `#bfe9ff` rim, Decision 66 — but what
+the mechanic becomes is still open.)
 
-**2. Does calcified tissue block projectiles?** High impact — it would
-differentiate whole weapon families and revive the parked Scalpel/Lance —
-but the riskiest item in the design, since a crust that neutralises your
-main weapon could feel awful. Recommendation: prototype in Phase 4 and
-decide from feel. Note Decision 44's armor floor addresses the milder
-version of the same risk.
+**2. ~~Does calcified tissue block projectiles?~~** Scoped **out of 4C** by
+the project owner on 2026-08-07 and moved to `docs/BACKLOG.md`'s *Ideas*
+section, where the full reasoning now lives. Still unanswered and still the
+riskiest single item in the design, but it is no longer shadowing a phase —
+its natural home is the 4C playtest gate or Phase 5, once penetration
+exists as a real counter.
 
 ### Deferred to their own design pass
 
