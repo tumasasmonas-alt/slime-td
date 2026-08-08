@@ -48,7 +48,7 @@ describe('updateBladesWeapon', () => {
   it('clears orbitals and does nothing without the weapon equipped', () => {
     const state = freshState();
     state.grid = makeTestGrid();
-    state.orbitals = [{ x: 1, y: 1, radius: 10 }];
+    state.orbitals = [{ x: 1, y: 1, radius: 10, shape: 'shuriken', color: '#fff', glowColor: '#fff' }];
     updateBladesWeapon(state, 0.016);
     expect(state.orbitals).toHaveLength(0);
   });

@@ -168,15 +168,20 @@ ring feeling oppressive) did not materialise.
    reasoning) — the rest of this project's most productive single day:
    Phase 3D, 4A, 4B, and 4C, each with a real bug found only by running
    the game. Read these before trusting a new formula's first draft.
-4. **`docs/DECISIONS.md` #23–#69** — the load-bearing calls in short form.
+4. **`docs/DECISIONS.md` #23–#71** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
-   68–69 are 4C. #47–69 are implementation-time findings, not from a
-   design session — see the notes at the top of each of those sections.
-5. **`docs/BACKLOG.md`** *Now* section — Phase 5 (arsenal framework) is
-   the concrete next step. Phase 3/4's own follow-ups (event tuning, the
-   coagulant formation drain visual, more AoE weapons, spontaneous
-   coagulation, behemoth timing) are in *Ideas* and *Bugs*.
+   68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
+   enhancement/socket/card-pool economy). #47–71 are implementation-time
+   findings, not from a design session — see the notes at the top of each
+   of those sections.
+5. **`docs/plans/phase-5-6-arsenal.md`** and **`docs/plans/phase-5b-framework.md`**
+   — the arsenal catalogue design and the shipped 5B economy, including
+   the assist-credit finding awaiting the owner's confirmation.
+6. **`docs/BACKLOG.md`** *Now* section — Phase 6-0 (a minimal pre-run
+   weapon select) is the concrete next step. Phase 3/4's own follow-ups
+   (event tuning, the coagulant formation drain visual, more AoE weapons,
+   spontaneous coagulation, behemoth timing) are in *Ideas* and *Bugs*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -247,7 +252,55 @@ src/
 
 *Newest first.*
 
-### 2026-08-08 (latest) — Phase 5A: the weapon pipeline ships. Decision 70.
+### 2026-08-08 (latest) — Phase 5B: the enhancement/socket/card-pool economy ships. Decision 71.
+
+**Full account:** `docs/plans/phase-5b-framework.md` — status header,
+§7's order-of-work table, §5.
+
+**Shipped:** weapon-level cards deleted outright (Decision 40, finally
+implemented); enhancement points bank globally at 1/level, spendable once
+5C's `+/-` ships; the 0/3/8/15/24 socket ladder as a pure function; new-
+weapon cards gated on free deck slots; extensions level 1→3 then leave
+the pool **permanently** (the owner's rule, better than either option
+offered); core gems — five of the seven existing passives ported onto 3
+fixed sockets with duplicates disallowed, `damage`/`atkSpeed` deliberately
+left on the old mechanism since they become per-weapon gems in 6A, not
+core gems; a guaranteed core-gem card slot every second level-up with an
+exhausted-pool fallback; `pickThree`'s biased shuffle replaced with an
+unbiased Fisher-Yates; gem inventory and a no-destructive-respec
+withdrawal function (extensions clamp rather than ever being destroyed,
+since no extension-inventory exists to return them to); the render
+structural pass flagged during the owner's UI/UX question — `OrbitalVisual`
+gained appearance data, `state.novaFx` became a list, fixing a latent
+overwrite bug before a second pulse weapon could trigger it.
+
+**Card-pool logic moved to `systems/cards.ts`, pure and tested** —
+`ui/upgradeCards.ts` is now a thin DOM wrapper, this project's existing
+systems/render split applied to a UI module for the first time.
+
+**One planned piece withheld: assist credit.** Implementing it found the
+mechanism doesn't solve the problem it was written for — XP is a single
+global pool, not tracked per weapon anywhere, so any kill by any weapon in
+a deck already pays full credit today. Raised for the owner rather than
+built or silently dropped, per the ground-truth override protocol —
+`docs/plans/phase-5b-framework.md` §5 has the full reasoning and is
+awaiting confirmation.
+
+**Verified live**: an 8-level card-pool dump confirmed the core-gem
+cadence and the permanent absence of any weapon-level card; applying
+cards directly confirmed a core gem socketing correctly (maxHp: +20 and
+a matching heal) and an extension vanishing from the pool once maxed; a
+425-second/58-level random-pick soak test on all seven weapons at max
+level ran with zero console errors, filled all three core sockets with
+no duplicates, and left the production bundle byte-identical once the
+debug bridge was removed. 380/380 tests, typecheck clean, build clean.
+
+**Next: Phase 6-0**, a minimal pre-run weapon select — settled during
+this session's UI/UX discussion, moved forward from Phase 7 so Phase 6's
+weapon batches are playtestable by the owner rather than only through the
+debug harness.
+
+### 2026-08-08 — Phase 5A: the weapon pipeline ships. Decision 70.
 
 **Full account and audit trail:** `docs/plans/phase-5-6-arsenal.md` §13,
 §14; `docs/DECISIONS.md` Decision 70.
@@ -1327,12 +1380,17 @@ so it's worth the extra care.
 
 ## Active plan
 
-**In progress: Phase 5, the arsenal framework. Phase 3 and Phase 4 are
-both complete, and 5A has shipped.** 3A/3B/3C shipped 2026-08-06 (plus a
-playtest-and-fix round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A on
-2026-08-08 — see the *Session log* above. Read the session records before
-assuming a new formula's first draft is right; every phase so far has
-found at least one real bug only by running the game.
+**Phase 5 is complete except one withheld item. Phase 3 and Phase 4 are
+both complete too.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix
+round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A and 5B both on 2026-08-08
+— see the *Session log* above. Read the session records before assuming a
+new formula's first draft is right; every phase so far has found at least
+one real bug only by running the game.
+
+**5B-5 (assist credit) is withheld, awaiting the owner.** Everything else
+in 5B shipped. See `docs/plans/phase-5b-framework.md` §5 — implementing it
+found the mechanism doesn't solve the problem it names, since XP is a
+global pool with no per-weapon tracking anywhere in the design.
 
 **Go linearly — this just closed out.** Phase 4 was the *questions* (armor,
 penetration, range-vs-callus, the full coagulant roster); Phase 5/6 are
@@ -1356,9 +1414,10 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **4C-1** | ✅ Sclerotic, Blastoma, armour from maturity, bloom's maturity payload, +50% weapon damage (Decision 68). |
 | **4C-2** | ✅ Carrier (corridor identity + feeding), Bulwark (multi-part body, the pair §10 requires) (Decision 69). **Phase 4 complete.** |
 | **5A-0/5A** | ✅ The weapon pipeline (Decision 70) — all seven weapons refactored onto ready/acquire/deliver, zero behaviour change, Ward Pulse promoted to Immolation Ring. |
-| **5B** | Enhancement points, sockets, gem inventory, assist credit → **next up** |
-| **5C** | Pause + inventory UI |
-| **6** | Arsenal content — 18 weapons, 65 gems. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3) — implementation in batches per §13. |
+| **5B** | ✅ Enhancement points, socket ladder, restructured card pool, core gems, gem inventory, render structural pass (Decision 71). **Assist credit withheld** — awaiting the owner, `docs/plans/phase-5b-framework.md` §5. |
+| **5C** | Pause + inventory UI → **next up**, after Phase 6-0 |
+| **6-0** | Minimal pre-run weapon select — moved forward from Phase 7 on 2026-08-08 so Phase 6 batches are owner-playtestable |
+| **6** | Arsenal content — 18 weapons, 65 gems. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3) — implementation in batches per §13, reordered (6E/6F swapped) after the visual-cost audit. |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase · real balance pass · leaderboard |
 | **9** | VFX and feel |

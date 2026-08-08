@@ -20,67 +20,36 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 Phase 5 — Arsenal framework
+### 🟡 Phase 6-0 — minimal pre-run weapon select
 
-**Phase 4 is fully shipped as of 2026-08-07** (4A/4B: Decisions 63–67;
-4C-1/4C-2: Decisions 68–69) — the full coagulant roster from the 2026-08-05
-design record §10 exists and forms from field state alone (mass, maturity,
-mass-shape, corridor density), armour is live, and Carrier/Bulwark shipped
-as the pair §10 asked for. Both 4C-1 and 4C-2 were self-greenlit per the
-owner's standing 2026-08-07 instruction once each was tested and verified
-live; see `docs/sessions/2026-08-07-phase-4c-wave2.md` for the full
-account, including the two balance bugs the live debug-harness caught that
-no unit test would have (bloom maturity rates too low to ever form a
-Sclerotic; the mean-over-footprint dilution that made the original
-threshold unreachable).
+**Phases 3, 4, 5A and 5B are all shipped.** Phase 5A (Decision 70) put
+every weapon on a shared pipeline; Phase 5B (Decision 71) built the
+enhancement/socket/card-pool economy — weapon-level cards are gone,
+extensions level 1→3 then leave the pool for good, five passives ported
+onto three core-gem sockets, `pickThree`'s biased shuffle fixed. **5B-5
+(assist credit) was withheld** — implementation found it doesn't solve
+the problem it names (XP is a global pool, not per-weapon); awaiting the
+owner's confirmation in `docs/plans/phase-5b-framework.md` §5.
 
-**Next up is Phase 5**, per the project's own go-linearly rule (below):
-weapon/extension/gem slots, an inventory UI, and dissolving the current
-flat passives into that slot system. See the session record §17 for scope.
+**Next up is Phase 6-0**: a minimal pre-run weapon select (list,
+checkboxes, start button — no currency, no unlocks), moved forward from
+Phase 7 on 2026-08-08 so Phase 6's weapon batches are playtestable by the
+owner rather than only through the debug harness. Then **6A**: the first
+real support gems (Amplifier + Behaviour classes), landing against a
+render layer and card-pool economy now built to carry them.
 
-**The arsenal design is settled at revision 3:**
-`docs/plans/phase-5-6-arsenal.md` — 18 weapons, 65 support gems in six
-classes, slot/socket/point economics, and a phasing that puts a four-stage
-weapon *pipeline* (§4 of that doc) ahead of all content, because
-transformative gems otherwise cost N-weapons × M-gems in hand-written
-special cases. **23 calls settled** by the owner across 2026-08-08; what
-remains open is measurement, not design.
+**The arsenal design is settled at revision 3**
+(`docs/plans/phase-5-6-arsenal.md`) — 18 weapons, 65 support gems in six
+classes, a visual-cost classification (§9½: 43 free, 16 shared-modifier,
+6 genuinely new) that swapped Phase 6's E/F batch order so weapons
+establish rendering vocabulary before gems generalise it. Full phasing
+in that doc's §13.
 
-**No decision is superseded** — the owner's one-+/-per-weapon model and
-the no-cap/no-DR call between them left Decision 40 completely intact, so
-socket-opening is a pure addition and the ground-truth override protocol
-was never invoked.
+### Phase 5A/5B — done, for reference
 
-**Phase 4's gate passed** — played by the owner 2026-08-08, *"all good."*
-The scar ring did not read as oppressive (the design's own risk #4).
-
-**A pre-refactor audit on 2026-08-08** re-read every decision, session and
-plan against the arsenal design. It found **Ward Pulse is a working weapon
-misfiled as a passive** — it has a cooldown, a tower-centred radius and
-calls `clearAt`, but was classed as a passive since the port, which is why
-it never got a visual and why it is the only weapon whose `clearAt` omits
-`coagulantMult` despite Decision 50. It becomes **Immolation Ring** in
-Phase 5A, which resolves all three at once. Two other work items came out
-of the same pass; both are in §13 of the plan.
-
-**Three things to read before starting**, all recorded in §12/§14 of the
-plan:
-
-- **Assist credit is the largest hidden cost.** Support weapons destroy no
-  mass, and XP *is* destroyed mass — so targets must carry a short-lived
-  record of which weapons affected them. New state on coagulants *and*
-  grid cells, on hot paths. Scheduled into 5B; if it slips, five pieces of
-  content ship as traps.
-- **Phase 5 ships with pool dilution deliberately unmitigated.** All three
-  fixes were declined in favour of measuring the real number, so the 5B
-  gate is an explicit go/no-go on the 65-gem count.
-- **Enhancement is a slider until the gate says otherwise** — that is
-  Decision 40's own recorded, accepted risk, with the socket ladder as the
-  only counterweight.
-
-Note the plan also closes two items further down this file if built:
-**More AoE weapons** (seven AoE weapons against today's two) and the
-arsenal half of **Per-variable weapon upgrade tiers**.
+Plans: `docs/plans/phase-5-6-arsenal.md` (the catalogue design) and
+`docs/plans/phase-5b-framework.md` (the economy, including the as-built
+delta and the assist-credit finding). Decisions 70–71.
 
 ### Phase 4C — done, for reference
 
@@ -113,7 +82,7 @@ wasn't compressed or skipped despite five sub-phases landing in one day.
 correcting both times**), `2026-08-06-arsenal-and-coagulant-mechanism.md`
 (how it works), `2026-08-07-xp-economy.md` (Phase 3D),
 `2026-08-07-phase-4a-maturity.md` (Phase 4A),
-`2026-08-07-phase-4c-wave2.md` (Phase 4C), and DECISIONS.md #23–#69.
+`2026-08-07-phase-4c-wave2.md` (Phase 4C), and DECISIONS.md #23–#71.
 
 **Still open, not urgent:** whether a behemoth crossing the arena reads as
 dramatic or tedious, and whether the conservation rules feel right in
@@ -172,7 +141,7 @@ the phase that absorbs each.
 | ~~**Frozen cells have no visual at all.**~~ ✅ **Fixed in Phase 4B** (Decision 66) — now a `#bfe9ff` rim, reusing Frost Nova's existing colour. Open since Phase 2; it was the precedent that forced 4A to ship a placeholder rather than shipping blind. | ✅ Done |
 | ~~**Density palette collapses.**~~ ✅ **Fixed in Phase 4B** (Decision 66). The cause turned out to be uneven *spacing*, not bad hues — density now rides evenly-stepped alpha, so recollapse is structurally impossible and mechanically tested. | ✅ Done |
 | **Screen shake fires only on contact damage.** Nothing else in the game shakes. | Phase 9 |
-| **`pickThree` uses a biased shuffle** — `sort(() => Math.random() - 0.5)` is not a uniform permutation, so card appearance rates are skewed. **Priority raised 2026-08-08:** the 5B gate exists to *measure* card-pool dilution, and a skewed shuffle measures a distribution the game doesn't have. | Phase 5B — **before** the gate, not after |
+| ~~**`pickThree` uses a biased shuffle.**~~ ✅ **Fixed in Phase 5B** (Decision 71) — replaced with an unbiased Fisher-Yates (`systems/cards.ts`'s `shuffled()`) before the gate that needs it to measure real dilution. | ✅ Done |
 
 **Process finding:** Decision 11 established "a weapon's signature visual
 is part of the weapon, not polish." Ward Pulse slipped through because

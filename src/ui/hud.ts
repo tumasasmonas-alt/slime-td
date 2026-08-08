@@ -117,7 +117,11 @@ function updateModifiers(refs: HudRefs, state: GameState): void {
   const armorPct = Math.round((1 - armorMult(state)) * 100);
   refs.modifiers.textContent =
     `DMG ${dmg.toFixed(2)}x   SPD ${spd.toFixed(2)}x   ARMOR ${armorPct}%   ` +
-    `PICKUP ${pick.toFixed(2)}x   XP ${xp.toFixed(2)}x`;
+    `PICKUP ${pick.toFixed(2)}x   XP ${xp.toFixed(2)}x   ` +
+    // Phase 5B (docs/plans/phase-5b-framework.md S3): points bank here
+    // until 5C's +/- control can spend them — Decision 65's rule that a
+    // mechanic's state must stay legible even in placeholder form.
+    `PTS ${state.enhancementPool}`;
 }
 
 function announce(refs: HudRefs, state: GameState, msg: string): void {

@@ -1673,6 +1673,125 @@ call rather than a private one to duplicate.
 
 ---
 
+## Phase 5B — the enhancement, socket and card-pool economy
+
+> Decision 71 came out of the 2026-08-08 session that implemented Phase
+> 5B, immediately following 5A. Plan, scope conversation, and the
+> as-built delta (assist credit withheld) are in
+> **`docs/plans/phase-5b-framework.md`**. The design it implements is
+> `docs/plans/phase-5-6-arsenal.md` §5, §6, §9F, §11, §12.
+
+**71. Weapon-level cards are gone; enhancement points bank globally and
+open sockets on a fixed ladder; five passives port onto three core-gem
+slots; assist credit is withheld.** ✅ (partial — see below)
+*2026-08-08.*
+
+**Card pool restructuring, Decision 40 finally implemented.** Today's
+`buildCardPool()` had offered `{kind:'weapon', nextLevel}` cards since the
+port; that branch is deleted outright. Weapon power now comes only from
+`state.enhancementPool` spend — banked one point per level crossed
+(`systems/xp.ts`), not yet spendable until Phase 5C's `+/-` control ships.
+Until then the pool is legible rather than silently inert: `updateHud`
+gained a `PTS n` readout (Decision 65's rule — a mechanic's state must
+stay legible even in placeholder form).
+
+New-weapon cards are gated on free deck slots
+(`Object.keys(state.weapons).length < state.weaponSlots`, starting count
+3) — previously unbounded, a single run could equip all seven weapons at
+once. Extension cards level 1→3 then leave the pool **permanently**, the
+project owner's rule, better than either option originally offered
+(Decision 40's "cards appear to do nothing" root cause, closed the same
+way for extensions as it was for weapon levels). Core gems get one
+**guaranteed slot every second level-up** rather than a separate draw or
+a slot in every draw — the former goes dead once 3 sockets fill, the
+latter permanently spends a quarter of the pool on defence — with an
+exhausted-pool fallback to a weapon-side card so a full core never offers
+a dead pick.
+
+**Card logic moved to `systems/cards.ts`, pure and unit-tested**, with
+`ui/upgradeCards.ts` reduced to a thin DOM wrapper — this project's
+existing systems/render separation, applied to a UI module for the first
+time, since testing DOM construction directly would need a browser
+environment this project doesn't otherwise use.
+
+**Core gems: five of seven existing passives (`maxHp`, `regen`, `armor`,
+`pickup`, `xpGain`) port onto three fixed sockets** (`state.coreGems`),
+chosen because `CoreGemKey` reuses `PassiveKey`'s own values directly
+rather than inventing a translation layer — `state.passives[key]` stays
+the exact field `damageMult`/`atkSpeedMult`/`pickupMult`/`xpMult`/
+`armorMult` already read, untouched. `state.coreGems` is new bookkeeping
+for which three sockets are filled with what; picking a core-gem card
+increments `state.passives[key]` by 1 and fills the next empty socket,
+exactly mirroring the old passive-card mutation. **`damage` and
+`atkSpeed` (Amplifier/Overclock) deliberately stay on the pre-5B
+unrestricted mechanism** — per the arsenal plan they become per-weapon
+socketed gems in Phase 6A, not core gems, and building that now with no
+real weapon-gems to socket would be speculative plumbing.
+
+**Duplicates disallowed among core gems** — at most one of each of the
+five types across the three sockets. Not specified anywhere in either
+plan; the general weapon-gem duplicate rule (same gem across different
+weapons, never twice in one) doesn't obviously transfer to a single
+3-socket "weapon." Chose "5 types competing for 3 slots" as the more
+legible framing for a first cut, flagged as revisable at the gate.
+
+**`pickThree`'s biased shuffle is fixed** — `sort(() => Math.random() -
+0.5)` is not a uniform permutation, and the 5B gate exists specifically to
+measure real card-pool dilution (arsenal plan §11), so a skewed shuffle
+would have measured a distribution the game doesn't have. Replaced with
+an unbiased Fisher-Yates in `systems/cards.ts`'s `shuffled()`.
+
+**Gem inventory and no-destructive-respec, built as plumbing with no live
+trigger yet.** `systems/sockets.ts`'s `withdrawPoints()` implements "gems
+in a closing socket return to inventory, most-recently-socketed first" —
+but extensions have nowhere to return to (no extension-inventory concept
+exists in the design), so a withdrawal that would destroy a committed
+extension is **clamped** instead: points can never drop below whatever
+`socketCount()` needs to hold the extensions already on that weapon.
+Nothing in 5B can yet trigger a withdrawal (5C's `+/-` is the first real
+caller); tested directly, the same "build plumbing, test it standalone"
+pattern 5A used for its own removed debug bridge.
+
+**Assist credit — planned, not built.** The original design (an
+`AssistTag` splitting a coagulant kill's XP between the destroying
+weapon and whatever softened/marked/displaced it first) was written to
+stop Solvent/Repulsor/Marker generating zero XP once they ship. Building
+it surfaced that it doesn't address that: **XP is a single global pool**
+(`state.tower.xp`), not tracked per weapon anywhere, and enhancement
+points bank the same way. Any kill by any weapon in a deck already pays
+the full pool today — a Solvent+Bolt build gets complete credit right
+now, with nothing to fix. Assist credit would be real code, permanently
+exercising nothing, for a per-weapon economy that isn't planned to exist.
+The narrower real risk it was reaching for — an all-support deck with no
+damage dealer generates no kills, hence no XP — isn't fixed by credit
+*redistribution* either, since there's no kill event to redistribute
+when nothing ever calls `clearAt`. Read as a legitimate consequence of a
+bad build (Rule 4/Decision 27's own philosophy: the field's state is an
+honest readout, not a system with a safety net), not a defect. **Raised
+for the owner rather than silently dropped**, per the ground-truth
+override protocol (Decision 22) — the same posture Decision 62 used for
+the behemoth-timing pushback.
+
+**Render structural pass, unrelated to the economy but shipped in the
+same session.** `OrbitalVisual` gained `shape`/`color`/`glowColor`,
+`state.novaFx` became a list rather than a single nullable slot — Blades
+and Frost moved their hardcoded render constants onto the entity with
+zero visual change (same hex values), and `render/orbitals.ts`/
+`render/novaFx.ts` now dispatch on entity data instead of assuming a
+specific weapon. Closes the latent overwrite bug flagged during the
+visual-cost audit: two pulse weapons firing the same frame previously
+clobbered each other's effect.
+
+**Verified live**: an 8-level card-pool composition dump confirmed the
+core-gem cadence (present on even levels, absent on odd) and the
+permanent absence of any `'weapon'`-kind card; a 425-second/58-level
+random-pick soak test on all seven weapons at max ran with zero console
+errors, filled all three core sockets with no duplicates, and left the
+production bundle's byte size identical after the debug bridge's
+removal. 380/380 tests, typecheck clean, build clean.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

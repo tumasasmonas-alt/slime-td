@@ -29,7 +29,7 @@ describe('updateFrostWeapon', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     updateFrostWeapon(state, 1);
-    expect(state.novaFx).toBeNull();
+    expect(state.novaFx).toHaveLength(0);
   });
 
   it('pulses on its first call — the timer starts at 0', () => {
@@ -46,13 +46,16 @@ describe('updateFrostWeapon', () => {
 
     expect(state.grid.growth[idx]).toBeLessThan(0.5);
     expect(state.grid.frozen[idx]).toBe(2.0);
-    expect(state.novaFx).toEqual({
-      x: 500,
-      y: 500,
-      radius: frostRadius(1, state.grid.perimeter),
-      life: 0.4,
-      maxLife: 0.4,
-    });
+    expect(state.novaFx).toEqual([
+      {
+        x: 500,
+        y: 500,
+        radius: frostRadius(1, state.grid.perimeter),
+        life: 0.4,
+        maxLife: 0.4,
+        color: '#bfe9ff',
+      },
+    ]);
     expect(state.weaponTimers.frost).toBeGreaterThan(0);
   });
 
@@ -62,10 +65,10 @@ describe('updateFrostWeapon', () => {
     state.weapons.frost = 1;
 
     updateFrostWeapon(state, 0.016);
-    state.novaFx = null; // clear so we can tell if a second pulse fires
+    state.novaFx = []; // clear so we can tell if a second pulse fires
     updateFrostWeapon(state, 0.016);
 
-    expect(state.novaFx).toBeNull();
+    expect(state.novaFx).toHaveLength(0);
   });
 
   it('never pulses closer than the safe radius, at any level', () => {

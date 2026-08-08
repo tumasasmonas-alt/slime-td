@@ -69,10 +69,13 @@ function startRun(): void {
   state.grid = buildGrid();
   state.slimeLayer = initSlimeLayer(state.grid);
   state.running = true;
-  // Bolt Turret starts equipped — matches the prototype's run-start,
-  // which sets this directly rather than via WEAPON_DEFS.bolt's (unused)
-  // startLevel.
+  // Phase 5B (docs/plans/phase-5b-framework.md S12.4): the settled
+  // starting kit is Bolt/Chain/Poison — single-target, multi-target, area
+  // denial, the three tactical roles rather than three delivery types.
+  // Matches state.weaponSlots' starting count of 3 exactly.
   state.weapons.bolt = 1;
+  state.weapons.chain = 1;
+  state.weapons.poison = 1;
   hideOverlays(overlayRefs);
   updateHud(hudRefs, state);
 }

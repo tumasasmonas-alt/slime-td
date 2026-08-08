@@ -47,4 +47,21 @@ describe('grantXp', () => {
     expect(withInsight.tower.xp).toBeCloseTo(5 * 1.14, 5);
     expect(withInsight.tower.xp).toBeGreaterThan(withoutInsight.tower.xp);
   });
+
+  // Phase 5B (docs/plans/phase-5b-framework.md S3): "one point every
+  // level, not every other" (Decision 40) — banked, not auto-spent.
+  it('banks one enhancement point per level crossed, not one per grant', () => {
+    const state = freshState();
+    expect(state.enhancementPool).toBe(0);
+    grantXp(state, xpToNext(1));
+    expect(state.enhancementPool).toBe(1);
+  });
+
+  it('banks one point per threshold when a single grant crosses several', () => {
+    const state = freshState();
+    grantXp(state, 100);
+    // Banked points equal levels gained, same as pendingLevelUps' own count.
+    expect(state.enhancementPool).toBe(state.tower.level - 1);
+    expect(state.enhancementPool).toBe(state.pendingLevelUps);
+  });
 });

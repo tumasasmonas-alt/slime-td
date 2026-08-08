@@ -6,6 +6,9 @@ import { cooldownReady, runWeaponPipeline, type WeaponPipeline } from './pipelin
 
 const FREEZE_DURATION = 2.0;
 const FX_LIFE = 0.4;
+// Phase 5B-6: moved off render/novaFx.ts's old hardcoded constant, value
+// unchanged.
+const FX_COLOR = '#bfe9ff';
 
 // Untargeted — pulses outward from the tower on a cooldown, damaging and
 // freezing growth in radius. The freeze mechanic itself (clearAt's
@@ -25,7 +28,10 @@ const frostPipeline: WeaponPipeline = {
       freezeDuration: FREEZE_DURATION,
       coagulantMult: WEAPON_DEFS.frost?.coagulantMult ?? 1,
     });
-    state.novaFx = { x: t.x, y: t.y, radius, life: FX_LIFE, maxLife: FX_LIFE };
+    // Phase 5B-6: pushed onto a list now, not assigned to a single slot —
+    // a second pulse weapon firing the same frame no longer overwrites
+    // this one. See docs/plans/phase-5b-framework.md S6a.
+    state.novaFx.push({ x: t.x, y: t.y, radius, life: FX_LIFE, maxLife: FX_LIFE, color: FX_COLOR });
   },
 };
 

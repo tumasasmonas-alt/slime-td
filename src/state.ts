@@ -1,3 +1,4 @@
+import { CORE_SOCKET_COUNT, type CoreGemKey } from './tuning/coreGems';
 import { EVENT_INITIAL_DELAY } from './tuning/events';
 import { xpToNext } from './tuning/xp';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './tuning/world';
@@ -80,10 +81,23 @@ export interface MissileProjectile extends ProjectileBase {
 
 export type Projectile = BoltProjectile | ChainProjectile | MissileProjectile;
 
+// Phase 5B-6 (docs/plans/phase-5b-framework.md S6a): appearance data
+// lives on the entity, matching the pattern render/projectiles.ts and
+// render/clouds.ts already use — a weapon whose effect orbits (Blades
+// today, Orbital Conversion's target in Phase 6) draws itself without
+// render/orbitals.ts needing to know which weapon it is. `shape` is
+// deliberately a closed union rather than a free-form string: adding a
+// shape is a one-line type change plus one new case in drawOrbitals,
+// not a silent no-op if a caller typos a string.
+export type OrbitalShape = 'shuriken' | 'dot';
+
 export interface OrbitalVisual {
   x: number;
   y: number;
   radius: number;
+  shape: OrbitalShape;
+  color: string;
+  glowColor: string;
 }
 
 export interface ChainFx {
@@ -146,12 +160,19 @@ export interface Gem {
   driftJitter: number;
 }
 
+// Phase 5B-6: carries its own colour now (was a hardcoded constant in
+// render/novaFx.ts) and state.novaFx becomes a list rather than a single
+// nullable slot — see the GameState field below for why the single slot
+// was a latent overwrite bug (docs/DECISIONS.md #4/#7's class, applied to
+// two pulse weapons firing in the same frame instead of a lazy draw-call
+// mutation).
 export interface NovaFx {
   x: number;
   y: number;
   radius: number;
   life: number;
   maxLife: number;
+  color: string;
 }
 
 export interface VeinSegment {
@@ -245,6 +266,40 @@ export interface CoagulantSeed {
 // angle, not a lifecycle stage).
 export type CoagulantPhase = 'forming' | 'active';
 
+// Phase 5B (docs/plans/phase-5b-framework.md S2, S4): a picked-up but
+// unsocketed gem, or one currently sitting in a weapon's socket. `id` is
+// unique per pickup (not per kind) because the same gem kind may be
+// socketed into several different weapons at once (arsenal plan S5's
+// duplicate rule) — two instances of 'amplifier' are two separate
+// objects, not a stacked count.
+export interface GemInstance {
+  id: number;
+  // No real gem kinds exist until Phase 6A populates them (arsenal plan
+  // S1) — left as `string` rather than a union with one placeholder
+  // member, since a real union will replace this wholesale rather than
+  // grow from a seed value.
+  kind: string;
+}
+
+// One entry per extension *type* currently held on a weapon, tracking its
+// own level toward removal at 3 (docs/plans/phase-5b-framework.md S4 —
+// the owner's rule: maxed extensions leave the pool permanently, no
+// repeat offer). Only PLACEHOLDER_EXTENSION_KIND exists until Phase 6.
+export interface ExtensionSlot {
+  kind: string;
+  level: 1 | 2 | 3;
+}
+
+// Extensions and gems share one socket pool per weapon (arsenal plan S5:
+// "specialise this weapon, or generalise it?" is meant to be a live
+// question every time a socket opens) — occupiedSlots() in
+// systems/sockets.ts is what enforces the combined count against
+// socketCount(pointsInvested).
+export interface WeaponSockets {
+  extensions: ExtensionSlot[];
+  gems: GemInstance[];
+}
+
 export interface Coagulant {
   x: number;
   y: number;
@@ -296,8 +351,30 @@ export interface GameState {
   tierIndex: number;
 
   tower: Tower;
+  // Enhancement points invested per weapon (arsenal plan S6: one +/-
+  // per weapon, no cap, no diminishing returns — Decision 40 unchanged).
+  // A present key means equipped; value is points spent, which drives
+  // both damage/cooldown formulas directly and socketCount() (S2).
   weapons: Partial<Record<WeaponKey, number>>;
   passives: Partial<Record<PassiveKey, number>>;
+  // Points banked from level-ups, not yet spent (docs/plans/phase-5b-framework.md
+  // S3) — 5C's +/- control spends these; 5B banks-and-shows rather than
+  // auto-spending, a deliberately legible placeholder rather than a fake
+  // version of the real feature.
+  enhancementPool: number;
+  // Starting 3 (arsenal plan S5); Phase 7 raises it via meta currency.
+  weaponSlots: number;
+  // Fixed-length CORE_SOCKET_COUNT array; null means empty. Duplicates
+  // disallowed (an implementation-time call, S1/S4 of the 5B plan didn't
+  // specify — "5 types competing for 3 slots" reads more sensibly than
+  // "which type to stack" for a first cut).
+  coreGems: (CoreGemKey | null)[];
+  // Unsocketed gems the player owns — populated starting Phase 6A, when
+  // any gem kind actually exists to pick up.
+  gemInventory: GemInstance[];
+  weaponSockets: Partial<Record<WeaponKey, WeaponSockets>>;
+  // Monotonic counter for GemInstance.id.
+  nextGemId: number;
 
   grid: Grid | null;
   slimeLayer: SlimeLayer | null;
@@ -309,7 +386,10 @@ export interface GameState {
   clouds: CausticCloud[];
   particles: Particle[];
   gems: Gem[];
-  novaFx: NovaFx | null;
+  // Phase 5B-6: list, not a single nullable slot — two pulse weapons
+  // (Frost Nova, Immolation Ring once it has a visual) firing in the same
+  // frame previously overwrote each other.
+  novaFx: NovaFx[];
 
   frontier: Float32Array | null;
 
@@ -360,6 +440,12 @@ export function freshState(): GameState {
 
     weapons: {},
     passives: {},
+    enhancementPool: 0,
+    weaponSlots: 3,
+    coreGems: new Array(CORE_SOCKET_COUNT).fill(null),
+    gemInventory: [],
+    weaponSockets: {},
+    nextGemId: 1,
 
     grid: null,
     slimeLayer: null,
@@ -371,7 +457,7 @@ export function freshState(): GameState {
     clouds: [],
     particles: [],
     gems: [],
-    novaFx: null,
+    novaFx: [],
 
     frontier: null,
 

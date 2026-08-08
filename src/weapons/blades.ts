@@ -10,6 +10,10 @@ const SPIN_SPEED = 2.4;
 const HIT_RADIUS = 16;
 const HIT_COOLDOWN = 0.22;
 const VISUAL_RADIUS = 10;
+// Phase 5B-6: moved off render/orbitals.ts's old hardcoded constants,
+// values unchanged (docs/DECISIONS.md #17 — ninja-star, not a plain dot).
+const BLADE_COLOR = '#cfe8ff';
+const BLADE_GLOW_COLOR = '#6df0ff';
 
 // No targeting at all — blades circle the tower and damage whatever
 // revealed tissue they sweep through, each on its own per-slot cooldown
@@ -39,7 +43,14 @@ const bladesPipeline: WeaponPipeline = {
       const a = spin + (i / count) * Math.PI * 2;
       const bx = t.x + Math.cos(a) * radius;
       const by = t.y + Math.sin(a) * radius;
-      state.orbitals.push({ x: bx, y: by, radius: VISUAL_RADIUS });
+      state.orbitals.push({
+        x: bx,
+        y: by,
+        radius: VISUAL_RADIUS,
+        shape: 'shuriken',
+        color: BLADE_COLOR,
+        glowColor: BLADE_GLOW_COLOR,
+      });
 
       const { cx, cy } = worldToCell(grid, bx, by);
       const ci = gIdx(grid, cx, cy);

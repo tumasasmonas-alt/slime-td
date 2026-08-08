@@ -1,9 +1,12 @@
 # Phase 5B — the enhancement, socket and card-pool economy
 
-**Status:** 📋 **Scope settled 2026-08-08, not yet built.** Written
-immediately after 5A shipped (Decision 70); the four open questions in §8
-were answered the same session and are folded in below. Ready to
-implement on greenlight.
+**Status:** ✅ **Implemented and verified 2026-08-08 — Decision 71.**
+5B-1 through 5B-4 and 5B-6 shipped. **5B-5 (assist credit) was withheld**
+— implementation surfaced that the mechanism as designed doesn't solve
+the problem it names; see §5, awaiting the owner's confirmation before
+either building a revised version or closing it out. 380/380 tests,
+typecheck clean, build clean, verified live via a 425-second/58-level
+debug-harness soak test.
 
 **Depends on:** 5A (`weapons/pipeline.ts`), shipped and verified.
 **Source design:** `docs/plans/phase-5-6-arsenal.md` §5, §6, §9F, §11, §12,
@@ -202,47 +205,55 @@ number is not worth guessing at a phase early.
 
 ---
 
-## 5. Assist credit — the hard part, done here rather than deferred
+## 5. Assist credit — NOT built. A re-discovery during implementation.
 
-**Why this can't wait for Phase 6.** Solvent/Repulsor/Marker (Phase 6
-weapons) destroy no mass, so without assist credit they'd generate zero
-XP the moment they ship — §14 of the arsenal plan already flagged this as
-the single largest hidden cost. Building the *plumbing* now, against the
-existing seven weapons (all of which currently destroy mass directly and
-would credit 100% to themselves), means 6D's actual no-damage weapons
-have something to plug into rather than a system built in a rush against
-deadline pressure.
+**Status: withheld pending the owner's confirmation.** Working through
+the actual mechanics to implement this step found that, as designed, it
+does not solve the problem it was written to solve. Raised rather than
+built, per the ground-truth override protocol (`CLAUDE.md`, Decision 22)
+— the same posture Decision 62 used for the behemoth-timing pushback.
 
-**The mechanism:**
+**The original reasoning:** *"Solvent, Repulsor and Marker destroy no
+mass, and XP is destroyed mass — so without assist credit they'd
+generate zero XP and be traps."*
 
-```ts
-// A short-lived tag on whatever a "setup" effect touched — marked,
-// softened, displaced. No Phase 6 weapon uses this yet; every current
-// weapon's clearAt call passes no assist tag, so 100% of credit goes to
-// whichever weapon actually destroyed the mass, exactly today's
-// behaviour. This is pure plumbing until Phase 6 has a producer.
-interface AssistTag {
-  weaponKey: WeaponKey;
-  expiresAt: number;   // state.time-relative
-  share: number;        // 0..1, fraction of resulting XP credited to weaponKey
-}
-```
+**What implementation surfaced:** XP in this game is a **single global
+pool** (`state.tower.xp`), not tracked per-weapon anywhere. Any kill, by
+*any* weapon in the deck, already pays into that one pool — a build
+running Solvent + Bolt gets full XP credit today, right now, with no
+change needed, because Bolt's own `clearAt` call generates it regardless
+of what softened the target first. Enhancement points are banked the
+same way (`state.enhancementPool`, §3 above) — globally, not per-weapon.
 
-Coagulants get `assistedBy?: AssistTag`; grid cells would need the same,
-but **grid-cell assist tagging is deferred to Phase 6D** when a
-grid-affecting setup weapon (Solvent) actually exists — adding a third
-per-cell array now, for a producer that doesn't exist, is exactly the
-kind of premature plumbing this project's own conventions warn against.
-Coagulant-only assist tracking is sufficient to prove the mechanism and
-keeps 5B's grid-memory footprint unchanged.
+**So "assist credit" — a mechanism for *redistributing* XP between the
+weapon that landed the kill and the weapon that set it up — has nothing
+to attach to.** There is no per-weapon economy anywhere in this design
+for it to feed. The `AssistTag`/`share` mechanism from the original
+draft would be real code with a real test, permanently exercising
+nothing, for a consumer that isn't planned to exist.
 
-`clearAt`'s XP accounting (`grid/clear.ts`) gains one branch: if the
-target carries an unexpired `assistedBy`, split the XP basis by `share`
-between the destroying weapon and the assisting one. **Zero behaviour
-change for every weapon that exists today** — nothing sets `assistedBy`
-yet, so this is dead code exercised only by a direct unit test until
-Phase 6 has a producer. Flagged plainly as such rather than silently
-built and forgotten.
+**The actual risk the original text was reaching for** is narrower than
+"assist credit" implies: a deck built from *only* no-damage weapons
+(hypothetically, all of Solvent + Repulsor + Marker with no damage
+dealer at all) generates zero kills and therefore zero XP. But no
+version of assist credit fixes that either — if nothing in the deck ever
+calls `clearAt` with power, there is no XP event to redistribute in the
+first place. **That outcome reads as a legitimate consequence of a bad
+build, consistent with the game's own philosophy** (Decision 27: no
+scripted safety net, the field's state is the honest readout of how the
+player is doing) **— not a system failure needing a fix.**
+
+**Recommendation: do not build this.** If Phase 6 support weapons turn
+out to *feel* bad despite the economy being fine — a real possibility,
+since a player watching Solvent do nothing to their kill count is a UX
+concern even with XP flowing correctly — the fix belongs at the UI/feel
+layer (crediting a kill notification to the setup weapon, say), not the
+economy layer. That is a Phase 6 question, judged against real gems, not
+a Phase 5B one.
+
+**Flagged for the owner rather than silently dropped**, since removing a
+committed plan item is exactly the kind of change this project's
+conventions say to raise rather than decide alone.
 
 ---
 
@@ -323,13 +334,13 @@ afterward, and that is the test.
 
 | Step | Work | Test |
 |---|---|---|
-| **5B-1** | `tuning/sockets.ts`, `enhancementPool`, `weaponSlots`, starting kit (Bolt/Chain/Poison per §12.4) in `startRun()`. Fix `pickThree`'s shuffle. HUD line for unspent points. | `socketCount` invariant; starting-kit test |
-| **5B-2** | Card pool: remove weapon-level cards, add slot-gated new-weapon cards, extension leveling-and-removal (placeholder extension types), 4-card draws, guaranteed core slot on even level-ups with its exhausted-pool fallback. **No bundle card** (6A). | Card-pool composition test; "a maxed extension is never offered again"; core slot appears on even level-ups and falls back when exhausted |
-| **5B-3** | Core gems: port the five existing passives onto 3-socket selection. Remove the old unlimited-concurrent-passive model. | Regression: existing passive-effect tests still pass, now gated through sockets |
-| **5B-4** | Gem inventory + `WeaponSockets` model; socket-closing-returns-to-inventory on point withdrawal (no destructive respec, §5 of the arsenal plan). | Conservation test: a gem is never lost, only relocated |
-| **5B-5** | Assist credit plumbing (§5), coagulant-only. | Direct unit test with a synthetic `assistedBy` tag; confirm zero behaviour change with none set |
-| **5B-6** | Render structural pass (§6a): `OrbitalVisual` gains appearance data, `state.novaFx` becomes a list. **No new visuals.** | Blades still renders an identical shuriken; two pulses in one frame both draw |
-| **▶ GATE** | Full suite + debug-harness run: a max-level run banks and can (via a temporary debug-only spend, same spirit as 5A's removed bridge) allocate points, draws cards from the restructured pool, core gems socket correctly. | |
+| **5B-1** | ✅ `tuning/sockets.ts`, `enhancementPool`, `weaponSlots`, starting kit (Bolt/Chain/Poison per §12.4) in `startRun()`. Fixed `pickThree`'s biased shuffle (now `shuffled()`, Fisher-Yates). HUD line for unspent points. | ✅ `socketCount` invariant (`tuning/sockets.test.ts`) |
+| **5B-2** | ✅ Card pool: weapon-level cards removed entirely, slot-gated new-weapon cards, extension leveling-and-removal (`PLACEHOLDER_EXTENSION_KIND`), 4-card draws, guaranteed core slot on even level-ups with its exhausted-pool fallback. **No bundle card** (still 6A). Logic split into `systems/cards.ts` (pure, testable) with `ui/upgradeCards.ts` as a thin DOM wrapper — the project's existing systems/render separation, applied to UI. | ✅ `systems/cards.test.ts` — pool composition, "a maxed extension is never offered again," core slot on even/absent on odd, exhausted-pool fallback |
+| **5B-3** | ✅ Core gems: `CoreGemKey` reuses `PassiveKey`'s own values directly rather than a translation layer — `state.passives[key]` stays the exact field driving `damageMult`/`atkSpeedMult`/etc., untouched. `state.coreGems` (3 fixed slots) is new bookkeeping for which physical sockets are filled; duplicates disallowed (implementation-time call, undocumented in the design — flagged in the report). `damage`/`atkSpeed` deliberately stay on the pre-5B unrestricted mechanism (§6). | ✅ Existing `passives.test.ts` (24 tests) passes completely unmodified — confirms the port didn't touch the multiplier math |
+| **5B-4** | ✅ `GemInstance`/`WeaponSockets`/`gemInventory` in `state.ts`; `systems/sockets.ts`'s `withdrawPoints()` — gems evict to inventory most-recently-socketed-first, **extensions clamp the withdrawal rather than ever being destroyed** (no extension-inventory exists to return them to). No live trigger yet (5C's +/- ships it); tested directly, same pattern as 5A-era plumbing. | ✅ `systems/sockets.test.ts` — conservation (a gem is never lost, only relocated), the extension clamp, zero-points-to-withdraw no-op |
+| **5B-5** | ❌ **Not built.** Assist credit doesn't solve the problem it names — see §5. Withheld pending the owner's confirmation. | — |
+| **5B-6** | ✅ Render structural pass: `OrbitalVisual` gained `shape`/`color`/`glowColor`, `state.novaFx` is a list. Blades/Frost moved their hardcoded render constants onto the entity (zero visual change — same hex values). `render/orbitals.ts`/`render/novaFx.ts` now dispatch on entity data instead of assuming a specific weapon. | ✅ `systems/novaFx.test.ts` gained a two-simultaneous-effects case proving the old single-slot overwrite is fixed |
+| **▶ GATE** | ✅ Full suite (380/380) + a live debug-harness run: starting kit confirmed (Bolt/Chain/Poison), 8-level card-pool composition dump confirmed the core-gem cadence and the absence of any `'weapon'`-kind card, a maxed extension confirmed to vanish from the pool, and a 425-second/58-level random-pick soak test with all 7 weapons at max ran with zero console errors and filled all 3 core sockets with no duplicates. | |
 
 ---
 
@@ -363,7 +374,24 @@ weapon would then duplicate.
 
 - **The socket ladder's numbers** (0/3/8/15/24) are untested against a
   real XP curve. `tuning/sockets.ts` exists as a single pure function
-  specifically so the gate can retune them in one line.
+  specifically so the gate can retune them in one line. The live soak
+  test reached level 58 in ~7 minutes of simulated time on a max-weapons
+  build — an extreme upper bound, not a realistic pacing signal.
 - **Whether the gate can conclude anything about enhancement-as-slider**
   with an empty weapon-gem pool. Probably not — see §1. That is the
   known limit of this gate, not a defect in it.
+- **Assist credit** (§5) — awaiting the owner's confirmation that it
+  should be dropped, or correction if there's a per-weapon consumer
+  planned that this implementation pass didn't know about.
+
+### One implementation-time call, not written down anywhere before now
+
+**Core gems disallow duplicates** — at most one of each of the five
+types active across the 3 sockets, never two copies of the same one.
+Neither the arsenal plan nor this plan's earlier drafts specified this;
+the general weapon-gem duplicate rule (§5 of the arsenal plan: same gem
+across different weapons, never twice in one) doesn't obviously transfer
+to "the core" as a single weapon-equivalent with 3 sockets. Chose "5
+types competing for 3 slots" over "which type to stack" as the more
+legible framing for a first cut — cheap to revisit if it reads wrong at
+the gate.
