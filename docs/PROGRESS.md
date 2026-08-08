@@ -245,7 +245,76 @@ src/
 
 *Newest first.*
 
-### 2026-08-07 (latest) — Phase 4C: Coagulants Wave 2. **Phase 4 closes.**
+### 2026-08-07 (latest) — Arsenal design pass. **Draft, not decided.**
+
+**No code.** The owner opened the arsenal discussion immediately after
+Phase 4 closed, asking for ≥15 weapons with per-weapon upgradeable
+attributes, weapon extensions, support gems (*"support gems can also add
+abilities to weapons, or change their working way all together"*), and a
+call on slot counts.
+
+**Produced:** `docs/plans/phase-5-6-arsenal.md` — a full design covering
+18 weapons, ~35 gems in six classes, slot/socket/point economics, a
+coverage matrix against all 12 threats Phase 4 shipped, card-pool
+dilution fixes, and a 5A–6F phasing.
+
+**The load-bearing finding**, and the reason the design session was run
+*before* the framework rather than after it as §17 scheduled: weapons are
+currently six bespoke `updateXWeapon()` functions, and transformative
+gems on that shape cost *N weapons × M gems* in hand-written special
+cases — 144 at the catalogue's size. Phase 5A is therefore a **pure
+pipeline refactor with zero behaviour change**, and it is the whole bet.
+
+**Revision 2 (2026-08-08) after the owner's first review.** Approved:
+sockets opened by enhancement points, all 18 weapons, no ceiling on
+transformative gems. Changed on request: **one +/- per weapon** rather
+than per-attribute allocation (better — it restores Decision 40's
+legibility, and makes attribute *count* free, which is what lets Blades
+have a fourth for blade count); the **Reach** gem cut as redundant with
+Expansion; the gem list grown from 46 to **65**, with Noita's *Trigger*
+and *Formation* added as the two most build-generating mechanics found in
+the research.
+
+**Revision 3 — the design is settled.** 23 calls closed in one pass. The
+notable ones, and two where the owner's answer beat the options offered:
+
+- **Extensions level to 3 and then leave the pool entirely** — no card, no
+  drop, no trade ship. Kills the 2026-08-05 playtest's *"cards appear to
+  do nothing"* finding at the root, since a plateaued card can never be
+  offered, and a long run shrinks its own pool toward what it has not
+  taken. Better than any of the three options presented.
+- **Four cards per level-up, plus a bundle card every N levels** that
+  offers a package rather than an atom — a pacing beat the level-up loop
+  currently lacks, and a partial dilution answer.
+- Gems do **not** level; the orbital trade ship becomes the outlet for
+  dead ones (parked for 6/7). Core gems get **their own card track**.
+  3 extensions per weapon. Starting kit **Bolt, Chain, Poison** — the
+  three tactical roles rather than three delivery types. No weapon
+  rarity. No level cap and no diminishing returns.
+- Support weapons earn XP by **assist credit**; **Siphon converts at a
+  loss** so Decision 42's two containers survive; **Penetration cannot
+  push past Decision 44's armor floor**.
+
+**No decision is superseded — zero, down from two in revision 1.** The
+single-+/- model restored Decision 40's legibility clause and the
+no-cap/no-DR call restored the rest, so socket-opening is a pure addition
+and `CLAUDE.md`'s override protocol was never invoked.
+
+**Still open: six items, all measurement rather than design** — point
+totals per run, the bundle card's N, which 3 of each weapon's 4 candidate
+extensions ship.
+
+**Two risks carried into Phase 5 deliberately**, both recorded: pool
+dilution ships unmitigated (all three fixes declined in favour of
+measuring the real number, making the 5B gate a go/no-go on 65 gems), and
+enhancement remains a slider by Decision 40's own accepted risk, with the
+socket ladder as the only counterweight. **Assist credit is the largest
+hidden implementation cost** and is scheduled into 5B for that reason.
+
+**Nothing has been written into DECISIONS.md** — the 23 calls go in when
+Phase 5 starts, so the record is written against work that happened.
+
+### 2026-08-07 — Phase 4C: Coagulants Wave 2. **Phase 4 closes.**
 
 **Planning + implementation, two sub-phases built back to back.** Full
 record: **`docs/sessions/2026-08-07-phase-4c-wave2.md`**. Plans:

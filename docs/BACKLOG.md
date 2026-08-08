@@ -38,6 +38,38 @@ threshold unreachable).
 weapon/extension/gem slots, an inventory UI, and dissolving the current
 flat passives into that slot system. See the session record §17 for scope.
 
+**The arsenal design is settled at revision 3:**
+`docs/plans/phase-5-6-arsenal.md` — 18 weapons, 65 support gems in six
+classes, slot/socket/point economics, and a phasing that puts a four-stage
+weapon *pipeline* (§4 of that doc) ahead of all content, because
+transformative gems otherwise cost N-weapons × M-gems in hand-written
+special cases. **23 calls settled** by the owner across 2026-08-08; what
+remains open is measurement, not design.
+
+**No decision is superseded** — the owner's one-+/-per-weapon model and
+the no-cap/no-DR call between them left Decision 40 completely intact, so
+socket-opening is a pure addition and the ground-truth override protocol
+was never invoked.
+
+**Three things to read before starting**, all recorded in §12/§14 of the
+plan:
+
+- **Assist credit is the largest hidden cost.** Support weapons destroy no
+  mass, and XP *is* destroyed mass — so targets must carry a short-lived
+  record of which weapons affected them. New state on coagulants *and*
+  grid cells, on hot paths. Scheduled into 5B; if it slips, five pieces of
+  content ship as traps.
+- **Phase 5 ships with pool dilution deliberately unmitigated.** All three
+  fixes were declined in favour of measuring the real number, so the 5B
+  gate is an explicit go/no-go on the 65-gem count.
+- **Enhancement is a slider until the gate says otherwise** — that is
+  Decision 40's own recorded, accepted risk, with the socket ladder as the
+  only counterweight.
+
+Note the plan also closes two items further down this file if built:
+**More AoE weapons** (seven AoE weapons against today's two) and the
+arsenal half of **Per-variable weapon upgrade tiers**.
+
 ### Phase 4C — done, for reference
 
 Plans: `docs/plans/phase-4c1-wave2-armour.md` (Sclerotic, Blastoma, armour
