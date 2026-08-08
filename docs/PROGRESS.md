@@ -143,9 +143,11 @@ The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
 gem system, and the tier table is demoted to flavour. **All of Phase 3 and
-Phase 4 are done and (mostly) playtested** — 4C-2 specifically has only
-been verified via the debug harness, not yet by the project owner's own
-play; see the *Now* section of BACKLOG.
+Phase 4 are done and playtested.** Phase 4's gate was run by the project
+owner on 2026-08-08 — *"I have played it, all good"* — so the full
+coagulant roster, armour, and the scar ring are confirmed in real play,
+not just through the debug harness. The design's own risk #4 (the scar
+ring feeling oppressive) did not materialise.
 
 **Start here, in order:**
 

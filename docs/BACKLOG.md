@@ -51,6 +51,18 @@ the no-cap/no-DR call between them left Decision 40 completely intact, so
 socket-opening is a pure addition and the ground-truth override protocol
 was never invoked.
 
+**Phase 4's gate passed** — played by the owner 2026-08-08, *"all good."*
+The scar ring did not read as oppressive (the design's own risk #4).
+
+**A pre-refactor audit on 2026-08-08** re-read every decision, session and
+plan against the arsenal design. It found **Ward Pulse is a working weapon
+misfiled as a passive** — it has a cooldown, a tower-centred radius and
+calls `clearAt`, but was classed as a passive since the port, which is why
+it never got a visual and why it is the only weapon whose `clearAt` omits
+`coagulantMult` despite Decision 50. It becomes **Immolation Ring** in
+Phase 5A, which resolves all three at once. Two other work items came out
+of the same pass; both are in §13 of the plan.
+
 **Three things to read before starting**, all recorded in §12/§14 of the
 plan:
 
@@ -155,12 +167,12 @@ the phase that absorbs each.
 | Bug | Absorbed by |
 |---|---|
 | **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — **killed at the root** by Decision 40: weapon *level* cards stop existing, so the failure mode has nowhere to live |
-| **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. | Phase 5/6 — Ward becomes a gem |
+| **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. **Root cause found 2026-08-08:** it is a *weapon* misfiled as a passive, so Decision 11's "a weapon's signature visual is part of the weapon" never applied to it — the same classification gap that hid `frozen`. | Phase 5A — promoted to a real weapon and renamed **Immolation Ring**, which gets it a visual and fixes its missing `coagulantMult` |
 | **Frost Nova's ring is nearly invisible.** 3px stroke, 0.4s life on a 3.6s cooldown (~11% uptime), fading alpha, low-contrast `#bfe9ff`. Also an expectation gap: it reads as an "aura" but is coded as an instantaneous pulse. | Phase 9 |
 | ~~**Frozen cells have no visual at all.**~~ ✅ **Fixed in Phase 4B** (Decision 66) — now a `#bfe9ff` rim, reusing Frost Nova's existing colour. Open since Phase 2; it was the precedent that forced 4A to ship a placeholder rather than shipping blind. | ✅ Done |
 | ~~**Density palette collapses.**~~ ✅ **Fixed in Phase 4B** (Decision 66). The cause turned out to be uneven *spacing*, not bad hues — density now rides evenly-stepped alpha, so recollapse is structurally impossible and mechanically tested. | ✅ Done |
 | **Screen shake fires only on contact damage.** Nothing else in the game shakes. | Phase 9 |
-| **`pickThree` uses a biased shuffle** — `sort(() => Math.random() - 0.5)` is not a uniform permutation, so card appearance rates are skewed. | Phase 5 |
+| **`pickThree` uses a biased shuffle** — `sort(() => Math.random() - 0.5)` is not a uniform permutation, so card appearance rates are skewed. **Priority raised 2026-08-08:** the 5B gate exists to *measure* card-pool dilution, and a skewed shuffle measures a distribution the game doesn't have. | Phase 5B — **before** the gate, not after |
 
 **Process finding:** Decision 11 established "a weapon's signature visual
 is part of the weapon, not polish." Ward Pulse slipped through because

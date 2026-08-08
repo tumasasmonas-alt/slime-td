@@ -3,8 +3,15 @@
 **Status:** 📋 **Revision 3 — design settled, not yet written into
 DECISIONS.md.** Reviewed by the project owner across 2026-08-08 in two
 passes: revision 2 reshaped the attribute model, cut a gem and grew the
-list to 65; revision 3 closed **23 open questions** (§12). What remains
-open is measurement — point totals, pacing numbers — not design.
+list to 65; revision 3 closed **23 open questions** (§12). A pre-refactor
+audit — re-reading every decision, session record and plan against this
+document — then closed **three more** and surfaced **three work items**
+(§12.6, §13). What remains open is measurement — point totals, pacing
+numbers — not design.
+
+**Phase 4's gate passed**, played by the owner 2026-08-08: *"I have played
+it, all good."* The threat model this catalogue is authored against is
+confirmed in real play, not just through the debug harness.
 
 **No decision is superseded.** Revision 1 proposed overriding two clauses
 of Decision 40, revision 2 one, revision 3 none: the owner's single-+/-
@@ -25,7 +32,7 @@ working way all together."*
 §2–§4, §8; Decisions 32, 36, 39–46, 68–69.
 
 **Nothing in `docs/DECISIONS.md` has been changed by this document.** §12
-records the **23 settled calls** that would go in as decisions when Phase 5
+records the **26 settled calls** that would go in as decisions when Phase 5
 starts, and the six items left open — all of which are numbers needing
 measurement rather than choices needing a call.
 
@@ -577,6 +584,14 @@ converts it into single-target).
 **Answers:** Blastoma, Mote swarm, ambient field.
 
 **7.11 · Immolation Ring** 🔥 — *persistent ring at the perimeter / positional / DoT*
+**Built from Ward Pulse** (settled 2026-08-08). `systems/ward.ts` already
+is this weapon in all but name — a periodic `clearAt` on a tower-centred
+radius — but it has been misfiled as a *passive* since the port, which is
+why it never got a visual (a standing BACKLOG bug) and why it is the one
+weapon whose `clearAt` call still does not pass `coagulantMult` despite
+Decision 50 updating every other call site for exactly that reason.
+Promoting it resolves all three at once and gives this weapon working code
+to start from rather than a blank file.
 **Fills the "nothing is defensively positioned" gap head-on.** A burning
 ring sits at the perimeter and damages anything crossing it. It has no
 targeting stage at all — it is a *line*, and everything in the game must
@@ -967,7 +982,7 @@ lands.
 | **Plating** | flat reduction on incoming damage | passive `armor` |
 | **Magnetism** | pickup radius | passive `pickup` |
 | **Avarice** | +XP | passive `xpGain` |
-| **Ward** | a regenerating shield absorbing arrival damage | passive `ward` |
+| **Ward** | a regenerating shield absorbing arrival damage | *(new — see note)* |
 | **Perimeter Anchor** | enlarges the perimeter | — |
 | **Reflex** | arrival damage is partly returned to the field | — |
 | **Scholar** | +1 enhancement point every N levels | — |
@@ -979,6 +994,14 @@ lands.
 predicted range would be: a wider perimeter is a wider engagement zone, a
 wider scar ring, and more armoured spawns. A straight upgrade that is
 sometimes wrong.
+
+> **The Ward name is reused, not inherited.** The existing `ward` passive
+> is *Ward Pulse*, a periodic damage ring — it becomes **Immolation Ring**
+> (§7.11), not this gem. The core gem called Ward is a genuinely new
+> shield mechanic that happens to take the name back. Worth stating
+> explicitly because revision 2 of this document listed Ward as
+> "replacing passive `ward`", which would have quietly deleted a working
+> weapon.
 
 **Salvage and Adrenal Surge both pay out for being hit**, which makes a
 genuine defensive-attrition build possible — take the arrival, bank the
@@ -1158,6 +1181,34 @@ Socket-opening is a pure addition. The override protocol was never needed.
 | 21 | Weapons have **no rarity or power tiers** | §12.5 |
 | 22 | **Core gems draw from a separate track** | §5, §11 |
 | 23 | **Four cards per level-up**, plus a **bundle card** every N levels | §11 |
+| 24 | **Ward Pulse becomes Immolation Ring** — promoted from passive to weapon | §7.11 |
+| 25 | **The level-up pause stays modal**; judge at the Phase 5 gate | §12.6 |
+| 26 | **Phase 4's gate passed** — played by the owner 2026-08-08, *"all good"* | — |
+
+### 12.6 · The modal level-up pause stays, for now
+
+Decision 61 assigned this to Phase 5 — *"deliberately not done: removing
+the modal pause on level-up… it belongs with Phase 5's card-pool
+restructure"* — and this plan makes the interruption **larger**, not
+smaller, by moving to four cards plus periodic bundle cards.
+
+**Settled 2026-08-08: keep it modal and judge at the gate.** Decision 61
+attached a condition to its own recommendation — *"the real fix **if
+showers prove insufficient**"* — and gem showers have never actually been
+judged insufficient. Removing the pause pre-emptively would be fixing a
+problem on the strength of a prediction, which is the habit this project
+has repeatedly found to be wrong (4A shipped four constants that had to be
+retuned once the game was run).
+
+Also worth stating plainly: in a no-aim game the pause interrupts nothing
+the player was doing (§4, the premise correction in the 3D record). The
+cost is dramatic, not mechanical — a behemoth's death getting buried under
+UI — which is precisely the kind of thing a gate can judge and an argument
+cannot.
+
+**If the gate says it is bad**, the fix is non-modal cards in 5C, and the
+cheaper intermediate step is making the bundle card *replace* a normal
+draw rather than add to it.
 
 ### 12.1 · Assist credit — the mechanism this implies
 
@@ -1239,7 +1290,8 @@ that a blocked projectile has alternatives — not before.
 
 | Step | Work | Gate |
 |---|---|---|
-| **5A** | The four-stage pipeline (§4). Refactor all six weapons onto it. **Zero behaviour change.** Outcome tests first, then the refactor. | Every existing weapon test passes untouched |
+| **5A-0** | **Rewrite the 23 weapon tests as outcome tests against current code.** They currently call `updateBoltWeapon(state, dt)` and friends — the exact mechanism entry points the pipeline replaces, so "existing tests pass untouched" is impossible until they stop asserting the mechanism. Decision 20's rule, applied before the thing it protects moves. | The rewritten suite passes against unmodified code |
+| **5A** | The four-stage pipeline (§4). Refactor **all seven** weapons onto it — the six in `weapons/` plus **Ward Pulse**, which is a weapon misfiled as a passive (§7.11). **Zero behaviour change.** Also: extend the tower-centred radius guard (below). | 5A-0's outcome tests pass untouched; `towerCenteredRadius` guard extended |
 | **5B** | Enhancement points, per-weapon attribute curves, socket thresholds, gem instances and inventory, socketing model in `state.ts`. Passives dissolved into core gems on their own card track. Cards become extensions (levelling to 3, then removed) + gems. **Assist credit (§12.1)** — the hidden cost, and it belongs here rather than in Phase 6. | Mass/XP invariants hold; card-pool composition test; a maxed extension is provably never offered again |
 | **5C** | Pause + inventory UI: one +/- per weapon, socket/unsocket, gems returning to inventory when a socket closes, four-card draws, the bundle card, and **per-weapon gem descriptions** (§12, the known failure mode). | — |
 | **▶ GATE** | **Playtest the socketing loop**, and **judge the gem count.** Does the inventory screen get opened more than once? Is enhancement a decision or a slider? And how bad is dilution really, with none of the three declined fixes in place? | |
@@ -1257,6 +1309,37 @@ that a blocked projectile has alternatives — not before.
 
 **Phase 7 (Meta)** then buys: weapon unlocks, turret slots, core sockets,
 gem bundles. Unchanged from §17.
+
+### Three audit findings folded into the phases above
+
+Found 2026-08-08 by re-reading every doc against this plan before starting
+work. None needed a design call; all three are work items.
+
+**1. The tower-centred radius guard does not guard the weapons.**
+`tuning/weaponGeometry.test.ts` tests `towerCenteredRadius()` generically
+and never enumerates a single weapon — so it proves the helper is correct,
+not that anything calls it. A pipeline that computes radius centrally could
+bypass the helper entirely and every test would still pass. **That is
+precisely how prototype bug #5 made Orbiting Blades unable to hit ambient
+infection at any tier, any level, in any run.** Three weapons depend on it
+today (Blades, Frost, Ward Pulse) and four more will (Immolation,
+Resonance, Repulsor, Shockwave). **5A must add a test that asserts every
+tower-centred weapon's *actual* resolved radius clears the perimeter**, not
+just that the helper would if asked.
+
+**2. `pickThree`'s shuffle is biased**, and it now matters more than its
+BACKLOG priority suggests. `sort(() => Math.random() - 0.5)` is not a
+uniform permutation. Normally a cosmetic fairness bug — but the 5B gate
+exists specifically to **measure real card-pool dilution** (§11), and a
+skewed shuffle means measuring a distribution the game does not have.
+**Fix it in 5B, before the gate, not after.**
+
+**3. Ward Pulse's `clearAt` call omits `coagulantMult`.** Decision 50
+updated every weapon's call site to read its own value *"specifically so a
+future edit to that field isn't silently ignored by weapons that never look
+at it"* — Ward was missed because it is classed as a passive. Harmless
+today (every value is 1), live the moment Penetration exists. Fixed by
+5A's promotion of Ward onto the pipeline.
 
 ---
 
