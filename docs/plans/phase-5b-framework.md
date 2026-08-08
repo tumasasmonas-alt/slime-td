@@ -1,8 +1,9 @@
 # Phase 5B — the enhancement, socket and card-pool economy
 
-**Status:** 📋 Proposed, awaiting the project owner's review. Nothing here
-is decided or built. Written 2026-08-08, immediately after 5A shipped
-(Decision 70).
+**Status:** 📋 **Scope settled 2026-08-08, not yet built.** Written
+immediately after 5A shipped (Decision 70); the four open questions in §8
+were answered the same session and are folded in below. Ready to
+implement on greenlight.
 
 **Depends on:** 5A (`weapons/pipeline.ts`), shipped and verified.
 **Source design:** `docs/plans/phase-5-6-arsenal.md` §5, §6, §9F, §11, §12,
@@ -32,15 +33,19 @@ mechanics the game already has, working, today: the `maxHp`/`regen`/
 choice" rather than "unlimited concurrent levels" is bounded, low-risk
 work, not new content authorship.
 
-**§2 proposes: 5B ships the core-gem track as real, working content**
-(the five ported passives), and ships the **weapon-socket mechanism**
-fully wired but genuinely empty of gem types until 6A — extensions and
-weapon gems are visibly "coming soon" rather than silently absent. This
-keeps the socketing loop judgeable (core gems prove the model end to end)
-without smuggling Phase 6 catalogue work into a framework phase. **This
-is a scope call, not a decision** — flagged here rather than made
-unilaterally, exactly because it changes what "playing after 5B" feels
-like. See §8, Q1.
+**Settled 2026-08-08: 5B ships the core-gem track as real, working
+content** (the five ported passives), and ships the **weapon-socket
+mechanism** fully wired but genuinely empty of gem types until 6A. This
+keeps the socketing loop judgeable — core gems prove the model end to end
+— without smuggling Phase 6 catalogue work into a framework phase.
+
+The consequence to accept honestly: **at the 5B gate, the weapon half of
+the socket system will have nothing in it.** That is expected, not a
+failure, and the gate should be read accordingly — it can judge "does
+socketing work, does the core loop feel right, how does the restructured
+pool draw," but it *cannot* judge specialise-vs-spread, which needs 6A's
+gems. Recorded here so a thin-feeling gate reads as information rather
+than a problem.
 
 ---
 
@@ -106,13 +111,17 @@ what happens to a banked point so the game stays playable and testable
 through this phase — the same problem 4A solved with a crude placeholder
 rather than shipping blind.
 
-**Proposed placeholder policy, replaced wholesale by 5C:** each level-up
-banks one point into `enhancementPool` (not auto-spent). A player can
-still complete a run with every point sitting unspent — the run is not
+**Placeholder policy, settled 2026-08-08, replaced wholesale by 5C:** each
+level-up banks one point into `enhancementPool` (not auto-spent). A player
+can still complete a run with every point sitting unspent — the run is not
 broken, just under-optimized, which is an honest placeholder state rather
-than a fabricated one. `updateHud` gets one new line: unspent points, so
-the gap is visible rather than silently inert (Decision 11's rule again —
-a mechanic's state needs to be legible even in placeholder form).
+than a fabricated one.
+
+**`updateHud` gets one new line showing unspent points** (settled — Q4).
+Decision 65's rule, which 4A learned the hard way: it is not enough for a
+mechanic's state to exist, it has to be *legible in the state the mechanic
+actually produces*. A banked point nobody can see is the `frozen` mistake
+in a new costume.
 
 **Rejected: auto-spend evenly across decked weapons.** Tempting, but it
 manufactures behaviour ("the game is choosing your build for you") that
@@ -154,24 +163,42 @@ two (enough to prove the invariant — "a maxed extension is provably never
 offered again," the 5A phasing table's own gate criterion) without
 authoring real per-weapon mechanics, which is 6B's job.
 
-### Core gems draw from a separate track
+### Core gems: a guaranteed slot, every second level-up
 
-**Cadence not yet specified anywhere in the design doc — a genuine gap,
-not an oversight.** Proposed: every 3rd level-up shows a core-gem draw
-(3 choices from the 5 ported core gems, §1) instead of the normal weapon
-draw. Flagged in §8, Q2 — a pacing number, cheap to retune, not worth
-blocking on.
+**Settled 2026-08-08.** Not a whole separate draw, and not every level:
+on **even-numbered level-ups**, one of the four cards is guaranteed to be
+a core gem; on odd level-ups all four are weapon-side.
 
-### Four cards per draw, plus a bundle card every N levels
+This is the better shape than either option originally offered. A whole
+separate core draw interrupts the level-up rhythm and, with only 3 core
+sockets, goes dead quickly once they're filled. A guaranteed slot in
+*every* draw permanently spends a quarter of the pool on defence. Every
+second level-up gives roughly one core offer per socket across an early
+run, keeps three of four slots offensive on average, and never stops the
+normal rhythm.
 
-Both settled 2026-08-08. `N` is unspecified — proposed **every 5 levels**
-as a starting guess, tuned at the gate. The bundle card's actual packages
-(§11: *"three packages, each holding 2–3 related cards"*) need real gem
-content to build from — **the bundle mechanic ships in 5B, its first real
-packages ship whenever 6A's gems exist to fill them.** Until then, a
-5B-era bundle draw offers packages of whatever's actually available
-(likely just core gems + a placeholder extension pairing) — thin, but
-honest, same reasoning as §1.
+**One fallback to build:** if the core pool is genuinely exhausted — all
+five owned, all three sockets full, nothing left that could change the
+build — the guaranteed slot falls back to a weapon-side card rather than
+offering a dead pick. Same "never offer a dead card" rule §11 of the
+arsenal plan already establishes.
+
+### Four cards per draw; the bundle card defers to 6A
+
+Four-card draws ship in 5B. **The bundle card does not** (settled
+2026-08-08).
+
+Its whole purpose is handing out a *coherent themed package* — §11's
+example, `Detonation + Penetration` teaching the armor lesson in a single
+pick, which no individual card can do. With 5B's weapon-gem pool empty
+(§1), a bundle could only bundle core gems and placeholder extensions:
+not a thin version of the mechanic, a fundamentally different and worse
+one. Judging the pacing beat against that would produce a misleading
+result.
+
+**Ships in 6A**, alongside the first real gems that give packages
+something to be made of. The interval `N` is deferred with it — a pacing
+number is not worth guessing at a phase early.
 
 ---
 
@@ -243,8 +270,8 @@ built and forgotten.
 
 | Step | Work | Test |
 |---|---|---|
-| **5B-1** | `tuning/sockets.ts`, `enhancementPool`, `weaponSlots`, starting kit (Bolt/Chain/Poison per §12.4) in `startRun()`. Fix `pickThree`'s shuffle. | `socketCount` invariant; starting-kit test |
-| **5B-2** | Card pool: remove weapon-level cards, add slot-gated new-weapon cards, extension leveling-and-removal (placeholder extension types), core-gem separate track, 4-card + bundle draws. | Card-pool composition test; "a maxed extension is never offered again" |
+| **5B-1** | `tuning/sockets.ts`, `enhancementPool`, `weaponSlots`, starting kit (Bolt/Chain/Poison per §12.4) in `startRun()`. Fix `pickThree`'s shuffle. HUD line for unspent points. | `socketCount` invariant; starting-kit test |
+| **5B-2** | Card pool: remove weapon-level cards, add slot-gated new-weapon cards, extension leveling-and-removal (placeholder extension types), 4-card draws, guaranteed core slot on even level-ups with its exhausted-pool fallback. **No bundle card** (6A). | Card-pool composition test; "a maxed extension is never offered again"; core slot appears on even level-ups and falls back when exhausted |
 | **5B-3** | Core gems: port the five existing passives onto 3-socket selection. Remove the old unlimited-concurrent-passive model. | Regression: existing passive-effect tests still pass, now gated through sockets |
 | **5B-4** | Gem inventory + `WeaponSockets` model; socket-closing-returns-to-inventory on point withdrawal (no destructive respec, §5 of the arsenal plan). | Conservation test: a gem is never lost, only relocated |
 | **5B-5** | Assist credit plumbing (§5), coagulant-only. | Direct unit test with a synthetic `assistedBy` tag; confirm zero behaviour change with none set |
@@ -252,17 +279,26 @@ built and forgotten.
 
 ---
 
-## 8. Open questions — need the owner's call before 5B-2
+## 8. Settled 2026-08-08
 
-1. **Does 5B ship thin** (mechanism only, mostly-empty weapon-gem pool)
-   **or pull forward a handful of real gems** (Amplifier, Overclock,
-   maybe Multishot) so the socketing loop is actually judgeable at the
-   gate? §1. Recommend: ship thin, and treat "is the loop still worth
-   judging with an empty pool" as itself a finding the gate produces —
-   but this is a real tradeoff, not an obvious call.
-2. **Core-gem draw cadence** — every 3rd level-up is a placeholder guess
-   with no basis in anything settled. §4.
-3. **Bundle card interval `N`** — same, a pacing guess (proposed: 5).
-4. **Should `enhancementPool` display in the HUD before 5C's real UI
-   exists**, so an unspent point isn't invisible? Recommend yes (§3) —
-   but it's a scope addition to "just the model," worth confirming.
+| # | Question | Call | Where |
+|---|---|---|---|
+| 1 | Thin 5B, or pull forward real weapon gems? | **Thin** — core gems real, weapon side empty until 6A | §1 |
+| 2 | Core-gem cadence | **Guaranteed slot, every second level-up**, with an exhausted-pool fallback | §4 |
+| 3 | Bundle card interval | **Deferred entirely to 6A** — needs real gems to bundle | §4 |
+| 4 | Enhancement pool visible pre-5C? | **Yes** — one HUD line | §3 |
+
+**Nothing is blocking.** Two of these went against the plan's own
+proposals and both are improvements: the guaranteed-every-second-level
+core slot avoids both failure modes the original options had, and
+deferring the bundle card avoids judging a mechanic by a version of it
+that couldn't work.
+
+### Still genuinely open, deliberately
+
+- **The socket ladder's numbers** (0/3/8/15/24) are untested against a
+  real XP curve. `tuning/sockets.ts` exists as a single pure function
+  specifically so the gate can retune them in one line.
+- **Whether the gate can conclude anything about enhancement-as-slider**
+  with an empty weapon-gem pool. Probably not — see §1. That is the
+  known limit of this gate, not a defect in it.

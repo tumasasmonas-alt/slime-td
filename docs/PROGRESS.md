@@ -292,12 +292,25 @@ enhancement pool, the socket ladder, card-pool restructuring (weapon-level
 cards removed, extensions leveling 1→3 then permanently removed, core
 gems on a separate track), and assist credit's plumbing built now against
 the seven existing weapons so Phase 6's no-damage weapons have something
-to plug into later. **Surfaces one real scope tension**: weapon-socketed
-gems are themselves Phase 6 content, so a strictly-empty 5B pool risks
-being untestable in the way that matters — proposed fix is shipping the
-five ported-passive core gems as real content to keep the loop judgeable,
-flagged as an open call (§8) rather than decided unilaterally. Awaiting
-review before implementation starts.
+to plug into later. **Surfaced one real scope tension**, since weapon-socketed
+gems are themselves Phase 6 content: a strictly-empty 5B pool risks being
+untestable in the way that matters.
+
+**All four open questions settled the same session.** 5B ships **thin** —
+the five ported-passive core gems are real content so the loop is
+judgeable end to end, while the weapon-gem side stays genuinely empty
+until 6A. Core gems get a **guaranteed card slot on even-numbered
+level-ups** (better than either option offered: a separate draw goes dead
+once 3 sockets fill, a slot in *every* draw permanently spends a quarter
+of the pool on defence). The **bundle card defers wholesale to 6A** —
+with no real gems to bundle it would be a different and worse mechanic,
+not a thin version of the right one. Unspent points get a HUD line, per
+Decision 65's legibility rule.
+
+**Known limit of the 5B gate, recorded up front:** with the weapon-gem
+pool empty it can judge socketing, the core loop and the restructured
+draw, but *not* specialise-vs-spread. A thin-feeling gate is expected
+information, not a failure.
 
 ### 2026-08-07 — Arsenal design pass. **Draft, not decided.**
 
