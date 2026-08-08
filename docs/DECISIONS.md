@@ -1804,6 +1804,89 @@ removal. 380/380 tests, typecheck clean, build clean.
 
 ---
 
+## Phase 5C — the pause + inventory screen. Phase 5 closes.
+
+> Decision 72 came out of the 2026-08-08 session that implemented Phase
+> 5C, immediately after Phase 5B. Plan, scope conversation, and the
+> as-built delta are in **`docs/plans/phase-5c-inventory-ui.md`**. The
+> design it implements is `docs/plans/phase-5-6-arsenal.md` §5, §6.
+
+**72. The pause + inventory screen ships, making 5B's economy spendable;
+the Phase 5 gate moves to after 6A.** ✅ *2026-08-08.*
+
+**The screen.** A DOM overlay (Decision 5's pattern, consistent with the
+level-up card panel and start/game-over overlays), listing every equipped
+weapon with a live stat line (`WeaponDef.stats(lvl)`, new — terser than
+`desc(lvl)`, which stays card copy), a `+`/`−` pair spending
+`state.enhancementPool`, and a socket-dot row that visibly grows as points
+go in — the intended mechanism for teaching the socket ladder with no
+tutorial. A core row shows the three fixed slots and what occupies them.
+
+**Opened two ways**: a HUD button during normal play, or a "Manage
+Loadout" button inside the level-up card screen — settled 2026-08-08,
+*"just got a point is exactly when a player wants to spend one."*
+`main.ts` tracks which entry point was used so closing returns to the
+right place: resuming play, or re-showing the pending level-up cards
+rather than silently discarding them. A key shortcut was deliberately not
+built — this game has zero keyboard input today and no controls hint
+anywhere, so a key-only binding would have been undiscoverable for a
+screen whose whole purpose is being opened repeatedly. The button teaches
+the shortcut's existence first; the shortcut itself is a later addition.
+
+**A real bug in 5B's plumbing, found and fixed here.** `withdrawPoints()`
+shipped in 5B as pure plumbing with no live caller, and it had a genuine
+gap: withdrawn points were removed from the weapon but never credited
+back to `enhancementPool` — harmless while nothing called it, a real bug
+the instant something did. Fixed as part of wiring the `−` button, along
+with a new `investPoints()` (the mirror on the spend side) and an
+exported `minPointsForSockets()` so the button disables itself exactly at
+the extension clamp rather than showing live and silently no-op'ing. Both
+directions are tested for round-trip conservation.
+
+**Build for reuse, per the settled plan.** `ui/weaponRow.ts` is a shared
+row renderer parameterised by mode (`'loadout'` for this screen,
+`'select'` scaffolded for Phase 6-0's pre-run weapon select) — one module,
+intended two callers, following `systems/cards.ts`'s precedent of
+separating pure/reusable logic from the DOM wrapper that consumes it.
+
+**A weapon at 0 points stays equipped and fires weakly** (settled
+2026-08-08) rather than unequipping — freeing a deck slot from a stat
+control would be a surprising side effect, and mid-run deck management is
+a Phase 7 concern. Noted during implementation: this produces stats
+genuinely *below* the weapon's old "level 1" baseline (every formula
+assumed `lvl >= 1`; the socket model lets it reach 0), not a floor at the
+old minimum — a minor tuning observation, not a defect, flagged in the
+plan for whoever tunes it later.
+
+**The Phase 5 gate moves to after 6A.** Its central question — *is
+enhancement a decision or a slider?* — cannot be answered while sockets
+are empty: opening a 4th socket buys nothing until Phase 6A ships real
+gems, so specialising has no benefit beyond raw power and the answer is
+forced to "slider" regardless of whether the design is sound. Running the
+gate now would have produced a known-meaningless result that could later
+be mistaken for a real finding. Build order is unchanged (5C → 6-0 → 6A);
+only the point where the full gate runs moved. 5C still passed its own
+small immediate check — does it open, does the `+`/`−` read legibly, does
+anything break — which is answerable without gems and was answered live.
+
+**Phase 5 is complete as of this decision** — the pipeline (5A), the
+enhancement/socket/card-pool economy (5B), and the screen that makes it
+usable (5C) — with no outstanding items. Next: Phase 6-0, a minimal
+pre-run weapon select.
+
+**Verified live**: the full open/close cycle from both entry points; `+`
+raising a weapon's points, live stats, and the enhancement pool
+simultaneously; socket dots growing from 1 to 2 exactly at the 3-point
+threshold; the `−` button correctly disabling when withdrawal would
+destroy a committed extension; a core gem socketing and rendering its
+icon and name in the core row; the manage-loadout round trip (cards →
+inventory → resume → cards reappear) leaving `pendingLevelUps` untouched
+throughout. Zero console errors across the sequence. 389/389 tests,
+typecheck clean, build clean, production bundle byte-identical after the
+debug bridge's removal.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

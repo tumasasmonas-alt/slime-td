@@ -298,6 +298,158 @@
         white-space: nowrap;
       }
 
+      /* ---------- Loadout button + inventory screen ---------- */
+      /* Sits at the HUD's z-index (10), well under every overlay's (50) —
+         that alone keeps it unclickable whenever a card or the start/
+         game-over panel is showing, with no extra state check needed. */
+      #loadout-btn {
+        position: absolute;
+        bottom: 14px;
+        right: 18px;
+        z-index: 10;
+        pointer-events: auto;
+        background: #0008;
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 8px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      #loadout-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      button.secondary {
+        background: none;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-family: inherit;
+        font-size: 11px;
+        letter-spacing: 0.03em;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-top: 18px;
+      }
+      button.secondary:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .panel-wide {
+        max-width: 520px;
+        text-align: left;
+        max-height: 82vh;
+        overflow-y: auto;
+      }
+      #inventory-points {
+        font-size: 12px;
+        color: var(--gold);
+        letter-spacing: 0.05em;
+        margin-bottom: 14px;
+        text-align: center;
+      }
+      .weapon-row {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+      }
+      .weapon-row-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .weapon-row-icon {
+        font-size: 18px;
+      }
+      .weapon-row-name {
+        font-size: 13px;
+        font-weight: bold;
+        flex: 1;
+      }
+      .weapon-row-points {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .weapon-row-controls {
+        display: flex;
+        gap: 4px;
+      }
+      .weapon-row-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: #0006;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .weapon-row-btn:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .weapon-row-btn:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .weapon-row-stats {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      .weapon-row-sockets {
+        margin-top: 6px;
+        display: flex;
+        gap: 5px;
+      }
+      .socket-dot {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .socket-dot.filled {
+        color: var(--accent);
+      }
+      #inventory-core-label {
+        font-size: 10px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 16px 0 8px;
+      }
+      #inventory-core {
+        display: flex;
+        gap: 10px;
+      }
+      .core-slot {
+        flex: 1;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        text-align: center;
+        font-size: 18px;
+        color: var(--muted);
+      }
+      .core-slot.filled {
+        color: var(--text);
+      }
+      .core-slot-icon {
+        display: block;
+        font-size: 18px;
+      }
+      .core-slot-name {
+        display: block;
+        font-size: 10px;
+        margin-top: 4px;
+        color: var(--muted);
+      }
+
       /* ---------- Start / game-over overlays ---------- */
       h1 {
         font-size: 26px;
@@ -377,10 +529,24 @@
     <div id="weapon-tray"></div>
     <div id="modifiers"></div>
 
+    <button id="loadout-btn" type="button">Loadout</button>
+
     <div id="upgrade-overlay" class="overlay hidden">
       <div class="panel">
         <div id="upgrade-title">Level Up — Choose an Upgrade</div>
         <div id="cards"></div>
+        <button class="secondary" id="manage-loadout-btn" type="button">Manage Loadout</button>
+      </div>
+    </div>
+
+    <div id="inventory-overlay" class="overlay hidden">
+      <div class="panel panel-wide">
+        <div id="upgrade-title">Loadout</div>
+        <div id="inventory-points"></div>
+        <div id="inventory-weapons"></div>
+        <div id="inventory-core-label">Core</div>
+        <div id="inventory-core"></div>
+        <button class="primary" id="inventory-close-btn" type="button">Resume</button>
       </div>
     </div>
 

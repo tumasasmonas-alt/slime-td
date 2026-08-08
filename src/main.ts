@@ -26,6 +26,7 @@ import { updateProjectiles } from './systems/projectiles';
 import { runSimulation } from './systems/tick';
 import { updateTowerTick } from './systems/tower';
 import { initHud, updateAnnounceFade, updateHud } from './ui/hud';
+import { closeInventory, initInventory, openInventory } from './ui/inventory';
 import { hideOverlays, initOverlays, showGameOver } from './ui/overlays';
 import { initUpgradeCards, syncUpgradeOverlay } from './ui/upgradeCards';
 import { updateBladesWeapon } from './weapons/blades';
@@ -46,8 +47,18 @@ const { canvas, ctx } = setupCanvas(canvasEl);
 let state: GameState = freshState();
 
 const hudRefs = initHud();
-const cardRefs = initUpgradeCards();
+// Phase 5C (docs/plans/phase-5c-inventory-ui.md S5): forward references
+// to functions declared later in this file — safe because `function`
+// declarations hoist, and these callbacks only ever run from a click,
+// long after the whole module has finished initializing. Same pattern
+// `initOverlays(startRun)` below already relies on.
+const cardRefs = initUpgradeCards(handleOpenInventoryFromLevelUp);
 const overlayRefs = initOverlays(startRun);
+const inventoryRefs = initInventory('loadout-btn', 'inventory-close-btn', handleOpenInventoryFromHud, handleCloseInventory);
+// Tracks which of the two entry points opened the inventory, so closing
+// it knows whether to resume the run or re-show the pending level-up
+// cards rather than silently discarding them.
+let openedInventoryFromLevelUp = false;
 
 let camera: Camera = fitCamera(window.innerWidth, window.innerHeight);
 let dpr = 1;
@@ -77,7 +88,34 @@ function startRun(): void {
   state.weapons.chain = 1;
   state.weapons.poison = 1;
   hideOverlays(overlayRefs);
+  closeInventory(inventoryRefs); // defensive — nothing reaches this mid-run today, but a fresh run should never inherit a stuck overlay
   updateHud(hudRefs, state);
+}
+
+// Phase 5C (docs/plans/phase-5c-inventory-ui.md S5): opened either from
+// the HUD button during normal play, or from a "Manage Loadout" button
+// inside the level-up card screen — see openedInventoryFromLevelUp above
+// for why closing needs to remember which.
+function handleOpenInventoryFromHud(): void {
+  if (!state.running || state.paused) return;
+  state.paused = true;
+  openedInventoryFromLevelUp = false;
+  openInventory(inventoryRefs, state);
+}
+
+function handleOpenInventoryFromLevelUp(): void {
+  cardRefs.overlay.classList.add('hidden');
+  openedInventoryFromLevelUp = true;
+  openInventory(inventoryRefs, state);
+}
+
+function handleCloseInventory(): void {
+  closeInventory(inventoryRefs);
+  if (openedInventoryFromLevelUp && state.pendingLevelUps > 0) {
+    syncUpgradeOverlay(cardRefs, state); // re-shows the pending cards; state.paused stays true throughout
+  } else {
+    state.paused = false;
+  }
 }
 
 function update(dt: number): void {

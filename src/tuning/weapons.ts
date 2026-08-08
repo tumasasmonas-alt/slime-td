@@ -6,6 +6,11 @@ export interface WeaponDef {
   readonly icon: string;
   readonly maxLevel: number;
   readonly desc: (lvl: number) => string;
+  // Phase 5C (docs/plans/phase-5c-inventory-ui.md S4): a terser readout
+  // for the inventory screen's weapon rows — "45 pwr · 0.42s" rather than
+  // desc's full sentence. Different jobs: desc is card copy read once,
+  // stats is a live number a player watches change as they spend points.
+  readonly stats: (lvl: number) => string;
   // Per-weapon multiplier on damage dealt to coagulants, on top of the
   // overlap-area scaling in grid/clear.ts and the global
   // COAGULANT_DAMAGE_SCALE dial. Defaults to 1 for every weapon here —
@@ -145,6 +150,7 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '⚡',
     maxLevel: 8,
     desc: (lvl) => `Fires at the nearest wall of infection. Lv${lvl}: ${boltDamage(lvl).toFixed(0)} pwr`,
+    stats: (lvl) => `${boltDamage(lvl).toFixed(0)} pwr · ${boltCooldown(lvl).toFixed(2)}s`,
     coagulantMult: 1,
   },
   blades: {
@@ -152,6 +158,7 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '🗡️',
     maxLevel: 8,
     desc: (lvl) => `Spinning blades shred any tissue they touch. Lv${lvl}: ${bladeCount(lvl)} blade(s)`,
+    stats: (lvl) => `${bladeDamage(lvl).toFixed(0)} pwr · ${bladeCount(lvl)} blade(s)`,
     coagulantMult: 1,
   },
   chain: {
@@ -159,6 +166,7 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '🔗',
     maxLevel: 8,
     desc: (lvl) => `Strikes the wall, then arcs to ${chainCount(lvl)} nearby clusters.`,
+    stats: (lvl) => `${chainDamage(lvl).toFixed(0)} pwr · ${chainCount(lvl)} forks · ${chainCooldown(lvl).toFixed(2)}s`,
     coagulantMult: 1,
   },
   frost: {
@@ -166,6 +174,7 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '❄️',
     maxLevel: 8,
     desc: () => `Pulses outward, damaging tissue and freezing growth nearby.`,
+    stats: (lvl) => `${frostDamage(lvl).toFixed(0)} pwr · ${frostCooldown(lvl).toFixed(2)}s`,
     coagulantMult: 1,
   },
   poison: {
@@ -173,6 +182,7 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '☠️',
     maxLevel: 8,
     desc: () => `Drops a lingering cloud that erodes tissue over time.`,
+    stats: (lvl) => `${poisonDamage(lvl).toFixed(0)} pwr/s · ${poisonCooldown(lvl).toFixed(2)}s`,
     coagulantMult: 1,
   },
   missile: {
@@ -180,6 +190,7 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '🚀',
     maxLevel: 8,
     desc: () => `Homes onto the nearest wall and explodes.`,
+    stats: (lvl) => `${missileDamage(lvl).toFixed(0)} pwr · ${missileCooldown(lvl).toFixed(2)}s`,
     coagulantMult: 1,
   },
   // Phase 5A (Decision 70): promoted from PASSIVE_DEFS.ward. maxLevel
@@ -190,6 +201,7 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '🔥',
     maxLevel: 6,
     desc: (lvl) => `Periodically purges a ring around the core. Lv${lvl}: ${immolationDamage(lvl).toFixed(0)} pwr`,
+    stats: (lvl) => `${immolationDamage(lvl).toFixed(0)} pwr · ${IMMOLATION_TICK.toFixed(1)}s`,
     coagulantMult: 1,
   },
 };

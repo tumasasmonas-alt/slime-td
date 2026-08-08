@@ -20,37 +20,30 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 Phase 5C — pause + inventory UI
+### 🟡 Phase 6-0 — minimal pre-run weapon select
 
-**Phases 3, 4, 5A and 5B are all shipped.** Phase 5A (Decision 70) put
-every weapon on a shared pipeline; Phase 5B (Decision 71) built the
-enhancement/socket/card-pool economy — weapon-level cards are gone,
-extensions level 1→3 then leave the pool for good, five passives ported
-onto three core-gem sockets, `pickThree`'s biased shuffle fixed. **Assist
-credit was dropped** with the owner's confirmation — it doesn't solve the
-problem it names (XP is a global pool, not per-weapon), and is now in
-*Ideas* below.
+**Phase 5 is fully shipped and complete: 5A, 5B and 5C.** 5A (Decision 70)
+put every weapon on a shared pipeline; 5B (Decision 71) built the
+enhancement/socket/card-pool economy; 5C (Decision 72) built the screen
+that makes it usable — the `+/-` control, live per-weapon stats, socket
+dots that visibly grow with investment, and a core-gem row. Opened by a
+HUD button, and reachable mid-level-up via a "Manage Loadout" button that
+returns to the pending cards on close rather than discarding them. **No
+outstanding items in Phase 5.**
 
-**Next up is Phase 5C** (`docs/plans/phase-5c-inventory-ui.md`, scope
-settled): the pause + inventory screen — the `+/-` control that makes
-banked enhancement points spendable, a socket row that grows visibly with
-investment, and a live per-weapon stat line so a `+` has visible
-consequence. Opened by a HUD button (this game has zero keyboard input
-today, so a key-only binding would be undiscoverable; the key comes later
-as a shortcut). Built from a **weapon-row component Phase 6-0 reuses**.
+**5C found and fixed a real bug in 5B's plumbing**: `withdrawPoints()`
+removed points from a weapon but never credited them back to
+`enhancementPool` — harmless with no live caller in 5B, a real bug the
+moment 5C's `−` button became one.
 
-Then **6-0** (minimal pre-run weapon select — a separate button beside
-Start, with a working default deck so restarts stay one click), then
-**6A** (the first real support gems — Amplifier + Behaviour, 17 free / 3
-modifier / 0 new on the visual-cost table, the cheapest possible batch to
-prove the architecture on).
-
-**The Phase 5 gate moved to after 6A**, settled 2026-08-08. Its central
-question — *is enhancement a decision or a slider?* — is unanswerable
-while sockets are empty: opening a 4th socket buys nothing, so
-specialising has no benefit and the answer is forced to "slider"
-regardless of whether the design works. The build order did not change;
-only the point where we stop and judge did.
+**Next up is Phase 6-0**: a minimal pre-run weapon select — a separate
+button beside Start, with a working default deck so restarts stay one
+click. Reuses `ui/weaponRow.ts`'s `'select'` mode, scaffolded in 5C for
+exactly this. Then **6A** (the first real support gems — Amplifier +
+Behaviour, 17 free / 3 modifier / 0 new on the visual-cost table, the
+cheapest possible batch to prove the architecture on), followed by **the
+Phase 5 gate**, moved here from directly after 5C since it can't judge
+"decision or slider" with empty sockets.
 
 **The arsenal design is settled at revision 3**
 (`docs/plans/phase-5-6-arsenal.md`) — 18 weapons, 65 support gems in six
@@ -59,11 +52,12 @@ classes, a visual-cost classification (§9½: 43 free, 16 shared-modifier,
 establish rendering vocabulary before gems generalise it. Full phasing
 in that doc's §13.
 
-### Phase 5A/5B — done, for reference
+### Phase 5 (5A/5B/5C) — done, for reference
 
-Plans: `docs/plans/phase-5-6-arsenal.md` (the catalogue design) and
-`docs/plans/phase-5b-framework.md` (the economy, including the as-built
-delta and the assist-credit finding). Decisions 70–71.
+Plans: `docs/plans/phase-5-6-arsenal.md` (the catalogue design),
+`docs/plans/phase-5b-framework.md` (the economy, including the
+assist-credit finding), `docs/plans/phase-5c-inventory-ui.md` (the
+screen, including the withdrawPoints bug fix). Decisions 70–72.
 
 ### Phase 4C — done, for reference
 
@@ -96,12 +90,12 @@ wasn't compressed or skipped despite five sub-phases landing in one day.
 correcting both times**), `2026-08-06-arsenal-and-coagulant-mechanism.md`
 (how it works), `2026-08-07-xp-economy.md` (Phase 3D),
 `2026-08-07-phase-4a-maturity.md` (Phase 4A),
-`2026-08-07-phase-4c-wave2.md` (Phase 4C), and DECISIONS.md #23–#71.
+`2026-08-07-phase-4c-wave2.md` (Phase 4C), and DECISIONS.md #23–#72.
 
 **Still open, not urgent:** whether a behemoth crossing the arena reads as
 dramatic or tedious, and whether the conservation rules feel right in
 practice (motes shouldn't chain into behemoths — Rule 4). Both need more
-playtesting than we've done to judge; neither blocks Phase 5C.
+playtesting than we've done to judge; neither blocks Phase 6.
 
 ### The rest of the phase plan
 
@@ -115,8 +109,9 @@ Full detail in the session record §17.
 | **4C** | ✅ Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark. **Phase 4 complete.** |
 | **5A** | ✅ The weapon pipeline (Decision 70) — seven weapons on ready/acquire/deliver, Ward Pulse promoted to Immolation Ring |
 | **5B** | ✅ Enhancement/socket/card-pool economy (Decision 71) — weapon-level cards gone, core gems, socket ladder |
-| **5C** | Pause + inventory UI → **next up** (`docs/plans/phase-5c-inventory-ui.md`) |
-| **6** | Arsenal content — design session done (`docs/plans/phase-5-6-arsenal.md`); 6-0 pre-run select, then batches per §13 |
+| **5C** | ✅ Pause + inventory UI (Decision 72) — +/- spending, socket dots, core row, manage-loadout round trip. **Phase 5 complete.** |
+| **6-0** | Minimal pre-run weapon select → **next up**, reuses `ui/weaponRow.ts`'s 'select' mode |
+| **6** | Arsenal content — design session done (`docs/plans/phase-5-6-arsenal.md`); batches per §13, gated by **the Phase 5 gate** after 6A |
 | **7** | Meta — currency, unlocks, persistent deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |
 | **9** | VFX and feel |

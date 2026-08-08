@@ -168,16 +168,19 @@ ring feeling oppressive) did not materialise.
    reasoning) — the rest of this project's most productive single day:
    Phase 3D, 4A, 4B, and 4C, each with a real bug found only by running
    the game. Read these before trusting a new formula's first draft.
-4. **`docs/DECISIONS.md` #23–#71** — the load-bearing calls in short form.
+4. **`docs/DECISIONS.md` #23–#72** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
    68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
-   enhancement/socket/card-pool economy). #47–71 are implementation-time
-   findings, not from a design session — see the notes at the top of each
-   of those sections.
-5. **`docs/plans/phase-5-6-arsenal.md`** and **`docs/plans/phase-5b-framework.md`**
-   — the arsenal catalogue design and the shipped 5B economy, including
-   the assist-credit finding awaiting the owner's confirmation.
+   enhancement/socket/card-pool economy); 72 is Phase 5C (the pause +
+   inventory screen — **Phase 5 closes here**). #47–72 are
+   implementation-time findings, not from a design session — see the
+   notes at the top of each of those sections.
+5. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
+   **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
+   design and the shipped 5B/5C economy and screen, including the
+   assist-credit finding (dropped) and the withdrawPoints bug 5C found
+   and fixed in 5B's plumbing.
 6. **`docs/BACKLOG.md`** *Now* section — Phase 6-0 (a minimal pre-run
    weapon select) is the concrete next step. Phase 3/4's own follow-ups
    (event tuning, the coagulant formation drain visual, more AoE weapons,
@@ -252,7 +255,42 @@ src/
 
 *Newest first.*
 
-### 2026-08-08 (latest) — Phase 5B: the enhancement/socket/card-pool economy ships. Decision 71.
+### 2026-08-08 (latest) — Phase 5C: the pause + inventory screen ships. Decision 72. Phase 5 closes.
+
+**Full account:** `docs/plans/phase-5c-inventory-ui.md` — status header,
+§8's order-of-work table, the two notes at the bottom on the
+`withdrawPoints` bug and the sub-baseline-at-0-points observation.
+
+**Shipped:** `WeaponDef.stats(lvl)` (terser than `desc`, for a live
+per-weapon readout); the inventory overlay with a HUD-button opener and a
+"Manage Loadout" button inside the level-up card screen, `main.ts`
+tracking which entry point opened it so closing returns to the right
+place; `+`/`−` wired to `investPoints()`/`withdrawPoints()`, disabling
+exactly at the enhancement-pool-empty and extension-clamp limits; socket
+dots that visibly grow with investment; a core-gem row; `ui/weaponRow.ts`
+as a shared renderer with 6-0's `'select'` mode scaffolded in.
+
+**Found and fixed a real bug in 5B's own plumbing**: `withdrawPoints()`
+removed points from a weapon but never credited them back to
+`enhancementPool` — inert while nothing called it in 5B, a genuine bug
+the moment 5C's `−` button became the first live caller.
+
+**Verified live**, directly in the browser via DOM interaction (not just
+the debug harness): the full open/close cycle from both entry points;
+`+` raising points, stats and socket count simultaneously; the socket
+dots growing from 1 to 2 exactly at the 3-point threshold; `−` disabling
+correctly against a committed extension; a core gem socketing and
+rendering; the manage-loadout round trip leaving `pendingLevelUps`
+untouched. Zero console errors. 389/389 tests, typecheck clean, build
+clean, bundle byte-identical after the debug bridge's removal.
+
+**Phase 5 is complete — 5A, 5B, 5C, no outstanding items.** The Phase 5
+gate moved to after 6A (settled during 5C's planning): it can't judge
+"is enhancement a decision or a slider?" while sockets are empty, since
+opening a socket buys nothing without gems to put in it. **Next: Phase
+6-0**, a minimal pre-run weapon select.
+
+### 2026-08-08 — Phase 5B: the enhancement/socket/card-pool economy ships. Decision 71.
 
 **Full account:** `docs/plans/phase-5b-framework.md` — status header,
 §7's order-of-work table, §5.
@@ -1380,25 +1418,28 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Phase 5 is complete except one withheld item. Phase 3 and Phase 4 are
-both complete too.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix
-round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A and 5B both on 2026-08-08
-— see the *Session log* above. Read the session records before assuming a
-new formula's first draft is right; every phase so far has found at least
-one real bug only by running the game.
+**Phase 5 is complete — 5A, 5B, 5C, no outstanding items. Phase 3 and
+Phase 4 are complete too.** 3A/3B/3C shipped 2026-08-06 (plus a
+playtest-and-fix round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A/5B/5C
+all on 2026-08-08 — see the *Session log* above. Read the session records
+before assuming a new formula's first draft is right; every phase so far
+has found at least one real bug only by running the game.
 
-**5B-5 (assist credit) was dropped, confirmed by the owner.** Everything
-else in 5B shipped, so **Phase 5B has no outstanding items.** Implementing
-it found the mechanism doesn't solve the problem it names — XP is a global
-pool with no per-weapon tracking anywhere in the design, so any kill
-already pays full credit. Moved to `docs/BACKLOG.md` *Ideas*; reasoning in
-`docs/plans/phase-5b-framework.md` §5.
+**Assist credit (5B-5) was dropped, confirmed by the owner** — XP is a
+global pool with no per-weapon tracking, so any kill already pays full
+credit. Moved to `docs/BACKLOG.md` *Ideas*.
 
-**Next is 5C** — the pause + inventory UI, which makes banked enhancement
-points spendable and sockets actually usable. It is the last piece of
-Phase 5 and a prerequisite for the Phase 5 gate: a socketing loop can't be
-playtested without a socketing UI. **Phase 6-0** (the minimal pre-run
-weapon select) comes after that gate, at the front of Phase 6.
+**5C built the screen that makes 5B's economy usable**, and found a real
+bug doing it: `withdrawPoints()` removed points from a weapon but never
+credited them back to the bank — inert in 5B with no live caller, a
+genuine bug the moment 5C's `−` button became one. Fixed as part of
+wiring it.
+
+**Next is Phase 6-0** — a minimal pre-run weapon select, reusing
+`ui/weaponRow.ts`'s `'select'` mode (scaffolded in 5C for this). Then 6A
+(the first real gems), then **the Phase 5 gate**, moved here from
+directly after 5C since it can't judge "decision or slider" while
+sockets are empty.
 
 **Go linearly — this just closed out.** Phase 4 was the *questions* (armor,
 penetration, range-vs-callus, the full coagulant roster); Phase 5/6 are
@@ -1423,8 +1464,8 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **4C-2** | ✅ Carrier (corridor identity + feeding), Bulwark (multi-part body, the pair §10 requires) (Decision 69). **Phase 4 complete.** |
 | **5A-0/5A** | ✅ The weapon pipeline (Decision 70) — all seven weapons refactored onto ready/acquire/deliver, zero behaviour change, Ward Pulse promoted to Immolation Ring. |
 | **5B** | ✅ Enhancement points, socket ladder, restructured card pool, core gems, gem inventory, render structural pass (Decision 71). Assist credit dropped — moved to BACKLOG *Ideas*. |
-| **5C** | Pause + inventory UI — the +/- control, socket display, live stat feedback → **next up** (`docs/plans/phase-5c-inventory-ui.md`) |
-| **6-0** | Minimal pre-run weapon select — moved forward from Phase 7 so Phase 6 batches are owner-playtestable. Reuses 5C's weapon-row component. |
+| **5C** | ✅ Pause + inventory UI (Decision 72) — +/- spending, live stats, socket dots, core row, manage-loadout round trip. Found and fixed a real `withdrawPoints` bug from 5B. **Phase 5 complete.** |
+| **6-0** | Minimal pre-run weapon select → **next up** — moved forward from Phase 7 so Phase 6 batches are owner-playtestable. Reuses `ui/weaponRow.ts`'s `'select'` mode, scaffolded in 5C. |
 | **▶ THE GATE** | **Moved here from after 5C** on 2026-08-08 — with sockets empty it could only answer "slider," a false negative. Runs after 6A's first gems, judging socketing, specialise-vs-spread and dilution together. |
 | **6** | Arsenal content — 18 weapons, 65 gems. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3) — implementation in batches per §13, reordered (6E/6F swapped) after the visual-cost audit. |
 | **7** | Meta — currency, unlocks, deck builder |

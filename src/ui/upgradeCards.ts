@@ -19,8 +19,16 @@ function requireEl(id: string): HTMLElement {
   return el;
 }
 
-export function initUpgradeCards(): CardRefs {
-  return { overlay: requireEl('upgrade-overlay'), cards: requireEl('cards') };
+// Phase 5C (docs/plans/phase-5c-inventory-ui.md S5): "just got a point" is
+// exactly when a player wants to spend one, so the level-up screen gets a
+// direct path into the inventory rather than making the player close out
+// and hunt for the HUD button. main.ts owns the actual open/close
+// coordination (which of the two overlays is "underneath"), same as
+// initOverlays(onStart) already does for the start/restart buttons.
+export function initUpgradeCards(onManageLoadout: () => void): CardRefs {
+  const refs = { overlay: requireEl('upgrade-overlay'), cards: requireEl('cards') };
+  requireEl('manage-loadout-btn').addEventListener('click', onManageLoadout);
+  return refs;
 }
 
 // Consumes one pending level-up per call, showing exactly one card set

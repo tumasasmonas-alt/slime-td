@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freshState } from '../state';
-import { occupiedSlots, freeSlots, withdrawPoints } from './sockets';
+import { investPoints, minPointsForSockets, occupiedSlots, freeSlots, withdrawPoints } from './sockets';
 
 describe('occupiedSlots', () => {
   it('is 0 for an undefined WeaponSockets', () => {
@@ -96,5 +96,124 @@ describe('withdrawPoints — no destructive respec (arsenal plan S5)', () => {
     const withdrawn = withdrawPoints(state, 'missile', 5);
     expect(withdrawn).toBe(0);
     expect(state.weapons.missile).toBe(0);
+  });
+
+  // Phase 5C: withdrawn points return to the bank rather than vanishing —
+  // a transfer, mirroring investPoints() exactly.
+  it('returns withdrawn points to enhancementPool', () => {
+    const state = freshState();
+    state.weapons.bolt = 8;
+    state.enhancementPool = 2;
+
+    const withdrawn = withdrawPoints(state, 'bolt', 5);
+
+    expect(withdrawn).toBe(5);
+    expect(state.enhancementPool).toBe(7);
+  });
+
+  it('respects the clamp when returning points — only the actual amount withdrawn is banked', () => {
+    const state = freshState();
+    state.weapons.poison = 8;
+    state.weaponSockets.poison = { extensions: [{ kind: 'a', level: 1 }], gems: [] }; // needs >= 0 points, no real floor here
+    state.enhancementPool = 0;
+
+    withdrawPoints(state, 'poison', 8);
+
+    // socketCount(0) = 1 >= 1 extension, so the full 8 can withdraw.
+    expect(state.enhancementPool).toBe(8);
+  });
+});
+
+describe('minPointsForSockets', () => {
+  it('is 0 with no extensions', () => {
+    expect(minPointsForSockets(undefined)).toBe(0);
+    expect(minPointsForSockets({ extensions: [], gems: [] })).toBe(0);
+  });
+
+  it('is the smallest points value whose socketCount covers the extension count', () => {
+    // socketCount(0)=1, socketCount(3)=2, socketCount(8)=3
+    expect(minPointsForSockets({ extensions: [{ kind: 'a', level: 1 }], gems: [] })).toBe(0);
+    expect(
+      minPointsForSockets({
+        extensions: [
+          { kind: 'a', level: 1 },
+          { kind: 'b', level: 1 },
+        ],
+        gems: [],
+      }),
+    ).toBe(3);
+    expect(
+      minPointsForSockets({
+        extensions: [
+          { kind: 'a', level: 1 },
+          { kind: 'b', level: 1 },
+          { kind: 'c', level: 1 },
+        ],
+        gems: [],
+      }),
+    ).toBe(8);
+  });
+});
+
+describe('investPoints', () => {
+  it('transfers points from the bank to the weapon', () => {
+    const state = freshState();
+    state.enhancementPool = 5;
+    state.weapons.bolt = 2;
+
+    const invested = investPoints(state, 'bolt', 3);
+
+    expect(invested).toBe(3);
+    expect(state.weapons.bolt).toBe(5);
+    expect(state.enhancementPool).toBe(2);
+  });
+
+  it('equips an unequipped weapon starting from 0', () => {
+    const state = freshState();
+    state.enhancementPool = 1;
+
+    investPoints(state, 'frost', 1);
+
+    expect(state.weapons.frost).toBe(1);
+  });
+
+  it('caps at what is actually banked, never overdrawing the pool', () => {
+    const state = freshState();
+    state.enhancementPool = 2;
+    state.weapons.bolt = 0;
+
+    const invested = investPoints(state, 'bolt', 5);
+
+    expect(invested).toBe(2);
+    expect(state.weapons.bolt).toBe(2);
+    expect(state.enhancementPool).toBe(0);
+  });
+
+  it('returns 0 and changes nothing when the pool is empty', () => {
+    const state = freshState();
+    state.enhancementPool = 0;
+    state.weapons.bolt = 4;
+
+    const invested = investPoints(state, 'bolt', 3);
+
+    expect(invested).toBe(0);
+    expect(state.weapons.bolt).toBe(4);
+  });
+
+  // Conservation: investing then withdrawing the same amount is a no-op
+  // on the total (pool + weapon), matching withdrawPoints' own guarantee.
+  it('round-trips with withdrawPoints without gaining or losing points', () => {
+    const state = freshState();
+    state.enhancementPool = 10;
+    state.weapons.bolt = 0;
+    const total = () => state.enhancementPool + (state.weapons.bolt ?? 0);
+    const before = total();
+
+    investPoints(state, 'bolt', 4);
+    expect(total()).toBe(before);
+
+    withdrawPoints(state, 'bolt', 4);
+    expect(total()).toBe(before);
+    expect(state.weapons.bolt).toBe(0);
   });
 });

@@ -1,8 +1,10 @@
 # Phase 5C — the pause + inventory screen
 
-**Status:** 📋 **Scope settled 2026-08-08, not yet built.** The four open
-questions in §9 were answered the same session and are folded in below.
-Ready to implement on greenlight.
+**Status:** ✅ **Implemented and verified 2026-08-08 — Decision 72.**
+All five steps shipped. 389/389 tests, typecheck clean, build clean,
+verified live via direct DOM interaction in the browser — every
+open/close path, both entry points, `+`/`−` including the extension
+clamp, and core-gem socketing.
 
 **Depends on:** 5B (Decision 71) — `enhancementPool`, `socketCount()`,
 `withdrawPoints()`, `weaponSockets`, `coreGems` all exist and are tested,
@@ -209,12 +211,12 @@ components 6-0 can reuse," settled 2026-08-08.
 
 | Step | Work | Test |
 |---|---|---|
-| **5C-1** | `WeaponDef.stats(lvl)` across all seven weapons (§4) — pure data, no UI, so the rest of the phase has something to render. | Every weapon def has a non-empty `stats()`; it changes with level |
-| **5C-2** | The overlay's HTML/CSS in `index.html`; `ui/inventory.ts` with the HUD button, open/close and pause wiring. Shared weapon-row renderer (§6). | Opens, pauses, closes, restores `paused` correctly |
-| **5C-3** | `+` / `−` wired to `enhancementPool` and `withdrawPoints()`; buttons disable at their real limits (no points banked; clamp reached; a weapon at 0 stays equipped). | Pure spend/withdraw logic unit-tested in `systems/` — the UI stays a thin wrapper, as 5B did with `systems/cards.ts` |
-| **5C-4** | Live stat lines per weapon; socket row rendering from `socketCount()`; core-gem row. | Stat text changes when points change; socket count matches the ladder |
-| **5C-5** | Reachable from the level-up card screen (§5). | — |
-| **▶ small check** | Does it open, does +/- feel legible, does anything break? **Not** the Phase 5 gate — that is now one combined gate after 6A (§1). | |
+| **5C-1** | ✅ `WeaponDef.stats(lvl)` across all seven weapons (§4). | ✅ Every weapon def has a non-empty `stats()` |
+| **5C-2** | ✅ The overlay's HTML/CSS in `index.html`; `ui/inventory.ts` with the HUD button, open/close and pause wiring. Shared `ui/weaponRow.ts` (§6), `'select'` mode scaffolded for 6-0. | ✅ Live-verified: opens, pauses, closes, restores `paused` correctly |
+| **5C-3** | ✅ `+`/`−` wired to `systems/sockets.ts`'s `investPoints()`/`withdrawPoints()`. **`withdrawPoints()` gained a real behaviour change here**: withdrawn points now return to `enhancementPool` — 5B built it as inert plumbing with no caller to notice the gap. Buttons disable at real limits (`minPointsForSockets()`, new exported helper; empty pool). | ✅ `systems/sockets.test.ts` — conservation round-trip, the extension-clamp disable condition, pool-empty disable |
+| **5C-4** | ✅ Live stat lines, socket dots from `socketCount()`, core-gem row from `state.coreGems`. | ✅ Live-verified: stat text and socket dot count both update immediately on `+`/`−` |
+| **5C-5** | ✅ "Manage Loadout" button inside the level-up panel; `main.ts` tracks which entry point opened the screen so closing returns to the right place (resume, or re-show pending cards). | ✅ Live-verified full round trip: cards → Manage Loadout → inventory → Resume → cards reappear, `pendingLevelUps` untouched |
+| **▶ small check** | ✅ Opens and closes cleanly from both entry points; `+`/`−` read legibly; extension clamp visibly disables rather than silently no-op'ing. **Not** the Phase 5 gate — that is one combined gate after 6A (§1). | |
 
 ---
 
@@ -235,5 +237,29 @@ All four went to the recommendation. **Nothing is blocking.**
   check can answer, and it can't be argued in advance.
 - **Whether the socket row teaches the ladder** without a tutorial. The
   intent is that watching `○` appear as points go in is
-  self-explanatory; that is a guess until someone plays it.
+  self-explanatory; confirmed live that the dots do grow correctly as
+  points go in — whether it *reads* as teaching itself is still a guess
+  until someone plays it cold.
 - **Everything about specialise-vs-spread**, which needs 6A's gems (§1).
+
+### One thing 5B left inert that 5C exposed
+
+`withdrawPoints()` shipped in 5B as pure plumbing with no caller — and it
+had a real gap: withdrawn points were removed from the weapon but never
+credited back to `enhancementPool`. Harmless while nothing called it, but
+a genuine bug the moment something did. Fixed here, alongside a new
+`investPoints()` (the mirror on the spend side) and an exported
+`minPointsForSockets()` so the `−` button can disable itself exactly at
+the clamp rather than showing live and silently no-op'ing. Both are
+tested for round-trip conservation: investing then withdrawing the same
+amount changes nothing about the pool-plus-weapon total.
+
+### A minor tuning observation, not a bug
+
+A weapon at 0 points now computes strictly below its old "level 1"
+baseline — e.g. Bolt at 0 points is 8 pwr / 0.60s cooldown, versus 15 pwr
+/ 0.55s at 1 point, because every weapon formula was written assuming
+`lvl >= 1` and 5B's model lets `lvl` (now "points invested") reach 0.
+Consistent with "stays equipped, fires weakly" as settled — just noting
+it produces a genuinely sub-baseline weapon, not a floor at the old
+level-1 number, in case that reads as surprising in play.
