@@ -1024,6 +1024,88 @@ and a roguelite usually wants one line that does.
 
 ---
 
+## 9½. Visual cost — the render layer's N × M problem
+
+*Added 2026-08-08, at the owner's prompting: **"the weapons will have to
+respond somehow visually to most of the gems we have and extensions."***
+
+**The pipeline (Decision 70) made gems O(1) in weapons for behaviour. It
+did nothing for rendering.** That gap is real, but it is much smaller than
+18 × 65 = 1,170 suggests, for one structural reason: **the render layer
+is already half entity-driven.** `render/projectiles.ts` and
+`render/clouds.ts` read appearance (`color`, `radius`, `life`) off the
+entity and have no idea which weapon produced it — a new weapon that
+fires a projectile renders **for free** today.
+
+Two modules break that pattern and both are fixed in 5B
+(`docs/plans/phase-5b-framework.md` §6a):
+
+| Module | Problem |
+|---|---|
+| `render/orbitals.ts` | Hardcoded ninja-star, `BLADE_COLOR`, `POINTS = 4`. `OrbitalVisual` is `{x, y, radius}` with no identity — **Orbital Conversion would draw Frost Nova as a cyan shuriken.** |
+| `render/novaFx.ts` | Hardcoded colour, and `state.novaFx` is a **single slot**, not a list — two pulse weapons in one frame overwrite each other. Latent today; a real bug the moment Immolation Ring gets its visual or Shockwave ships. |
+
+### The three visual costs
+
+- **Free** — an existing entity-driven renderer already draws the result.
+  No new render code at all.
+- **Modifier** — needs a tint, overlay or small tell. Built **once as a
+  shared treatment**, then applied generically. Not per-weapon work.
+- **New** — needs genuinely new rendering, usually a new entity type.
+
+### Gems
+
+| Class | Free | Modifier | New |
+|---|---|---|---|
+| **A · Amplifier** (6) | all 6 — they scale numbers the renderer already reads | — | — |
+| **B · Behaviour** (14) | 11 — Multishot, Echo, Pierce, Fork, Chaining, Homing, Ricochet, Barrage, Formation, Overflow, Bounce | 3 — Splash, Kickback, Priming | — |
+| **C · Conditional** (11) | 6 — Saturation, Virulence, Giant-Slayer, Culling, Desperation, Proximity | 5 — Penetration, Shatter, Corrosion, Sterilizer, Momentum | — |
+| **D · Targeting** (8) | all 8 — they change *where* effects go, never what they look like | — | — |
+| **E · Transformative** (14) | 5 — Trigger, Orbital Conversion*, Reclamation, Fission Cascade, Sympathetic Link | 3 — Culture, Metronome, Overload | **6 — Detonation, Sustained, Inversion, Siphon, Conversion, Emplacement** |
+| **F · Core** (12) | 7 — mostly HUD-side | 5 — Ward, Reflex, Quarantine, Adrenal Surge, Salvage | — |
+| **Total** | **43** | **16** | **6** |
+
+\* *Orbital Conversion is free **only after** 5B's generic-orbital fix.
+Before it, it is the single worst case in the table.*
+
+**Trigger being free is the most valuable line here.** It fires the
+weapon socketed below it at an impact point — so it draws whatever that
+weapon already draws, at a different position. Free, provided delivery
+stays position-parameterised, which the 5A pipeline already guarantees.
+
+### Weapons
+
+| Cost | Weapons |
+|---|---|
+| **Free** (shipped or reuses existing renderers) | Bolt, Blades, Chain, Frost, Poison, Missile · **Shockwave** (reuses the pulse renderer, once it's a list) · **Fission Charge** (projectiles) |
+| **Modifier** | **Siege Mortar** (projectile on an arc) · **Resonance Coil** (aura ring) · **Marker Beacon** (overlay on an existing coagulant) |
+| **New** | **Immolation Ring** (persistent ring — its missing visual is a live BACKLOG item) · **Lance** and **Cauterizer** (beams — share one implementation) · **Solvent Sprayer** (field softening made visible) · **Repulsor** (mass displacement) · **Antibody Swarm** (autonomous units) · **Mycelium** (second field layer — the most expensive thing in the document) |
+
+### The finding that changes the phase order
+
+**Four of the six expensive gems share their rendering with a weapon** —
+and in every case the current phasing ships the *gem* first:
+
+| Gem | Shares rendering with | Currently |
+|---|---|---|
+| **Inversion** | Repulsor (displacement) | gem in 6E, weapon in 6D ✅ |
+| **Conversion** | Antibody Swarm (friendly units) | gem in 6E, **weapon in 6F** ❌ |
+| **Culture** | Mycelium (friendly tissue) | gem in 6E, **weapon in 6F** ❌ |
+| **Orbital Conversion** | generic orbitals | fixed in 5B ✅ |
+
+**Recommendation: swap 6E and 6F.** Ship the weapons that establish a new
+visual vocabulary *first*, then the transformative gems that generalise
+it. Otherwise Conversion has to invent friendly-unit rendering that
+Antibody Swarm then either duplicates or refactors, and Culture does the
+same to Mycelium.
+
+The swap costs nothing — 6E and 6F have no logical dependency on each
+other, only this rendering one — and it also spreads the six expensive
+gems across a batch that already carries the two most expensive weapons,
+rather than stacking all of it into the final gem batch.
+
+---
+
 ## 10. Gem bundles
 
 Decision 41: currency buys **thematic** bundles, not individual gems,
@@ -1295,19 +1377,20 @@ that a blocked projectile has alternatives — not before.
 | **5A-0** | ✅ Audited the 23 weapon tests before touching anything — they turned out to already be outcome tests (asserting `state.projectiles`/`state.grid.growth`/`state.orbitals`, never mocking internals), so no rewrite was needed. The concern behind this step was real in principle but did not apply in practice; recorded honestly rather than manufacturing a rewrite to match the original prediction. | ✅ Confirmed, not rewritten |
 | **5A** | ✅ **Shipped 2026-08-08 — Decision 70.** The four-stage pipeline (`weapons/pipeline.ts`). All **seven** weapons on it — the six in `weapons/` plus **Immolation Ring**, promoted from Ward Pulse (§7.11). **Zero behaviour change**, verified by the unmodified 23 tests, a live debug-harness run, and an identical production bundle size. Tower-centred radius guard extended to enumerate `bladeRadius`/`frostRadius`/`immolationRadius` directly. | ✅ 339/339 tests, typecheck clean, build clean, live-verified |
 | **5B** | Enhancement points, per-weapon attribute curves, socket thresholds, gem instances and inventory, socketing model in `state.ts`. Passives dissolved into core gems on their own card track. Cards become extensions (levelling to 3, then removed) + gems. **Assist credit (§12.1)** — the hidden cost, and it belongs here rather than in Phase 6. | Mass/XP invariants hold; card-pool composition test; a maxed extension is provably never offered again |
-| **5C** | Pause + inventory UI: one +/- per weapon, socket/unsocket, gems returning to inventory when a socket closes, four-card draws, the bundle card, and **per-weapon gem descriptions** (§12, the known failure mode). | — |
-| **▶ GATE** | **Playtest the socketing loop**, and **judge the gem count.** Does the inventory screen get opened more than once? Is enhancement a decision or a slider? And how bad is dilution really, with none of the three declined fixes in place? | |
+| **5C** | Pause + inventory UI: one +/- per weapon, socket/unsocket, gems returning to inventory when a socket closes, four-card draws, and **per-weapon gem descriptions** (§12, the known failure mode). **The bundle card is not here** — deferred to 6A, since with an empty weapon-gem pool it could only bundle placeholders. Built from **components the Phase 6-0 deck screen reuses**, not one-off markup. | — |
+| **▶ GATE** | **Playtest the socketing loop**, and **judge the gem count.** Does the inventory screen get opened more than once? Is enhancement a decision or a slider? And how bad is dilution really, with none of the three declined fixes in place? **Known limit:** with the weapon-gem pool empty this gate cannot judge specialise-vs-spread. | |
 
 **Phase 6 — Content**, in batches, each independently playtestable.
 
 | Step | Work | Why this order |
 |---|---|---|
-| **6A** | Gems: Amplifier (A) + Behaviour (B), ~15 | Validates the pipeline against the six weapons that already exist. If a gem needs a per-weapon special case here, 5A was wrong and it is cheap to find out. |
-| **6B** | Weapons: Lance, Shockwave, Fission, Immolation | The four that need nothing beyond the pipeline. Also the four that most directly fix the owner's two named gaps — single-target and AoE. |
-| **6C** | Gems: Conditional (C) + Targeting (D) | Threat Priority finally lands, against the Carrier/Bulwark pair already shipped. |
-| **6D** | Weapons: Mortar, Cauterizer, Solvent, Resonance, Repulsor | Needs two new subsystems — persistent terrain modification and displacement. |
-| **6E** | Gems: Transformative (E) | The combinatorial layer, on top of a catalogue broad enough to make it sing. |
-| **6F** | Weapons: Antibody Swarm, Marker Beacon, Mycelium | Summons and a second field. The riskiest, and the first cuts if the catalogue trims. |
+| **6-0** | **Minimal pre-run weapon select** — a list, checkboxes, a start button. No currency, no unlocks, no persistence. | Settled 2026-08-08. The deck defines the card pool from 5B onward, but the deck *builder* was scheduled for Phase 7 — meaning that through all of Phase 6 you could not choose which weapons to bring, and **no weapon pairing could be deliberately playtested** with 18 weapons, 3 slots and random offers. Every subsequent batch depends on this to be judgeable by the owner rather than only by the debug harness. Phase 7 later layers currency and unlocks onto this screen instead of building one from scratch. |
+| **6A** | Gems: Amplifier (A) + Behaviour (B), ~15. Plus the **bundle card**, which finally has real gems to make packages from. | Validates the pipeline against the seven weapons that already exist. If a gem needs a per-weapon special case here, 5A was wrong and it is cheap to find out. Visual cost (§9½): 17 free, 3 modifier, 0 new — the cheapest possible batch to prove the architecture on. |
+| **6B** | Weapons: Lance, Shockwave, Fission, **Immolation's visual** | The four that need nothing beyond the pipeline, and the two that most directly fix the owner's named gaps — single-target and AoE. Immolation is already mechanically shipped (Decision 70) and only owes its visual. Establishes **beam rendering** (Lance) which Cauterizer reuses in 6D. |
+| **6C** | Gems: Conditional (C) + Targeting (D) | Threat Priority finally lands, against the Carrier/Bulwark pair already shipped. Visual cost: 14 free, 5 modifier, 0 new. |
+| **6D** | Weapons: Mortar, Cauterizer, Solvent, Resonance, Repulsor | Needs two new subsystems — persistent terrain modification and displacement. Establishes **displacement rendering** (Repulsor), which the Inversion gem reuses. |
+| **6E** | Weapons: Antibody Swarm, Marker Beacon, Mycelium | ⚠️ **Swapped with 6F on 2026-08-08** — see §9½. Summons and a second field: the riskiest weapons, and the first cuts if the catalogue trims. They must ship **before** the transformative gems because **Conversion reuses Antibody Swarm's friendly-unit rendering and Culture reuses Mycelium's friendly-tissue layer.** In the old order each gem would have had to invent rendering the weapon then duplicated or refactored. |
+| **6F** | Gems: Transformative (E) | The combinatorial layer, last, on a catalogue broad enough to make it sing — and on a *visual* vocabulary now fully established by 6B/6D/6E. Carries **all six** of the catalogue's expensive gems (§9½), so it is the batch to schedule generously. |
 
 **Phase 7 (Meta)** then buys: weapon unlocks, turret slots, core sockets,
 gem bundles. Unchanged from §17.

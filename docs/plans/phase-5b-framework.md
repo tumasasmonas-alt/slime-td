@@ -246,6 +246,52 @@ built and forgotten.
 
 ---
 
+## 6a. The render-layer structural pass
+
+*Added 2026-08-08, settled the same session. Prompted by the owner's
+question about how weapons respond visually to gems and extensions.*
+
+5A made gems O(1) in weapons for **behaviour**. It did nothing for
+**rendering**, and an audit found the render layer is split down the
+middle:
+
+| Module | Pattern |
+|---|---|
+| `render/projectiles.ts` | **Generic** ✅ — reads `p.color`/`p.radius` off the entity |
+| `render/clouds.ts` | **Generic** ✅ — same |
+| `render/orbitals.ts` | **Weapon-coupled** ❌ — hardcoded ninja-star, `BLADE_COLOR`, `POINTS = 4` |
+| `render/novaFx.ts` | **Weapon-coupled** ❌ — hardcoded colour, and a **single slot** rather than a list |
+
+**Two concrete fixes, both small, both applying the pattern the other two
+modules already use** — the entity carries its own appearance, the
+renderer reads it:
+
+1. **`OrbitalVisual` gains appearance data.** Today it is `{x, y, radius}`
+   with no identity, so the Orbital Conversion gem — which puts *any*
+   weapon's effect on an orbiting body — would draw Frost Nova as a cyan
+   shuriken. Adding a shape/colour field makes generic orbitals possible
+   and turns that gem from the worst case in the catalogue into a free
+   one (arsenal plan §9½).
+2. **`state.novaFx` becomes a list.** It is `NovaFx | null` — a single
+   slot. Two pulse weapons firing in the same frame overwrite each other.
+   **This is a latent bug today**, not a hypothetical: Immolation Ring
+   exists now and is scheduled for its visual in 6B, and Shockwave lands
+   in the same batch. Either one makes this real.
+
+**Why 5B and not 6A** (settled): both are structural rather than content,
+they are cheap now and annoying to retrofit, and doing them here means
+6A's first real gems land against a render layer that can already carry
+them — rather than 6A shipping a refactor *and* its own content, with the
+novaFx overwrite arriving as a confusing visual bug first.
+
+**Explicitly not in scope:** no new visuals, no new entity types, no
+gem-response rendering. This is the same kind of pass 5A was — moving
+structure so future content is cheap, changing nothing the player sees.
+`drawOrbitals` must still draw the identical shuriken for Blades
+afterward, and that is the test.
+
+---
+
 ## 6. What 5B does *not* touch
 
 - **`damageMult`/`atkSpeedMult` stay global**, exactly as today. §9A's
@@ -258,6 +304,13 @@ built and forgotten.
   the debug harness, same as every "logic before UI" phase this project
   has shipped (4A's placeholder is the closer analogy than "no UI at
   all," but 5B genuinely has no in-world visual to show — see §7).
+- **No new visuals.** §6a moves render *structure* only. Immolation
+  Ring's missing visual stays a 6B item; nothing gains a gem-response
+  visual until there are gems.
+- **No pre-run weapon select.** Settled 2026-08-08 as **Phase 6-0**,
+  moved forward from Phase 7 so Phase 6's weapon batches are playtestable
+  by the owner rather than only through the debug harness. 5C should
+  build its inventory from components that screen can reuse.
 - **No weapon-slot purchasing.** Phase 7 doesn't exist yet; `weaponSlots`
   starts at 3 and stays there through 5B/5C/6.
 - **The `pickThree` biased shuffle gets fixed here** (carried over from
@@ -275,6 +328,7 @@ built and forgotten.
 | **5B-3** | Core gems: port the five existing passives onto 3-socket selection. Remove the old unlimited-concurrent-passive model. | Regression: existing passive-effect tests still pass, now gated through sockets |
 | **5B-4** | Gem inventory + `WeaponSockets` model; socket-closing-returns-to-inventory on point withdrawal (no destructive respec, §5 of the arsenal plan). | Conservation test: a gem is never lost, only relocated |
 | **5B-5** | Assist credit plumbing (§5), coagulant-only. | Direct unit test with a synthetic `assistedBy` tag; confirm zero behaviour change with none set |
+| **5B-6** | Render structural pass (§6a): `OrbitalVisual` gains appearance data, `state.novaFx` becomes a list. **No new visuals.** | Blades still renders an identical shuriken; two pulses in one frame both draw |
 | **▶ GATE** | Full suite + debug-harness run: a max-level run banks and can (via a temporary debug-only spend, same spirit as 5A's removed bridge) allocate points, draws cards from the restructured pool, core gems socket correctly. | |
 
 ---
@@ -287,12 +341,23 @@ built and forgotten.
 | 2 | Core-gem cadence | **Guaranteed slot, every second level-up**, with an exhausted-pool fallback | §4 |
 | 3 | Bundle card interval | **Deferred entirely to 6A** — needs real gems to bundle | §4 |
 | 4 | Enhancement pool visible pre-5C? | **Yes** — one HUD line | §3 |
+| 5 | When does the render structural pass happen? | **5B**, as step 5B-6 | §6a |
+| 6 | When does a pre-run weapon select land? | **Phase 6-0**, moved forward from Phase 7 | §6 |
+| 7 | Classify all weapons/gems by visual cost? | **Yes** — done, arsenal plan §9½ | — |
 
-**Nothing is blocking.** Two of these went against the plan's own
+**Nothing is blocking.** Two of the first four went against the plan's own
 proposals and both are improvements: the guaranteed-every-second-level
 core slot avoids both failure modes the original options had, and
 deferring the bundle card avoids judging a mechanic by a version of it
 that couldn't work.
+
+**5–7 came from the owner's UI/UX question** and produced the session's
+sharpest finding: the visual-cost classification (arsenal plan §9½) showed
+that **four of the six expensive transformative gems share rendering with
+a weapon, and the old phase order shipped the gem first in every case.**
+6E and 6F are now swapped so the weapons establish the visual vocabulary
+and the gems generalise it, rather than each gem inventing rendering its
+weapon would then duplicate.
 
 ### Still genuinely open, deliberately
 

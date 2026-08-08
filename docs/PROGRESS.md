@@ -312,6 +312,42 @@ pool empty it can judge socketing, the core loop and the restructured
 draw, but *not* specialise-vs-spread. A thin-feeling gate is expected
 information, not a failure.
 
+**Then the owner asked the UI/UX question** — when do the pre-game and
+inventory screens get built, do weapons ship with visuals, and how do
+weapons respond visually to gems and extensions. It produced the
+session's sharpest finding.
+
+**5A made gems O(1) in weapons for behaviour; nothing had done that for
+rendering.** An audit found the render layer split down the middle —
+`projectiles.ts` and `clouds.ts` are properly entity-driven (a new weapon
+firing a projectile renders *free* today), while `orbitals.ts` hardcodes
+Blades' ninja-star and `novaFx.ts` hardcodes Frost's colour **and holds a
+single slot rather than a list**. That second one is a latent bug now,
+not a hypothetical: Immolation Ring exists and is due its visual in 6B,
+Shockwave lands the same batch, and either makes two pulses overwrite
+each other. Both fixes land as **5B-6**, structure only, no new visuals.
+
+**Every weapon and gem is now classified by visual cost** (arsenal plan
+§9½): 43 free, 16 shared-modifier, 6 genuinely new — far from the 18 × 65
+the question implied, because the entity-driven pattern already carries
+most of it. *Trigger* turning out free is the best line in the table: it
+fires the weapon below it at an impact point, so it draws whatever that
+weapon already draws.
+
+**That classification changed the phase order.** Four of the six
+expensive transformative gems share rendering with a weapon, and the old
+order shipped the gem first every time — Conversion before Antibody
+Swarm's friendly units, Culture before Mycelium's tissue layer. **6E and
+6F are swapped**: weapons establish the visual vocabulary, gems
+generalise it.
+
+**And a scheduling hole:** the deck defines the card pool from 5B on, but
+the deck *builder* sat in Phase 7 — so through all of Phase 6 no weapon
+pairing could be deliberately playtested, with 18 weapons, 3 slots and
+random offers. A minimal pre-run select (list, checkboxes, start button —
+no currency) is now **Phase 6-0**, and 5C builds its inventory from
+components that screen reuses.
+
 ### 2026-08-07 — Arsenal design pass. **Draft, not decided.**
 
 **No code.** The owner opened the arsenal discussion immediately after
