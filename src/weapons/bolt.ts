@@ -1,19 +1,23 @@
 import type { GameState } from '../state';
-import { atkSpeedMult, damageMult } from '../systems/passives';
-import { nearestFrontierPoint } from '../systems/frontier';
+import { damageMult } from '../systems/passives';
 import { boltCooldown, boltDamage } from '../tuning/weapons';
+import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const BOLT_SPEED = 620;
+
+const boltPipeline: WeaponPipeline = {
+  ready: cooldownReady('bolt', boltCooldown),
+  acquire: frontierAcquire,
+  deliver: (state, lvl, target) => {
+    if (!target) return;
+    fireBolt(state, target.x, target.y, boltDamage(lvl) * damageMult(state));
+  },
+};
 
 export function updateBoltWeapon(state: GameState, dt: number): void {
   const lvl = state.weapons.bolt;
   if (!lvl) return;
-  state.weaponTimers.bolt -= dt;
-  if (state.weaponTimers.bolt > 0) return;
-  const target = nearestFrontierPoint(state);
-  if (!target) return;
-  state.weaponTimers.bolt = boltCooldown(lvl) / atkSpeedMult(state);
-  fireBolt(state, target.x, target.y, boltDamage(lvl) * damageMult(state));
+  runWeaponPipeline(state, dt, lvl, boltPipeline);
 }
 
 function fireBolt(state: GameState, targetX: number, targetY: number, dmg: number): void {

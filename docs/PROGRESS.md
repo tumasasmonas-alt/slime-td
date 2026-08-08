@@ -247,7 +247,48 @@ src/
 
 *Newest first.*
 
-### 2026-08-07 (latest) — Arsenal design pass. **Draft, not decided.**
+### 2026-08-08 (latest) — Phase 5A: the weapon pipeline ships. Decision 70.
+
+**Full account and audit trail:** `docs/plans/phase-5-6-arsenal.md` §13,
+§14; `docs/DECISIONS.md` Decision 70.
+
+**Before touching code:** a full re-read of every decision, session
+record and plan, requested by the owner. Found six flags; the owner
+settled three (Phase 4's gate had in fact been played — *"I have played
+it, all good"*; Ward Pulse becomes Immolation Ring; the modal level-up
+pause stays, judged at the Phase 5 gate) and three became work items
+folded into 5A without needing a call.
+
+**Shipped:** `weapons/pipeline.ts` — ready/acquire/deliver, with resolve
+deliberately deferred (no gem needs it yet, and generalizing it now would
+be exactly the over-built-abstraction risk the arsenal plan flags). All
+seven weapons refactored onto it: the six existing plus **Immolation
+Ring**, promoted from the `ward` passive — a weapon that had been
+misclassified since the port, which is also why it never got a visual and
+why its `clearAt` call never passed `coagulantMult`.
+
+**Zero behaviour change, verified three ways:** the 23 pre-existing
+weapon tests turned out to already be outcome tests and pass unmodified;
+a live debug-harness run (Decision 59's methodology) confirmed all seven
+weapons fire correctly over 60s at max level; the production bundle is
+byte-identical in size to the pre-refactor build.
+
+**Three balance gaps found and deliberately preserved, not fixed:**
+Immolation Ring doesn't respond to Overclock, doesn't respond to
+Amplifier, and never got Phase 4C-1's +50% damage pass — all inherited
+from Ward Pulse never having been classified as a weapon when those
+shipped. Pinned with a regression test, flagged in BACKLOG as an open
+balance call for Phase 6B, not silently rolled into this refactor.
+
+**The tower-centred radius guard now actually guards the weapons** — a
+new test enumerates `bladeRadius`/`frostRadius`/`immolationRadius`
+directly, closing the exact blind spot that let prototype bug #5 make
+Orbiting Blades non-functional in every run while its own tests passed.
+
+339/339 tests, typecheck clean, build clean. **Next: 5B**, per the
+owner's standing instruction — plan it, then report.
+
+### 2026-08-07 — Arsenal design pass. **Draft, not decided.**
 
 **No code.** The owner opened the arsenal discussion immediately after
 Phase 4 closed, asking for ≥15 weapons with per-weapon upgradeable
@@ -1226,12 +1267,12 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Next: Phase 5, the arsenal framework. Phase 3 and Phase 4 are both
-complete.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round),
-3D/4A/4B/4C-1/4C-2 all on 2026-08-07 — see the *Session log* above. That
-is five sub-phases in one day, each with at least one real bug found only
-by running the game — read the session records before assuming a new
-formula's first draft is right.
+**In progress: Phase 5, the arsenal framework. Phase 3 and Phase 4 are
+both complete, and 5A has shipped.** 3A/3B/3C shipped 2026-08-06 (plus a
+playtest-and-fix round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A on
+2026-08-08 — see the *Session log* above. Read the session records before
+assuming a new formula's first draft is right; every phase so far has
+found at least one real bug only by running the game.
 
 **Go linearly — this just closed out.** Phase 4 was the *questions* (armor,
 penetration, range-vs-callus, the full coagulant roster); Phase 5/6 are
@@ -1254,8 +1295,10 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse fixed, `frozen` finally visible (Decisions 66–67). Texture deferred to Phase 9. |
 | **4C-1** | ✅ Sclerotic, Blastoma, armour from maturity, bloom's maturity payload, +50% weapon damage (Decision 68). |
 | **4C-2** | ✅ Carrier (corridor identity + feeding), Bulwark (multi-part body, the pair §10 requires) (Decision 69). **Phase 4 complete.** |
-| **5** | Arsenal framework — weapon/extension/gem slots, inventory UI, passives dissolved → **next up** |
-| **6** | Arsenal content — **own design session first**, then toward 20 weapons |
+| **5A-0/5A** | ✅ The weapon pipeline (Decision 70) — all seven weapons refactored onto ready/acquire/deliver, zero behaviour change, Ward Pulse promoted to Immolation Ring. |
+| **5B** | Enhancement points, sockets, gem inventory, assist credit → **next up** |
+| **5C** | Pause + inventory UI |
+| **6** | Arsenal content — 18 weapons, 65 gems. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3) — implementation in batches per §13. |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase · real balance pass · leaderboard |
 | **9** | VFX and feel |

@@ -1,19 +1,23 @@
 import type { GameState } from '../state';
-import { atkSpeedMult, damageMult } from '../systems/passives';
-import { nearestFrontierPoint } from '../systems/frontier';
+import { damageMult } from '../systems/passives';
 import { chainCooldown, chainCount, chainDamage } from '../tuning/weapons';
+import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const CHAIN_SPEED = 760;
+
+const chainPipeline: WeaponPipeline = {
+  ready: cooldownReady('chain', chainCooldown),
+  acquire: frontierAcquire,
+  deliver: (state, lvl, target) => {
+    if (!target) return;
+    fireChain(state, target.x, target.y, chainCount(lvl), chainDamage(lvl) * damageMult(state));
+  },
+};
 
 export function updateChainWeapon(state: GameState, dt: number): void {
   const lvl = state.weapons.chain;
   if (!lvl) return;
-  state.weaponTimers.chain -= dt;
-  if (state.weaponTimers.chain > 0) return;
-  const target = nearestFrontierPoint(state);
-  if (!target) return;
-  state.weaponTimers.chain = chainCooldown(lvl) / atkSpeedMult(state);
-  fireChain(state, target.x, target.y, chainCount(lvl), chainDamage(lvl) * damageMult(state));
+  runWeaponPipeline(state, dt, lvl, chainPipeline);
 }
 
 function fireChain(state: GameState, targetX: number, targetY: number, hops: number, dmg: number): void {

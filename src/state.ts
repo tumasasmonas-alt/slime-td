@@ -319,7 +319,6 @@ export interface GameState {
 
   weaponTimers: Record<WeaponKey, number>;
   bladeNextHit: Record<number, number>;
-  wardTimer: number;
   simAcc: number;
   announceTimer: number;
   contactPressure: number;
@@ -382,9 +381,8 @@ export function freshState(): GameState {
     eventSpawnTimer: EVENT_INITIAL_DELAY,
     coagulants: [],
 
-    weaponTimers: { bolt: 0, blades: 0, chain: 0, frost: 0, poison: 0, missile: 0 },
+    weaponTimers: { bolt: 0, blades: 0, chain: 0, frost: 0, poison: 0, missile: 0, immolation: 0 },
     bladeNextHit: {},
-    wardTimer: 0,
     simAcc: 0,
     announceTimer: 0,
     contactPressure: 0,

@@ -167,7 +167,7 @@ the phase that absorbs each.
 | Bug | Absorbed by |
 |---|---|
 | **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — **killed at the root** by Decision 40: weapon *level* cards stop existing, so the failure mode has nowhere to live |
-| **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. **Root cause found 2026-08-08:** it is a *weapon* misfiled as a passive, so Decision 11's "a weapon's signature visual is part of the weapon" never applied to it — the same classification gap that hid `frozen`. | Phase 5A — promoted to a real weapon and renamed **Immolation Ring**, which gets it a visual and fixes its missing `coagulantMult` |
+| **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. **Root cause found 2026-08-08:** it is a *weapon* misfiled as a passive, so Decision 11's "a weapon's signature visual is part of the weapon" never applied to it — the same classification gap that hid `frozen`. **Reclassification shipped 2026-08-08** (Decision 70) — it is now `weapons/immolation.ts`, a real weapon, with its missing `coagulantMult` fixed. The visual itself is still open, deliberately deferred to Phase 6B as real content rather than retrofitted during the architecture-only 5A pass. | Phase 6B |
 | **Frost Nova's ring is nearly invisible.** 3px stroke, 0.4s life on a 3.6s cooldown (~11% uptime), fading alpha, low-contrast `#bfe9ff`. Also an expectation gap: it reads as an "aura" but is coded as an instantaneous pulse. | Phase 9 |
 | ~~**Frozen cells have no visual at all.**~~ ✅ **Fixed in Phase 4B** (Decision 66) — now a `#bfe9ff` rim, reusing Frost Nova's existing colour. Open since Phase 2; it was the precedent that forced 4A to ship a placeholder rather than shipping blind. | ✅ Done |
 | ~~**Density palette collapses.**~~ ✅ **Fixed in Phase 4B** (Decision 66). The cause turned out to be uneven *spacing*, not bad hues — density now rides evenly-stepped alpha, so recollapse is structurally impossible and mechanically tested. | ✅ Done |
@@ -179,6 +179,28 @@ is part of the weapon, not polish." Ward Pulse slipped through because
 it's classed as a *passive*, and freeze slipped through because it's a
 *field state*. **The rule should be scoped to any mechanic with a
 world-space effect, not just weapons.**
+
+### 🟡 Immolation Ring is missing three balance passes the other six weapons got
+*Discovered 2026-08-08 during the Ward Pulse → Immolation Ring promotion
+(Decision 70).* Preserved deliberately, not fixed — 5A's charter was
+architecture only, zero behaviour change. Immolation Ring currently:
+
+- Does not respond to **Overclock** (`atkSpeedMult`) — its cooldown is a
+  fixed 1.1s regardless of the passive.
+- Does not respond to **Amplifier** (`damageMult`) — its damage is a bare
+  `10 * lvl`.
+- Never received Phase 4C-1's **`WEAPON_DAMAGE_SCALE`** (+50%) pass, which
+  every other weapon's damage function carries.
+
+All three exist because Ward Pulse wasn't classified as a weapon when
+each of those was wired up, so its inline formula in the old
+`systems/ward.ts` was never touched. `weapons/immolation.test.ts` pins the
+Overclock gap with a regression test so it isn't undone by accident.
+
+**This is a balance call, not a bug** — whether Immolation Ring should
+join its six siblings on all three is the owner's decision. Natural home
+is Phase 6B, when the weapon gets its actual content pass (visual,
+extensions, attributes) alongside the rest of the new roster.
 
 ### 🟡 Infection events fire too often at the start of a run
 *Found in the 2026-08-07 Phase 3D playtest.* The owner's read: the opening

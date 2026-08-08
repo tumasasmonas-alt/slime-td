@@ -1,5 +1,5 @@
 // Reach for weapons whose radius is centered on the (stationary) tower:
-// Orbiting Blades, Frost Nova, Ward Pulse.
+// Orbiting Blades, Frost Nova, Immolation Ring.
 //
 // Density is always lowest right around the tower — ambient growth
 // creeps in there at a heavily damped rate (see docs/DECISIONS.md #15), so a tower-centered radius smaller than

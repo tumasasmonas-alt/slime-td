@@ -21,5 +21,4 @@ export const PASSIVE_DEFS: Readonly<Record<PassiveKey, PassiveDef>> = {
   damage: { name: 'Amplifier', icon: '💥', maxLevel: 8, desc: '+10% damage, all weapons.' },
   pickup: { name: 'Magnetism', icon: '🧲', maxLevel: 6, desc: 'Gems drift toward the core faster.' },
   xpGain: { name: 'Insight', icon: '📖', maxLevel: 6, desc: '+14% experience gained.' },
-  ward: { name: 'Ward Pulse', icon: '🌀', maxLevel: 6, desc: 'Periodically purges a ring around the core.' },
 };

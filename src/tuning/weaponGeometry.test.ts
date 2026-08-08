@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { bladeRadius, frostRadius, immolationRadius } from './weapons';
 import { PERIMETER } from './world';
 import { towerCenteredRadius, type TowerCenteredReach } from './weaponGeometry';
 
@@ -43,6 +44,33 @@ describe('towerCenteredRadius', () => {
         const r = towerCenteredRadius(spec, lvl, perimeter);
         expect(r).toBeGreaterThanOrEqual(previous);
         previous = r;
+      }
+    }
+  });
+});
+
+// Phase 5A audit finding (docs/plans/phase-5-6-arsenal.md S13): the suite
+// above proves towerCenteredRadius() itself is correct, but never proved
+// any weapon actually calls it — exactly the gap that let prototype bug
+// #5 make Orbiting Blades unable to hit ambient infection at any tier or
+// level, in any run, while every isolated-helper test kept passing. This
+// enumerates the real exported radius function each tower-centered
+// weapon calls, not a re-derivation of the helper's own spec.
+describe('every tower-centered weapon actually clears the perimeter', () => {
+  const weapons: { name: string; radiusFn: (lvl: number, perimeter: number) => number; maxLevel: number }[] = [
+    { name: 'blades', radiusFn: bladeRadius, maxLevel: 8 },
+    { name: 'frost', radiusFn: frostRadius, maxLevel: 8 },
+    { name: 'immolation', radiusFn: immolationRadius, maxLevel: 6 },
+  ];
+
+  it('resolves a radius strictly greater than the perimeter, at every level, for every tower-centered weapon', () => {
+    for (const { name, radiusFn, maxLevel } of weapons) {
+      for (const perimeter of TEST_PERIMETERS) {
+        for (let lvl = 1; lvl <= maxLevel; lvl++) {
+          expect(radiusFn(lvl, perimeter), `${name} at level ${lvl}, perimeter ${perimeter}`).toBeGreaterThan(
+            perimeter,
+          );
+        }
       }
     }
   });

@@ -1590,6 +1590,89 @@ the design record's own next milestone, Phase 5.
 
 ---
 
+## Phase 5A — the weapon pipeline
+
+> The arsenal design (18 weapons, 65 gems, slot/socket economics) was
+> settled across three review passes on 2026-08-07/08 and lives in
+> **`docs/plans/phase-5-6-arsenal.md`**, not here — nothing in that
+> document is a decision yet, per its own stated policy, since none of
+> its content has shipped. Decision 70 below is different: it is the
+> first *implemented* piece of Phase 5, the pipeline the whole catalogue
+> depends on, built 2026-08-08 after a full pre-refactor audit of every
+> prior decision and session record.
+
+**70. Every weapon is refactored onto a shared four-stage pipeline —
+ready → acquire → deliver → resolve — with the fourth stage deferred, and
+Ward Pulse is promoted from a passive to a weapon in the same pass.** ✅
+*2026-08-08.*
+
+**Why now, not with the first gem.** Weapons were six bespoke
+`updateXWeapon()` functions. A gem hooking any of them would need a
+special case per weapon — at the planned catalogue's size, 18 weapons ×
+14 transformative gems is 252 hand-written cases. `src/weapons/pipeline.ts`
+makes a gem a hook on a named stage instead: `ready` owns cooldown
+bookkeeping, `acquire` owns targeting (absent for self-centered weapons —
+nothing for a Targeting gem to replace), `deliver` emits the effect. Adding
+a gem becomes one hook, not N special cases.
+
+**Stage 4 (resolve) is deliberately not generalized yet.** For instant
+weapons resolution already happens inside `deliver` (a direct `clearAt`
+call); for projectile/cloud weapons it happens later in
+`systems/projectiles.ts`/`systems/clouds.ts`, untouched by this refactor.
+Building a uniform resolve-stage hook before a single resolve-stage gem
+exists to prove it against is exactly the over-built-abstraction risk the
+arsenal plan itself flags (§4's own risk #1); it gets built in Phase 6
+when Splash/Pierce/Detonation actually need it.
+
+**Zero behaviour change, verified three ways.** All 23 pre-existing weapon
+tests — which turned out to already be outcome tests (asserting
+`state.projectiles`/`state.grid.growth`/`state.orbitals`, never mocking
+internals) — pass unmodified against the refactored code. A live
+debug-harness run (Decision 59's methodology: `window.__debug` bridge,
+`fastForward`, removed before commit) confirmed all seven weapons fire
+correctly over 60s at max level with the core untouched. Production build
+output is byte-identical in size to the pre-refactor build.
+
+**Ward Pulse becomes Immolation Ring — the one deliberate exception to
+zero behaviour change.** It had a cooldown and a tower-centered radius —
+Frost Nova's and Blades' shape exactly — but was gated behind
+`state.passives.ward` since the port, a genuine misclassification rather
+than a design choice. Consequences of being misfiled as a passive: it
+never got a visual (Decision 11's "a weapon's signature visual is part of
+the weapon" only ever applied to things classed as weapons), and its
+`clearAt` call never passed `coagulantMult` (harmless today — defaults to
+1 either way — but would have silently no-op'd a future Penetration gem).
+Promoting it moves `'ward'` out of `PassiveKey` and `'immolation'` into
+`WeaponKey`; the mechanic itself is unchanged, the visual stays deferred
+to Phase 6B as real content, not retrofitted here.
+
+**Three balance gaps discovered during the promotion, deliberately
+preserved rather than silently fixed:** Ward Pulse's tick never divided by
+`atkSpeedMult` (Overclock never sped it up), its damage was never
+multiplied by `damageMult` (Amplifier never boosted it), and its damage
+formula (`10 * lvl`) was never touched by `WEAPON_DAMAGE_SCALE` (the +50%
+Phase 4C-1 dial every other weapon carries). All three are pinned exactly
+as they were — one with a dedicated regression test
+(`weapons/immolation.test.ts`) proving Overclock still has no effect —
+because "the architecture moved" and "the weapon got stronger" are
+different changes, and only the owner should choose the second. Recorded
+as an open balance question in `docs/plans/phase-5-6-arsenal.md`, not
+decided here.
+
+**A pre-refactor audit found and fixed two more gaps before this shipped:**
+`tuning/weaponGeometry.test.ts` tested `towerCenteredRadius()` generically
+but never enumerated a single weapon calling it — exactly the blind spot
+that let prototype bug #5 make Orbiting Blades non-functional in every
+run while its own isolated tests passed. A new test now enumerates
+`bladeRadius`/`frostRadius`/`immolationRadius` — the real functions each
+weapon calls — across every level and a spread of perimeters. Separately,
+`immolationRadius` was extracted into `tuning/weapons.ts` alongside
+`bladeRadius`/`frostRadius` rather than left as an inline constant in
+`weapons/immolation.ts`, so that enumeration test has a real function to
+call rather than a private one to duplicate.
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

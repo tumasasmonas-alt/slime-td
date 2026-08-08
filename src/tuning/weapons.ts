@@ -94,6 +94,34 @@ export function missileCooldown(lvl: number): number {
   return Math.max(1.2, 2.7 - (lvl - 1) * 0.18);
 }
 
+// Phase 5A (Decision 70): promoted from the `ward` passive's inline
+// formula. Deliberately NOT multiplied by WEAPON_DAMAGE_SCALE and NOT
+// read through damageMult() at the call site, matching the passive's
+// exact prior behaviour — Ward Pulse never received the Phase 4C-1 damage
+// pass or the Amplifier passive the other six weapons get, since it
+// wasn't classified as a weapon when either was wired up. Preserved
+// as-is per 5A's zero-behaviour-change charter; flagged in
+// docs/plans/phase-5-6-arsenal.md as a balance call for the owner, not
+// silently corrected here.
+export function immolationDamage(lvl: number): number {
+  return 10 * lvl;
+}
+
+// Fixed, level-independent — matches Ward Pulse's WARD_TICK exactly.
+// Also NOT divided by atkSpeedMult at the call site (see weapons/immolation.ts):
+// Overclock never sped up Ward Pulse, and 5A preserves that rather than
+// silently granting it a passive it never had.
+export const IMMOLATION_TICK = 1.1;
+
+const IMMOLATION_REACH: TowerCenteredReach = { margin: 10, base: 66, perLevel: 6 };
+
+// Radius, anchored to the safe radius as a floor (docs/DECISIONS.md #16) —
+// same pattern as bladeRadius/frostRadius, carried over unchanged from
+// Ward Pulse's WARD_REACH.
+export function immolationRadius(lvl: number, perimeter: number): number {
+  return towerCenteredRadius(IMMOLATION_REACH, lvl, perimeter);
+}
+
 // Prototype formula was `62 + Math.min(24, lvl*2)` — linear across the
 // whole 1-8 level range the cap never actually engages (8*2=16 < 24), so
 // it's expressed directly as the equivalent base+perLevel form here.
@@ -152,6 +180,16 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     icon: '🚀',
     maxLevel: 8,
     desc: () => `Homes onto the nearest wall and explodes.`,
+    coagulantMult: 1,
+  },
+  // Phase 5A (Decision 70): promoted from PASSIVE_DEFS.ward. maxLevel
+  // carried over unchanged (6); desc is now level-dependent like every
+  // other weapon here, unlike the passive's static string it replaces.
+  immolation: {
+    name: 'Immolation Ring',
+    icon: '🔥',
+    maxLevel: 6,
+    desc: (lvl) => `Periodically purges a ring around the core. Lv${lvl}: ${immolationDamage(lvl).toFixed(0)} pwr`,
     coagulantMult: 1,
   },
 };

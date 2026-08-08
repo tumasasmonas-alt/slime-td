@@ -4,6 +4,7 @@ import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { findCoagulantHit } from '../systems/coagulants';
 import { damageMult } from '../systems/passives';
 import { WEAPON_DEFS, bladeCount, bladeDamage, bladeRadius } from '../tuning/weapons';
+import { runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const SPIN_SPEED = 2.4;
 const HIT_RADIUS = 16;
@@ -18,40 +19,51 @@ const VISUAL_RADIUS = 10;
 // end up smaller than the zone they're meant to defend — see
 // "documented prototype bugs" #5.
 //
+// Continuous rather than cooldown-gated — READY is always true when
+// equipped; the per-slot hit cooldown that would elsewhere live in READY
+// or ACQUIRE is intrinsic to DELIVER here, since it's per-blade, not
+// per-weapon. Self-centered — no ACQUIRE stage.
+const bladesPipeline: WeaponPipeline = {
+  ready: () => true,
+  deliver: (state, lvl) => {
+    const grid = state.grid;
+    if (!grid) return;
+    const t = state.tower;
+    const count = bladeCount(lvl);
+    const dmg = bladeDamage(lvl) * damageMult(state);
+    const spin = state.time * SPIN_SPEED;
+    const radius = bladeRadius(lvl, grid.perimeter);
+
+    state.orbitals = [];
+    for (let i = 0; i < count; i++) {
+      const a = spin + (i / count) * Math.PI * 2;
+      const bx = t.x + Math.cos(a) * radius;
+      const by = t.y + Math.sin(a) * radius;
+      state.orbitals.push({ x: bx, y: by, radius: VISUAL_RADIUS });
+
+      const { cx, cy } = worldToCell(grid, bx, by);
+      const ci = gIdx(grid, cx, cy);
+      const nextAllowed = state.bladeNextHit[i] ?? 0;
+      // Coagulants are entities, not grid cells — a blade sweeping
+      // through already-cleared space still needs to connect with a
+      // blob sitting there, which isRevealedIdx alone can't see.
+      const onTarget = isRevealedIdx(grid, ci) || findCoagulantHit(state, bx, by, HIT_RADIUS) !== null;
+      if (onTarget && state.time >= nextAllowed) {
+        clearAt(state, bx, by, dmg, { radiusPx: HIT_RADIUS, coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1 });
+        state.bladeNextHit[i] = state.time + HIT_COOLDOWN;
+      }
+    }
+  },
+};
+
 // Takes `_dt` only to match the (state, dt) signature every other
 // weapon update function uses — blades have no cooldown timer of their
 // own, driven purely by state.time and the per-slot hit cooldown.
 export function updateBladesWeapon(state: GameState, _dt: number): void {
   const lvl = state.weapons.blades;
-  const grid = state.grid;
-  if (!lvl || !grid) {
+  if (!lvl || !state.grid) {
     state.orbitals = [];
     return;
   }
-
-  const t = state.tower;
-  const count = bladeCount(lvl);
-  const dmg = bladeDamage(lvl) * damageMult(state);
-  const spin = state.time * SPIN_SPEED;
-  const radius = bladeRadius(lvl, grid.perimeter);
-
-  state.orbitals = [];
-  for (let i = 0; i < count; i++) {
-    const a = spin + (i / count) * Math.PI * 2;
-    const bx = t.x + Math.cos(a) * radius;
-    const by = t.y + Math.sin(a) * radius;
-    state.orbitals.push({ x: bx, y: by, radius: VISUAL_RADIUS });
-
-    const { cx, cy } = worldToCell(grid, bx, by);
-    const ci = gIdx(grid, cx, cy);
-    const nextAllowed = state.bladeNextHit[i] ?? 0;
-    // Coagulants are entities, not grid cells — a blade sweeping through
-    // already-cleared space still needs to connect with a blob sitting
-    // there, which isRevealedIdx alone can't see.
-    const onTarget = isRevealedIdx(grid, ci) || findCoagulantHit(state, bx, by, HIT_RADIUS) !== null;
-    if (onTarget && state.time >= nextAllowed) {
-      clearAt(state, bx, by, dmg, { radiusPx: HIT_RADIUS, coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1 });
-      state.bladeNextHit[i] = state.time + HIT_COOLDOWN;
-    }
-  }
+  runWeaponPipeline(state, _dt, lvl, bladesPipeline);
 }

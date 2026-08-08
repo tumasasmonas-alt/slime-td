@@ -25,7 +25,6 @@ import { updateParticles } from './systems/particles';
 import { updateProjectiles } from './systems/projectiles';
 import { runSimulation } from './systems/tick';
 import { updateTowerTick } from './systems/tower';
-import { updateWardPulse } from './systems/ward';
 import { initHud, updateAnnounceFade, updateHud } from './ui/hud';
 import { hideOverlays, initOverlays, showGameOver } from './ui/overlays';
 import { initUpgradeCards, syncUpgradeOverlay } from './ui/upgradeCards';
@@ -33,6 +32,7 @@ import { updateBladesWeapon } from './weapons/blades';
 import { updateBoltWeapon } from './weapons/bolt';
 import { updateChainWeapon } from './weapons/chain';
 import { updateFrostWeapon } from './weapons/frost';
+import { updateImmolationWeapon } from './weapons/immolation';
 import { updateMissileWeapon } from './weapons/missile';
 import { updatePoisonWeapon } from './weapons/poison';
 
@@ -93,13 +93,13 @@ function update(dt: number): void {
   updateFrostWeapon(state, dt);
   updatePoisonWeapon(state, dt);
   updateMissileWeapon(state, dt);
+  updateImmolationWeapon(state, dt);
   updateProjectiles(state, dt);
   updateGems(state, dt);
   updateParticles(state, dt);
   updateChainFx(state, dt);
   updateNovaFx(state, dt);
   updateClouds(state, dt);
-  updateWardPulse(state, dt);
   updateTowerTick(state, dt); // regen + shake decay
   updateAnnounceFade(hudRefs, state, dt);
   if (state.grid && state.slimeLayer) {

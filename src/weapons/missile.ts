@@ -1,7 +1,7 @@
 import type { GameState } from '../state';
-import { atkSpeedMult, damageMult } from '../systems/passives';
-import { nearestFrontierPoint } from '../systems/frontier';
+import { damageMult } from '../systems/passives';
 import { missileCooldown, missileDamage, missileRadius } from '../tuning/weapons';
+import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const MISSILE_SPEED = 300;
 
@@ -10,17 +10,19 @@ const MISSILE_SPEED = 300;
 // (Decision 43/BACKLOG Phase 3A). Reverting to the frontier point once a
 // coagulant target exists is a small follow-up, not a rewrite: the
 // projectile's steering already tracks whatever targetPoint holds.
+const missilePipeline: WeaponPipeline = {
+  ready: cooldownReady('missile', missileCooldown),
+  acquire: frontierAcquire,
+  deliver: (state, lvl, target) => {
+    if (!target) return;
+    fireMissile(state, target.x, target.y, missileDamage(lvl) * damageMult(state), missileRadius(lvl));
+  },
+};
+
 export function updateMissileWeapon(state: GameState, dt: number): void {
   const lvl = state.weapons.missile;
   if (!lvl) return;
-  state.weaponTimers.missile -= dt;
-  if (state.weaponTimers.missile > 0) return;
-
-  const target = nearestFrontierPoint(state);
-  if (!target) return;
-
-  state.weaponTimers.missile = missileCooldown(lvl) / atkSpeedMult(state);
-  fireMissile(state, target.x, target.y, missileDamage(lvl) * damageMult(state), missileRadius(lvl));
+  runWeaponPipeline(state, dt, lvl, missilePipeline);
 }
 
 function fireMissile(state: GameState, targetX: number, targetY: number, dmg: number, splashRadius: number): void {
