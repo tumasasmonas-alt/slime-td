@@ -285,8 +285,19 @@ new test enumerates `bladeRadius`/`frostRadius`/`immolationRadius`
 directly, closing the exact blind spot that let prototype bug #5 make
 Orbiting Blades non-functional in every run while its own tests passed.
 
-339/339 tests, typecheck clean, build clean. **Next: 5B**, per the
-owner's standing instruction — plan it, then report.
+339/339 tests, typecheck clean, build clean.
+
+**5B planned the same session:** `docs/plans/phase-5b-framework.md` —
+enhancement pool, the socket ladder, card-pool restructuring (weapon-level
+cards removed, extensions leveling 1→3 then permanently removed, core
+gems on a separate track), and assist credit's plumbing built now against
+the seven existing weapons so Phase 6's no-damage weapons have something
+to plug into later. **Surfaces one real scope tension**: weapon-socketed
+gems are themselves Phase 6 content, so a strictly-empty 5B pool risks
+being untestable in the way that matters — proposed fix is shipping the
+five ported-passive core gems as real content to keep the loop judgeable,
+flagged as an open call (§8) rather than decided unilaterally. Awaiting
+review before implementation starts.
 
 ### 2026-08-07 — Arsenal design pass. **Draft, not decided.**
 
