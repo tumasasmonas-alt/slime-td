@@ -1387,10 +1387,18 @@ round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A and 5B both on 2026-08-08
 new formula's first draft is right; every phase so far has found at least
 one real bug only by running the game.
 
-**5B-5 (assist credit) is withheld, awaiting the owner.** Everything else
-in 5B shipped. See `docs/plans/phase-5b-framework.md` §5 — implementing it
-found the mechanism doesn't solve the problem it names, since XP is a
-global pool with no per-weapon tracking anywhere in the design.
+**5B-5 (assist credit) was dropped, confirmed by the owner.** Everything
+else in 5B shipped, so **Phase 5B has no outstanding items.** Implementing
+it found the mechanism doesn't solve the problem it names — XP is a global
+pool with no per-weapon tracking anywhere in the design, so any kill
+already pays full credit. Moved to `docs/BACKLOG.md` *Ideas*; reasoning in
+`docs/plans/phase-5b-framework.md` §5.
+
+**Next is 5C** — the pause + inventory UI, which makes banked enhancement
+points spendable and sockets actually usable. It is the last piece of
+Phase 5 and a prerequisite for the Phase 5 gate: a socketing loop can't be
+playtested without a socketing UI. **Phase 6-0** (the minimal pre-run
+weapon select) comes after that gate, at the front of Phase 6.
 
 **Go linearly — this just closed out.** Phase 4 was the *questions* (armor,
 penetration, range-vs-callus, the full coagulant roster); Phase 5/6 are
@@ -1414,8 +1422,9 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **4C-1** | ✅ Sclerotic, Blastoma, armour from maturity, bloom's maturity payload, +50% weapon damage (Decision 68). |
 | **4C-2** | ✅ Carrier (corridor identity + feeding), Bulwark (multi-part body, the pair §10 requires) (Decision 69). **Phase 4 complete.** |
 | **5A-0/5A** | ✅ The weapon pipeline (Decision 70) — all seven weapons refactored onto ready/acquire/deliver, zero behaviour change, Ward Pulse promoted to Immolation Ring. |
-| **5B** | ✅ Enhancement points, socket ladder, restructured card pool, core gems, gem inventory, render structural pass (Decision 71). **Assist credit withheld** — awaiting the owner, `docs/plans/phase-5b-framework.md` §5. |
-| **5C** | Pause + inventory UI → **next up**, after Phase 6-0 |
+| **5B** | ✅ Enhancement points, socket ladder, restructured card pool, core gems, gem inventory, render structural pass (Decision 71). Assist credit dropped — moved to BACKLOG *Ideas*. |
+| **5C** | Pause + inventory UI — the +/- control, socketing, per-weapon gem descriptions → **next up** |
+| **▶ GATE** | Playtest the socketing loop. **Known limit:** with the weapon-gem pool empty until 6A, it can't judge specialise-vs-spread. |
 | **6-0** | Minimal pre-run weapon select — moved forward from Phase 7 on 2026-08-08 so Phase 6 batches are owner-playtestable |
 | **6** | Arsenal content — 18 weapons, 65 gems. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3) — implementation in batches per §13, reordered (6E/6F swapped) after the visual-cost audit. |
 | **7** | Meta — currency, unlocks, deck builder |

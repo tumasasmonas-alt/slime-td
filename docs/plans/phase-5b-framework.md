@@ -1,12 +1,12 @@
 # Phase 5B — the enhancement, socket and card-pool economy
 
-**Status:** ✅ **Implemented and verified 2026-08-08 — Decision 71.**
-5B-1 through 5B-4 and 5B-6 shipped. **5B-5 (assist credit) was withheld**
+**Status:** ✅ **Complete — implemented and verified 2026-08-08, Decision 71.**
+5B-1 through 5B-4 and 5B-6 shipped. **5B-5 (assist credit) was dropped**
 — implementation surfaced that the mechanism as designed doesn't solve
-the problem it names; see §5, awaiting the owner's confirmation before
-either building a revised version or closing it out. 380/380 tests,
-typecheck clean, build clean, verified live via a 425-second/58-level
-debug-harness soak test.
+the problem it names; raised, and the owner confirmed dropping it the
+same session (§5). Moved to `docs/BACKLOG.md` *Ideas*. **No outstanding
+items.** 380/380 tests, typecheck clean, build clean, verified live via a
+425-second/58-level debug-harness soak test.
 
 **Depends on:** 5A (`weapons/pipeline.ts`), shipped and verified.
 **Source design:** `docs/plans/phase-5-6-arsenal.md` §5, §6, §9F, §11, §12,
@@ -205,13 +205,19 @@ number is not worth guessing at a phase early.
 
 ---
 
-## 5. Assist credit — NOT built. A re-discovery during implementation.
+## 5. Assist credit — dropped. A re-discovery during implementation.
 
-**Status: withheld pending the owner's confirmation.** Working through
-the actual mechanics to implement this step found that, as designed, it
-does not solve the problem it was written to solve. Raised rather than
-built, per the ground-truth override protocol (`CLAUDE.md`, Decision 22)
-— the same posture Decision 62 used for the behemoth-timing pushback.
+**Status: ✅ dropped, confirmed by the project owner 2026-08-08** —
+*"it's fine to drop assist credit if the player will still get the XP
+after the mass is dead."* They will; that was the finding. Moved to
+`docs/BACKLOG.md` *Ideas* with the full reasoning and a note on what
+would revive it.
+
+Working through the actual mechanics to implement this step found that,
+as designed, it does not solve the problem it was written to solve.
+Raised rather than built, per the ground-truth override protocol
+(`CLAUDE.md`, Decision 22) — the same posture Decision 62 used for the
+behemoth-timing pushback.
 
 **The original reasoning:** *"Solvent, Repulsor and Marker destroy no
 mass, and XP is destroyed mass — so without assist credit they'd
@@ -243,17 +249,18 @@ build, consistent with the game's own philosophy** (Decision 27: no
 scripted safety net, the field's state is the honest readout of how the
 player is doing) **— not a system failure needing a fix.**
 
-**Recommendation: do not build this.** If Phase 6 support weapons turn
-out to *feel* bad despite the economy being fine — a real possibility,
-since a player watching Solvent do nothing to their kill count is a UX
-concern even with XP flowing correctly — the fix belongs at the UI/feel
-layer (crediting a kill notification to the setup weapon, say), not the
-economy layer. That is a Phase 6 question, judged against real gems, not
-a Phase 5B one.
+**Recommendation, accepted: do not build this.** If Phase 6 support
+weapons turn out to *feel* bad despite the economy being fine — a real
+possibility, since a player watching Solvent do nothing to their kill
+count is a UX concern even with XP flowing correctly — the fix belongs at
+the UI/feel layer (crediting a kill notification to the setup weapon,
+say), not the economy layer. That is a Phase 6 question, judged against
+real gems, not a Phase 5B one.
 
 **Flagged for the owner rather than silently dropped**, since removing a
 committed plan item is exactly the kind of change this project's
-conventions say to raise rather than decide alone.
+conventions say to raise rather than decide alone. Confirmed and closed
+the same session; **Phase 5B is complete with no outstanding items.**
 
 ---
 

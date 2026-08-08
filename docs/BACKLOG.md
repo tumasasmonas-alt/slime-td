@@ -20,23 +20,28 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 Phase 6-0 — minimal pre-run weapon select
+### 🟡 Phase 5C — pause + inventory UI
 
 **Phases 3, 4, 5A and 5B are all shipped.** Phase 5A (Decision 70) put
 every weapon on a shared pipeline; Phase 5B (Decision 71) built the
 enhancement/socket/card-pool economy — weapon-level cards are gone,
 extensions level 1→3 then leave the pool for good, five passives ported
-onto three core-gem sockets, `pickThree`'s biased shuffle fixed. **5B-5
-(assist credit) was withheld** — implementation found it doesn't solve
-the problem it names (XP is a global pool, not per-weapon); awaiting the
-owner's confirmation in `docs/plans/phase-5b-framework.md` §5.
+onto three core-gem sockets, `pickThree`'s biased shuffle fixed. **Assist
+credit was dropped** with the owner's confirmation — it doesn't solve the
+problem it names (XP is a global pool, not per-weapon), and is now in
+*Ideas* below.
 
-**Next up is Phase 6-0**: a minimal pre-run weapon select (list,
-checkboxes, start button — no currency, no unlocks), moved forward from
-Phase 7 on 2026-08-08 so Phase 6's weapon batches are playtestable by the
-owner rather than only through the debug harness. Then **6A**: the first
-real support gems (Amplifier + Behaviour classes), landing against a
-render layer and card-pool economy now built to carry them.
+**Next up is Phase 5C**: the pause + inventory UI — the `+/-` control that
+makes banked enhancement points spendable, socketing and unsocketing, and
+per-weapon gem descriptions. It is the last piece of Phase 5 and a
+prerequisite for its gate, since a socketing loop can't be playtested
+without a socketing UI. It should be built from components **Phase 6-0's
+pre-run weapon select can reuse** — both render weapons, sockets and gems.
+
+After the Phase 5 gate: **6-0** (minimal pre-run weapon select) then
+**6A** (the first real support gems — Amplifier + Behaviour classes,
+17 free / 3 modifier / 0 new on the visual-cost table, the cheapest
+possible batch to prove the architecture on).
 
 **The arsenal design is settled at revision 3**
 (`docs/plans/phase-5-6-arsenal.md`) — 18 weapons, 65 support gems in six
@@ -87,7 +92,7 @@ correcting both times**), `2026-08-06-arsenal-and-coagulant-mechanism.md`
 **Still open, not urgent:** whether a behemoth crossing the arena reads as
 dramatic or tedious, and whether the conservation rules feel right in
 practice (motes shouldn't chain into behemoths — Rule 4). Both need more
-playtesting than we've done to judge; neither blocks Phase 5.
+playtesting than we've done to judge; neither blocks Phase 5C.
 
 ### The rest of the phase plan
 
@@ -99,9 +104,11 @@ Full detail in the session record §17.
 | **4A** | ✅ Maturity field — scar accumulation, capped age floor, decay, resistance/regrowth/ceiling effects |
 | **4B** | ✅ Two-axis visuals — density → alpha, maturity → colour; palette collapse and `frozen` visual both fixed |
 | **4C** | ✅ Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark. **Phase 4 complete.** |
-| **5** | Arsenal framework — slots, gems, inventory UI, passives dissolved → **next up** |
-| **6** | Arsenal content — **own design session first**, then toward 20 weapons |
-| **7** | Meta — currency, unlocks, deck builder |
+| **5A** | ✅ The weapon pipeline (Decision 70) — seven weapons on ready/acquire/deliver, Ward Pulse promoted to Immolation Ring |
+| **5B** | ✅ Enhancement/socket/card-pool economy (Decision 71) — weapon-level cards gone, core gems, socket ladder |
+| **5C** | Pause + inventory UI → **next up**, then the Phase 5 gate |
+| **6** | Arsenal content — design session done (`docs/plans/phase-5-6-arsenal.md`); 6-0 pre-run select, then batches per §13 |
+| **7** | Meta — currency, unlocks, persistent deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |
 | **9** | VFX and feel |
 
@@ -398,6 +405,47 @@ it isn't a surprise on launch day.
 ---
 
 ## Ideas — not committed
+
+### 💭 Per-weapon XP attribution ("assist credit")
+*Planned as Phase 5B-5, then dropped during implementation on 2026-08-08
+with the project owner's confirmation: **"it's fine to drop assist credit
+if the player will still get the XP after the mass is dead."** They will —
+that was the finding.*
+
+**Why it was planned:** the arsenal plan's §14 flagged it as the single
+largest hidden cost in Phase 5 — Solvent, Repulsor and Marker (Phase 6D)
+destroy no mass, and XP *is* destroyed mass (Decisions 42/61), so they
+looked like they'd generate zero XP and ship as traps.
+
+**Why it was dropped:** implementing it surfaced that **XP is a single
+global pool** (`state.tower.xp`), never tracked per weapon anywhere, and
+enhancement points bank the same way (`state.enhancementPool`). Any kill
+by any weapon in a deck already pays the full pool. A Solvent + Bolt build
+gets complete credit today with no change — Bolt's own `clearAt` call
+generates it regardless of what softened the target first. So a mechanism
+for *redistributing* XP between the killer and the setup weapon has
+nothing to attach to; it would be real code permanently exercising
+nothing, for a per-weapon economy that isn't planned to exist.
+
+The narrower risk it was reaching for — an all-support deck with no damage
+dealer at all generating no kills, hence no XP — isn't fixed by
+redistribution either: with nothing calling `clearAt` with power, there's
+no XP event to redistribute. That reads as a legitimate consequence of a
+bad build (Rule 4 / Decision 27: the field's state is an honest readout,
+not a system with a safety net).
+
+**What would revive this idea:** any future feature that needs to know
+*which weapon* earned something — per-weapon XP so weapons level
+independently, an end-of-run damage breakdown, achievements or unlock
+conditions tied to a specific weapon's performance, or a "most valuable
+weapon" stat on the game-over screen. None are planned; all would need
+this. Kept here so the reasoning isn't re-derived from scratch.
+
+**The related UX concern is real and separate**: a player watching Solvent
+visibly do nothing to their kill count may *feel* bad even with the
+economy working correctly. That fix belongs at the feedback layer
+(crediting a kill notification to the setup weapon, say), not the economy
+layer, and is a Phase 6 question judged against real support weapons.
 
 ### 💭 Does calcified tissue block projectiles?
 *Open question 4 from the 2026-08-05 record §18. Its recommendation was

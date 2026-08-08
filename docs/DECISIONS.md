@@ -1772,6 +1772,18 @@ for the owner rather than silently dropped**, per the ground-truth
 override protocol (Decision 22) — the same posture Decision 62 used for
 the behemoth-timing pushback.
 
+**The owner confirmed dropping it the same session** — *"it's fine to
+drop assist credit if the player will still get the XP after the mass is
+dead"* — which is exactly the finding. Moved to `docs/BACKLOG.md` *Ideas*
+with a note on what would revive it: any future feature needing to know
+*which weapon* earned something (per-weapon XP so weapons level
+independently, an end-of-run damage breakdown, weapon-specific unlock
+conditions). None are planned; all would need this. The related **UX**
+concern — a player watching Solvent visibly do nothing to their kill
+count may feel bad even with the economy working correctly — is real,
+separate, and belongs at the feedback layer in Phase 6, not the economy
+layer here.
+
 **Render structural pass, unrelated to the economy but shipped in the
 same session.** `OrbitalVisual` gained `shape`/`color`/`glowColor`,
 `state.novaFx` became a list rather than a single nullable slot — Blades
