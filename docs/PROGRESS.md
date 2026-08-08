@@ -1423,9 +1423,9 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **4C-2** | ✅ Carrier (corridor identity + feeding), Bulwark (multi-part body, the pair §10 requires) (Decision 69). **Phase 4 complete.** |
 | **5A-0/5A** | ✅ The weapon pipeline (Decision 70) — all seven weapons refactored onto ready/acquire/deliver, zero behaviour change, Ward Pulse promoted to Immolation Ring. |
 | **5B** | ✅ Enhancement points, socket ladder, restructured card pool, core gems, gem inventory, render structural pass (Decision 71). Assist credit dropped — moved to BACKLOG *Ideas*. |
-| **5C** | Pause + inventory UI — the +/- control, socketing, per-weapon gem descriptions → **next up** |
-| **▶ GATE** | Playtest the socketing loop. **Known limit:** with the weapon-gem pool empty until 6A, it can't judge specialise-vs-spread. |
-| **6-0** | Minimal pre-run weapon select — moved forward from Phase 7 on 2026-08-08 so Phase 6 batches are owner-playtestable |
+| **5C** | Pause + inventory UI — the +/- control, socket display, live stat feedback → **next up** (`docs/plans/phase-5c-inventory-ui.md`) |
+| **6-0** | Minimal pre-run weapon select — moved forward from Phase 7 so Phase 6 batches are owner-playtestable. Reuses 5C's weapon-row component. |
+| **▶ THE GATE** | **Moved here from after 5C** on 2026-08-08 — with sockets empty it could only answer "slider," a false negative. Runs after 6A's first gems, judging socketing, specialise-vs-spread and dilution together. |
 | **6** | Arsenal content — 18 weapons, 65 gems. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3) — implementation in batches per §13, reordered (6E/6F swapped) after the visual-cost audit. |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase · real balance pass · leaderboard |

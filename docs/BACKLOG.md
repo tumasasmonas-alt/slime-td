@@ -31,17 +31,26 @@ credit was dropped** with the owner's confirmation — it doesn't solve the
 problem it names (XP is a global pool, not per-weapon), and is now in
 *Ideas* below.
 
-**Next up is Phase 5C**: the pause + inventory UI — the `+/-` control that
-makes banked enhancement points spendable, socketing and unsocketing, and
-per-weapon gem descriptions. It is the last piece of Phase 5 and a
-prerequisite for its gate, since a socketing loop can't be playtested
-without a socketing UI. It should be built from components **Phase 6-0's
-pre-run weapon select can reuse** — both render weapons, sockets and gems.
+**Next up is Phase 5C** (`docs/plans/phase-5c-inventory-ui.md`, scope
+settled): the pause + inventory screen — the `+/-` control that makes
+banked enhancement points spendable, a socket row that grows visibly with
+investment, and a live per-weapon stat line so a `+` has visible
+consequence. Opened by a HUD button (this game has zero keyboard input
+today, so a key-only binding would be undiscoverable; the key comes later
+as a shortcut). Built from a **weapon-row component Phase 6-0 reuses**.
 
-After the Phase 5 gate: **6-0** (minimal pre-run weapon select) then
-**6A** (the first real support gems — Amplifier + Behaviour classes,
-17 free / 3 modifier / 0 new on the visual-cost table, the cheapest
-possible batch to prove the architecture on).
+Then **6-0** (minimal pre-run weapon select — a separate button beside
+Start, with a working default deck so restarts stay one click), then
+**6A** (the first real support gems — Amplifier + Behaviour, 17 free / 3
+modifier / 0 new on the visual-cost table, the cheapest possible batch to
+prove the architecture on).
+
+**The Phase 5 gate moved to after 6A**, settled 2026-08-08. Its central
+question — *is enhancement a decision or a slider?* — is unanswerable
+while sockets are empty: opening a 4th socket buys nothing, so
+specialising has no benefit and the answer is forced to "slider"
+regardless of whether the design works. The build order did not change;
+only the point where we stop and judge did.
 
 **The arsenal design is settled at revision 3**
 (`docs/plans/phase-5-6-arsenal.md`) — 18 weapons, 65 support gems in six
@@ -106,7 +115,7 @@ Full detail in the session record §17.
 | **4C** | ✅ Coagulants Wave 2 — Blastoma, Carrier, Sclerotic, Bulwark. **Phase 4 complete.** |
 | **5A** | ✅ The weapon pipeline (Decision 70) — seven weapons on ready/acquire/deliver, Ward Pulse promoted to Immolation Ring |
 | **5B** | ✅ Enhancement/socket/card-pool economy (Decision 71) — weapon-level cards gone, core gems, socket ladder |
-| **5C** | Pause + inventory UI → **next up**, then the Phase 5 gate |
+| **5C** | Pause + inventory UI → **next up** (`docs/plans/phase-5c-inventory-ui.md`) |
 | **6** | Arsenal content — design session done (`docs/plans/phase-5-6-arsenal.md`); 6-0 pre-run select, then batches per §13 |
 | **7** | Meta — currency, unlocks, persistent deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |
