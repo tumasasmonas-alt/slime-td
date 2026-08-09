@@ -48,8 +48,8 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-08 (Phase 5 shipped in full — **Phase 5 is
-complete**: 5A, 5B, 5C)
+**Last updated:** 2026-08-09 (Phase 6 re-planned into nine batches; Phase
+6-0, the pre-run weapon select, shipped — **not yet committed or pushed**)
 
 **Phases 3, 4 and 5 are all built.** 3A–3D and 4A–4C are playtested and
 confirmed (see the 2026-08-07 entries below for verdicts). **Phase 5**
@@ -86,15 +86,33 @@ scoping: weapon damage numbers, slime speed and overall game feel need the
 remaining systems in place before they can be tuned honestly. That is
 Phase 8 (Decision 13's supersession), not a reason to reorder anything.
 
+**2026-08-09: Phase 6 was reviewed and re-planned before any content
+shipped**, and **Phase 6-0 (the pre-run weapon select) built the same
+session.** Full account: `docs/plans/phase-6-roadmap.md` (the re-plan)
+and `docs/plans/phase-6-0-weapon-select.md` (6-0 itself). The review
+found a live consequence of a design gap — four built weapons (Blades,
+Frost, Missile, Immolation Ring) were unreachable in any run, because the
+deck was always full and the card pool's only weapon-granting path was
+gated on a free slot that never existed. The owner's answer reclassified
+this from bug to missing UI: **the deck always fills every slot, is fixed
+for the run, and the card pool never offers a weapon at all** — 6-0 is
+now the sole way any weapon is equipped, and it ships that way. The
+Phase 6 batch table also gained a new **6B** (real extensions for the
+seven existing weapons, absent from every previous phasing) and the Phase
+5 gate moved again, from after 6A to after 6B, since it needs both things
+a socket can hold to be real content before "decision or slider?" means
+anything. Nine batches total now, none of the catalogue's content
+touched. **Not yet committed** — the owner asked for a report first.
+
 | | |
 |---|---|
-| Tests | 389 passing (38 test files) — one known flake, see BACKLOG |
-| Source | 72 modules under `src/` |
+| Tests | 393 passing (39 test files) — one known flake, see BACKLOG |
+| Source | 73 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
-| Branch | `main` |
-| Code state | **Phase 3 + Phase 4 + Phase 5 (5A/5B/5C) all complete.** Phase 6 catalogue is design-only, not built. |
-| Blockers | **None.** Next is Phase 6-0 (minimal pre-run weapon select), linearly. |
+| Branch | `main` (working tree has uncommitted Phase 6-0 changes) |
+| Code state | **Phase 3 + Phase 4 + Phase 5 (5A/5B/5C) all complete. Phase 6-0 shipped, uncommitted.** Phase 6 catalogue is still design-only past 6-0. |
+| Blockers | **None.** Next is Phase 6A (Amplifier + Behaviour gems), per the re-planned nine-batch order. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
 still playtested — infection as a density field across a fixed perimeter,
@@ -279,7 +297,87 @@ src/
 
 *Newest first.*
 
-### 2026-08-08 (latest) — Phase 5C: the pause + inventory screen ships. Decision 72. Phase 5 closes.
+### 2026-08-09 (latest) — Phase 6 reviewed and re-planned; Phase 6-0 ships
+
+**Full account:** `docs/plans/phase-6-roadmap.md` (the re-plan, its five
+findings, and the owner's four settled calls) and
+`docs/plans/phase-6-0-weapon-select.md` (6-0's own plan, tests,
+order-of-work, and "what changed during implementation").
+
+**Shipped:** the pre-run weapon-select overlay — `ui/weaponSelect.ts`
+(new), `ui/weaponRow.ts`'s `'select'` mode filled in, `ui/overlays.ts`
+wiring `Choose Weapons`/`Change Loadout` and the deck-icon lines,
+`main.ts`'s `startRun()` reading the chosen deck instead of a hardcoded
+kit. The `newWeapon` `CardChoice` kind deleted outright from
+`systems/cards.ts` and `ui/upgradeCards.ts`. 393/393 tests (4 new),
+typecheck clean, build clean, verified live in-browser end to end.
+
+**Discussed and decided, before any code:** the owner asked for a review
+of Phase 6's phasing and a plan for 6-0, with the standing instruction
+(reaffirmed this session) to ask questions and get a greenlight before
+implementing. The review of `docs/plans/phase-5-6-arsenal.md` §13's
+phasing table, done against **shipped** Phase 5 code rather than the
+design it was written against, found two structural gaps and one live
+consequence:
+
+1. **Four built weapons (Blades, Frost, Missile, Immolation Ring) were
+   unreachable in any run.** `startRun()` always filled the deck exactly
+   (3 of 3 slots) and the `newWeapon` card's only gate was a free slot
+   that could never exist — both halves individually correct, an
+   interaction neither the 380 nor 389 tests caught, because the
+   deck-full case is exactly what the gating test asserts should offer
+   nothing.
+2. **Extensions were scheduled nowhere.** The §13 table has only
+   "Gems:" and "Weapons:" batches; the seven existing weapons appear in
+   no batch at all, so their 21 extensions (half of what a socket can
+   hold, per arsenal plan §5) had no home under any phasing.
+3. **Three batches were too large to playtest independently** — old 6D
+   carried two new subsystems, old 6F carried all six of the catalogue's
+   expensive-to-render transformative gems.
+
+**The owner settled four questions in one pass**, and the fourth
+answered more than it asked. Asked whether a pre-run deck must fill
+every slot, the owner's answer set the whole surrounding design: *"All
+of the slots equipped... there is no way to change weapons mid-run. And
+the player should not be offered any weapons in the pool — only
+weapon-specific extensions... support gems and core gems."* This
+reclassified finding 1 from a bug to missing UI — a full deck was always
+correct, the pre-run screen was the missing piece — and it **supersedes**
+one clause of arsenal plan §5 (*"an unlocked slot is optional to use"*),
+recorded as a deliberate, clean supersession per `CLAUDE.md`'s
+ground-truth protocol. The other three: the Phase 5 gate moves again
+(from after 6A to after 6B, since it needs both socket-fillers real to
+mean anything), a new **6B** batch is added for the seven incumbents'
+extensions, and Immolation Ring's three long-open balance gaps (no
+Overclock/Amplifier response, missing the 4C-1 damage pass) get fixed in
+that same batch rather than carried further.
+
+**Phase 6 is now nine batches** (6-0 through 6I) instead of six, with no
+change to the 18-weapon/65-gem catalogue itself — only re-sequencing and
+one added batch. Full table: `docs/plans/phase-6-roadmap.md` §3.
+
+**Verified live**, not just by the test suite: every weapon row renders
+and is selectable; the capacity refusal actually refuses a click on a
+disabled checkbox; a genuinely non-default deck (Chain/Poison/Immolation
+Ring) equipped, rendered its weapon-tray chips and in-game visuals
+correctly, and survived `Try Again` into a fresh run; the level-up card
+pool offered only extensions and a core gem for that deck, no weapon
+card anywhere; `Change Loadout` opened pre-checked with the run's actual
+deck and `Back` returned to the game-over screen rather than the start
+screen; the pre-existing 5C inventory screen (sharing the same
+`renderWeaponRow`) showed no regression. One run of testing crossed the
+project's own documented Vite self-reload quirk mid-session (BACKLOG) —
+recognized from its signature (a duplicate `[vite] connecting/connected`
+pair) and re-verified cleanly afterward, not mistaken for a new bug.
+
+**Not committed or pushed** — the owner's explicit instruction this
+session was to report when 6-0 was achieved, not to commit.
+
+**Planned** — **Phase 6A** next (Amplifier + Behaviour gems, deleting the
+legacy `damage`/`atkSpeed` passives in the same batch), per the
+re-planned order. No blockers.
+
+### 2026-08-08 — Phase 5C: the pause + inventory screen ships. Decision 72. Phase 5 closes.
 
 **Full account:** `docs/plans/phase-5c-inventory-ui.md` — status header,
 §8's order-of-work table, the two notes at the bottom on the

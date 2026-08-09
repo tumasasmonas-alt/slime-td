@@ -47,7 +47,7 @@ function showUpgradeCards(refs: CardRefs, state: GameState): void {
   for (const choice of choices) {
     const div = document.createElement('div');
     const { icon, name, rank, desc } = describeCard(choice);
-    div.className = 'card' + (choice.kind === 'newWeapon' ? ' new' : '');
+    div.className = 'card';
     div.innerHTML = `<div class="icon">${icon}</div><div class="name">${name}</div><div class="rank">${rank}</div><div class="desc">${desc}</div>`;
     div.addEventListener('click', () => selectCard(refs, state, choice));
     refs.cards.appendChild(div);
@@ -56,11 +56,6 @@ function showUpgradeCards(refs: CardRefs, state: GameState): void {
 }
 
 function describeCard(choice: CardChoice): { icon: string; name: string; rank: string; desc: string } {
-  if (choice.kind === 'newWeapon') {
-    const def = WEAPON_DEFS[choice.key];
-    if (!def) throw new Error(`No weapon def for ${choice.key}`);
-    return { icon: def.icon, name: def.name, rank: 'NEW WEAPON', desc: def.desc(1) };
-  }
   if (choice.kind === 'extension') {
     const weaponDef = WEAPON_DEFS[choice.weaponKey];
     return {

@@ -5,22 +5,23 @@ import {
   PLACEHOLDER_EXTENSION_MAX_LEVEL,
 } from '../tuning/extensions';
 import { PASSIVE_DEFS } from '../tuning/passives';
-import { WEAPON_DEFS } from '../tuning/weapons';
 import type { PassiveKey, WeaponKey } from '../types';
 import { freeSlots } from './sockets';
 
 // Phase 5B (docs/plans/phase-5b-framework.md S4): weapon LEVEL cards are
 // gone entirely (Decision 40) — weapon power comes only from
 // state.enhancementPool spend (S3), never a card pick. Cards now grant
-// *access* (a new weapon, a new extension level, a core gem) rather than
-// power directly.
+// *access* (a new extension level or a core gem) rather than power
+// directly.
 //
-// Kept in systems/ rather than ui/upgradeCards.ts, which now just wires
-// this to the DOM — pure pool/pick/apply logic is unit-testable directly
-// without a DOM environment, matching how the rest of this project
-// separates logic from rendering.
+// Phase 6-0 (docs/plans/phase-6-0-weapon-select.md S4): the pool never
+// offers a weapon either, by the project owner's 2026-08-09 rule — the
+// deck is chosen once, before the run, on the pre-run select screen, and
+// is fixed for the run's duration. The `newWeapon` kind that used to live
+// here is deleted outright, not merely unreachable: it was already dead
+// in practice (the starting deck always filled every slot), and Phase
+// 6-0 makes that permanent by design rather than by accident.
 export type CardChoice =
-  | { kind: 'newWeapon'; key: WeaponKey }
   | { kind: 'extension'; weaponKey: WeaponKey; extKind: string; nextLevel: 1 | 2 | 3 }
   | { kind: 'coreGem'; key: CoreGemKey }
   | { kind: 'passive'; key: PassiveKey; nextLevel: number; isNew: boolean }
@@ -39,19 +40,14 @@ function findExtension(state: GameState, weaponKey: WeaponKey, extKind: string):
   return state.weaponSockets[weaponKey]?.extensions.find((e) => e.kind === extKind);
 }
 
-// New-weapon and extension candidates — gated on free deck slots and free
-// weapon sockets respectively, so a dead card (nowhere to put the pick)
-// is never offered. Legacy passives (damage/atkSpeed) are pooled in here
-// too since they still compete for the same 4 draw slots.
+// Extension candidates, gated on free weapon sockets so a dead card
+// (nowhere to put the pick) is never offered. Legacy passives
+// (damage/atkSpeed) are pooled in here too since they still compete for
+// the same 4 draw slots. No weapon ever appears here (S4 above) — every
+// key in state.weapons was fixed by the pre-run select screen and stays
+// fixed for the run's duration.
 export function buildWeaponSidePool(state: GameState): CardChoice[] {
   const pool: CardChoice[] = [];
-
-  const equippedCount = Object.keys(state.weapons).length;
-  if (equippedCount < state.weaponSlots) {
-    for (const key of Object.keys(WEAPON_DEFS) as WeaponKey[]) {
-      if (state.weapons[key] === undefined) pool.push({ kind: 'newWeapon', key });
-    }
-  }
 
   for (const key of Object.keys(state.weapons) as WeaponKey[]) {
     if (freeSlots(state, key) <= 0) continue;
@@ -119,14 +115,7 @@ export function pickCards(state: GameState): CardChoice[] {
 // ui/upgradeCards.ts's DOM/overlay bookkeeping (closing the card panel,
 // re-showing it for a queued level-up) so it's testable directly.
 export function applyCardChoice(state: GameState, choice: CardChoice): void {
-  if (choice.kind === 'newWeapon') {
-    // Starts at 1 point invested, matching the starting kit's convention
-    // (main.ts) — every weapon formula assumes lvl >= 1 as its floor, and
-    // state.weapons[key] truthiness is how every weapons/*.ts file checks
-    // "is this equipped" (docs/plans/phase-5b-framework.md S2). Further
-    // power comes only from enhancementPool spend (5C), never from here.
-    state.weapons[choice.key] = 1;
-  } else if (choice.kind === 'extension') {
+  if (choice.kind === 'extension') {
     const sockets = (state.weaponSockets[choice.weaponKey] ??= { extensions: [], gems: [] });
     const existing = sockets.extensions.find((e) => e.kind === choice.extKind);
     if (existing) existing.level = choice.nextLevel;

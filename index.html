@@ -260,9 +260,6 @@
         color: var(--muted);
         line-height: 1.5;
       }
-      .card.new .rank {
-        color: #a8ffb0;
-      }
 
       #announce {
         position: absolute;
@@ -416,6 +413,18 @@
       .socket-dot.filled {
         color: var(--accent);
       }
+      .weapon-row-toggle {
+        width: 17px;
+        height: 17px;
+        cursor: pointer;
+        accent-color: var(--accent);
+      }
+      .weapon-row-selected {
+        border-color: var(--accent);
+      }
+      .weapon-row-disabled {
+        opacity: 0.35;
+      }
       #inventory-core-label {
         font-size: 10px;
         letter-spacing: 0.15em;
@@ -481,6 +490,29 @@
       button.primary:active {
         transform: translateY(3px);
         box-shadow: 0 3px 0 #1c6570;
+      }
+      button.primary:disabled {
+        opacity: 0.35;
+        cursor: default;
+        box-shadow: none;
+        transform: none;
+      }
+      .deck-line {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 14px;
+        font-size: 18px;
+      }
+      .deck-line-icon {
+        opacity: 0.9;
+      }
+      #weapon-select-counter {
+        font-size: 12px;
+        color: var(--gold);
+        letter-spacing: 0.05em;
+        margin-bottom: 14px;
+        text-align: center;
       }
       .kv {
         display: flex;
@@ -560,6 +592,8 @@
           Survive the escalating outbreak.
         </div>
         <button class="primary" id="start-btn">Start Run</button>
+        <div><button class="secondary" id="choose-weapons-btn" type="button">Choose Weapons</button></div>
+        <div class="deck-line" id="start-deck-line"></div>
       </div>
     </div>
 
@@ -571,6 +605,18 @@
         <div class="kv"><span>Level Reached</span><b id="go-level">1</b></div>
         <div class="kv"><span>Purged</span><b id="go-kills">0</b></div>
         <div style="margin-top: 22px"><button class="primary" id="restart-btn">Try Again</button></div>
+        <div><button class="secondary" id="change-loadout-btn" type="button">Change Loadout</button></div>
+        <div class="deck-line" id="gameover-deck-line"></div>
+      </div>
+    </div>
+
+    <div id="weapon-select-overlay" class="overlay hidden">
+      <div class="panel panel-wide">
+        <div id="upgrade-title">Choose Your Loadout</div>
+        <div id="weapon-select-counter"></div>
+        <div id="weapon-select-list"></div>
+        <button class="primary" id="weapon-select-start-btn" type="button" disabled>Start Run</button>
+        <button class="secondary" id="weapon-select-back-btn" type="button">Back</button>
       </div>
     </div>
 

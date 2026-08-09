@@ -6,9 +6,7 @@ import { minPointsForSockets, occupiedSlots } from '../systems/sockets';
 
 // Shared between Phase 5C's inventory screen and Phase 6-0's pre-run
 // weapon select (docs/plans/phase-5c-inventory-ui.md S6) — one row
-// layout, two callers, so the weapon list isn't built twice. 'select'
-// has no live caller yet; its branch is deliberate minimal scaffolding
-// for Phase 6-0 to build on, not a guess at everything that screen needs.
+// layout, two callers, so the weapon list isn't built twice.
 export type WeaponRowMode = 'loadout' | 'select';
 
 export interface WeaponRowHandlers {
@@ -17,12 +15,24 @@ export interface WeaponRowHandlers {
   onToggle?: (key: WeaponKey) => void; // 'select' mode only
 }
 
+// 'select' mode's checkbox state. Lives outside GameState — the pre-run
+// deck is not run state (docs/plans/phase-6-0-weapon-select.md S5), so
+// unlike 'loadout' mode this can't be read off `state`. `disabled` means
+// the deck is already at its required size and this row isn't part of
+// it; the row stays enabled if it's the one that's currently checked, so
+// unchecking always works.
+export interface WeaponRowSelectState {
+  selected: boolean;
+  disabled: boolean;
+}
+
 export function renderWeaponRow(
   key: WeaponKey,
   lvl: number,
   mode: WeaponRowMode,
-  state: GameState,
+  state: GameState | undefined,
   handlers: WeaponRowHandlers,
+  selectState?: WeaponRowSelectState,
 ): HTMLElement {
   const def = WEAPON_DEFS[key];
 
@@ -35,16 +45,38 @@ export function renderWeaponRow(
   row.appendChild(header);
 
   if (mode === 'loadout') {
+    if (!state) throw new Error('loadout mode requires state');
     renderLoadoutControls(row, header, key, lvl, def, state, handlers);
   } else {
-    const toggle = document.createElement('input');
-    toggle.type = 'checkbox';
-    toggle.className = 'weapon-row-toggle';
-    toggle.addEventListener('change', () => handlers.onToggle?.(key));
-    header.appendChild(toggle);
+    renderSelectControls(row, header, key, def, handlers, selectState);
   }
 
   return row;
+}
+
+function renderSelectControls(
+  row: HTMLElement,
+  header: HTMLElement,
+  key: WeaponKey,
+  def: (typeof WEAPON_DEFS)[WeaponKey],
+  handlers: WeaponRowHandlers,
+  selectState: WeaponRowSelectState | undefined,
+): void {
+  const toggle = document.createElement('input');
+  toggle.type = 'checkbox';
+  toggle.className = 'weapon-row-toggle';
+  toggle.checked = selectState?.selected ?? false;
+  toggle.disabled = (selectState?.disabled ?? false) && !toggle.checked;
+  toggle.addEventListener('change', () => handlers.onToggle?.(key));
+  header.appendChild(toggle);
+
+  row.classList.toggle('weapon-row-selected', selectState?.selected ?? false);
+  row.classList.toggle('weapon-row-disabled', toggle.disabled);
+
+  const stats = document.createElement('div');
+  stats.className = 'weapon-row-stats';
+  stats.textContent = def?.stats(1) ?? '';
+  row.appendChild(stats);
 }
 
 function renderLoadoutControls(

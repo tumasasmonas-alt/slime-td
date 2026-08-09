@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freshState } from '../state';
-import { applyCardChoice, buildCoreGemPool, buildWeaponSidePool, pickCards, shuffled } from './cards';
+import { applyCardChoice, buildCoreGemPool, buildWeaponSidePool, pickCards, shuffled, type CardChoice } from './cards';
 
 describe('shuffled', () => {
   it('returns a permutation — same elements, same length', () => {
@@ -19,7 +19,7 @@ describe('shuffled', () => {
 });
 
 describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', () => {
-  it('never offers a weapon-level card kind — only newWeapon/extension/passive', () => {
+  it('never offers a weapon-level card kind — only extension/passive', () => {
     const state = freshState();
     state.weapons.bolt = 5;
     const pool = buildWeaponSidePool(state);
@@ -28,25 +28,22 @@ describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', ()
     }
   });
 
-  it('gates new-weapon cards on free deck slots', () => {
-    const state = freshState();
-    state.weaponSlots = 1;
-    state.weapons.bolt = 1; // fills the only slot
-
-    const pool = buildWeaponSidePool(state);
-    expect(pool.some((c) => c.kind === 'newWeapon')).toBe(false);
-  });
-
-  it('offers new-weapon cards for every unequipped weapon while a slot is free', () => {
+  // Phase 6-0 (docs/plans/phase-6-0-weapon-select.md S4): the pool never
+  // offers a weapon at all, by the project owner's 2026-08-09 rule — the
+  // deck is chosen once, on the pre-run select screen, and is fixed for
+  // the run. Written as an invariant over CardChoice['kind'] rather than
+  // checking for the absence of a deleted variant, so it stays meaningful
+  // if a future card kind is ever added.
+  it('never offers a card that would change which weapons are equipped', () => {
     const state = freshState();
     state.weaponSlots = 3;
     state.weapons.bolt = 1;
 
     const pool = buildWeaponSidePool(state);
-    const newWeaponKeys = pool.filter((c) => c.kind === 'newWeapon').map((c) => (c.kind === 'newWeapon' ? c.key : null));
-    expect(newWeaponKeys).not.toContain('bolt'); // already equipped
-    expect(newWeaponKeys).toContain('blades');
-    expect(newWeaponKeys).toContain('immolation');
+    const allowedKinds: CardChoice['kind'][] = ['extension', 'coreGem', 'passive', 'heal'];
+    for (const c of pool) {
+      expect(allowedKinds).toContain(c.kind);
+    }
   });
 
   it('never offers an extension for a weapon with no free socket', () => {
@@ -150,7 +147,6 @@ describe('pickCards — core-gem cadence (settled 2026-08-08: every second level
   it('falls back to heal when nothing at all is offerable', () => {
     const state = freshState();
     state.tower.level = 3; // odd, no core slot
-    state.weaponSlots = 0; // no new weapons
     state.coreGems = ['maxHp', 'regen', 'armor'];
     state.passives.damage = 8; // maxLevel, no more legacy passive cards
     state.passives.atkSpeed = 8;
@@ -161,12 +157,6 @@ describe('pickCards — core-gem cadence (settled 2026-08-08: every second level
 });
 
 describe('applyCardChoice', () => {
-  it('newWeapon starts a weapon at 1 point invested, matching the equipped-check truthy pattern', () => {
-    const state = freshState();
-    applyCardChoice(state, { kind: 'newWeapon', key: 'frost' });
-    expect(state.weapons.frost).toBe(1);
-  });
-
   it('extension: first pick creates the socket entry at level 1', () => {
     const state = freshState();
     applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 1 });

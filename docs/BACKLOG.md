@@ -20,37 +20,40 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🟡 Phase 6-0 — minimal pre-run weapon select
+### ✅ Phase 6-0 — the pre-run weapon select. Shipped 2026-08-09, not yet committed.
 
-**Phase 5 is fully shipped and complete: 5A, 5B and 5C.** 5A (Decision 70)
-put every weapon on a shared pipeline; 5B (Decision 71) built the
-enhancement/socket/card-pool economy; 5C (Decision 72) built the screen
-that makes it usable — the `+/-` control, live per-weapon stats, socket
-dots that visibly grow with investment, and a core-gem row. Opened by a
-HUD button, and reachable mid-level-up via a "Manage Loadout" button that
-returns to the pending cards on close rather than discarding them. **No
-outstanding items in Phase 5.**
+Full account: `docs/plans/phase-6-0-weapon-select.md` (its own status
+header, §7 tests, §8's order-of-work, and its "what changed during
+implementation" note). The Phase 6 re-plan that scheduled it and settled
+its design questions: `docs/plans/phase-6-roadmap.md`.
 
-**5C found and fixed a real bug in 5B's plumbing**: `withdrawPoints()`
-removed points from a weapon but never credited them back to
-`enhancementPool` — harmless with no live caller in 5B, a real bug the
-moment 5C's `−` button became one.
+**What shipped:** a `Choose Weapons` / `Change Loadout` overlay reachable
+from the start and game-over screens, enforcing an exact-count deck
+(`state.weaponSlots`, currently 3) with a visible capacity refusal on
+unselected rows; a deck line of weapon icons on both screens so the
+current selection is legible without opening anything; `Try Again`
+keeping the deck (in-memory, not `localStorage` — the owner asked for
+session persistence, not cross-reload); and the `newWeapon` card kind
+deleted outright from `systems/cards.ts`, since the owner's 2026-08-09
+rule is that the pool never offers a weapon at all. 393/393 tests,
+typecheck clean, build clean, verified live (§8 of the plan).
 
-**Next up is Phase 6-0**: a minimal pre-run weapon select — a separate
-button beside Start, with a working default deck so restarts stay one
-click. Reuses `ui/weaponRow.ts`'s `'select'` mode, scaffolded in 5C for
-exactly this. Then **6A** (the first real support gems — Amplifier +
-Behaviour, 17 free / 3 modifier / 0 new on the visual-cost table, the
-cheapest possible batch to prove the architecture on), followed by **the
-Phase 5 gate**, moved here from directly after 5C since it can't judge
-"decision or slider" with empty sockets.
+**This also resolves the "four weapons unreachable" finding** below, by
+design rather than by patch — see that entry.
 
-**The arsenal design is settled at revision 3**
-(`docs/plans/phase-5-6-arsenal.md`) — 18 weapons, 65 support gems in six
-classes, a visual-cost classification (§9½: 43 free, 16 shared-modifier,
-6 genuinely new) that swapped Phase 6's E/F batch order so weapons
-establish rendering vocabulary before gems generalise it. Full phasing
-in that doc's §13.
+**Next up is 6A** (the first real support gems — Amplifier + Behaviour,
+17 free / 3 modifier / 0 new on the visual-cost table), then the new
+**6B** (real extensions for the seven incumbent weapons, Immolation
+Ring's visual and its three balance fixes), then **the Phase 5 gate**,
+which the 2026-08-09 re-plan moved from after 6A to after 6B — it can't
+judge "decision or slider" while one of the two things a socket can hold
+is still a placeholder. Full nine-batch phasing: `docs/plans/phase-6-roadmap.md` §3.
+
+**The arsenal catalogue itself is unchanged** — 18 weapons, 65 support
+gems in six classes, the §9½ visual-cost classification. Nothing in the
+2026-08-09 re-plan reopens `docs/plans/phase-5-6-arsenal.md`; it only
+re-sequenced the batches and filled the extension-scheduling gap that
+plan's own §13 table had left open.
 
 ### Phase 5 (5A/5B/5C) — done, for reference
 
@@ -111,8 +114,8 @@ Full detail in the session record §17.
 | **5A** | ✅ The weapon pipeline (Decision 70) — seven weapons on ready/acquire/deliver, Ward Pulse promoted to Immolation Ring |
 | **5B** | ✅ Enhancement/socket/card-pool economy (Decision 71) — weapon-level cards gone, core gems, socket ladder |
 | **5C** | ✅ Pause + inventory UI (Decision 72) — +/- spending, socket dots, core row, manage-loadout round trip. **Phase 5 complete.** |
-| **6-0** | Minimal pre-run weapon select → **next up**, reuses `ui/weaponRow.ts`'s 'select' mode |
-| **6** | Arsenal content — design session done (`docs/plans/phase-5-6-arsenal.md`); batches per §13, gated by **the Phase 5 gate** after 6A |
+| **6-0** | ✅ Pre-run weapon select — shipped 2026-08-09, not yet committed. Reused `ui/weaponRow.ts`'s 'select' mode. |
+| **6** | Arsenal content — re-planned into nine batches 2026-08-09 (`docs/plans/phase-6-roadmap.md`), **next: 6A**, gated by **the Phase 5 gate** after the new 6B |
 | **7** | Meta — currency, unlocks, persistent deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |
 | **9** | VFX and feel |
@@ -182,6 +185,21 @@ Overclock gap with a regression test so it isn't undone by accident.
 join its six siblings on all three is the owner's decision. Natural home
 is Phase 6B, when the weapon gets its actual content pass (visual,
 extensions, attributes) alongside the rest of the new roster.
+
+**Raised again 2026-08-09 and still awaiting the owner's call.** The
+proposed Phase 6 re-phasing (`docs/plans/phase-6-roadmap.md`) gives it a
+concrete home: **6B**, the incumbent-weapon content batch, which is also
+where Immolation's missing visual and its three real extensions land. All
+four gaps on this weapon then close in one pass rather than being
+revisited four times.
+
+**A fifth gap belongs on this list, found 2026-08-09:** Immolation Ring
+also still carries `maxLevel: 6` while the other six carry `8`. Weapon
+`maxLevel` is now **dead data** — arsenal plan §6 retired it outright (no
+cap, no diminishing returns) and 5B removed the last code path that read
+it, but the field was never deleted from `WeaponDef`. Harmless today,
+misleading to anyone reading the defs. Delete the field in 6B alongside
+the rest of this entry rather than as its own errand.
 
 ### 🟡 Infection events fire too often at the start of a run
 *Found in the 2026-08-07 Phase 3D playtest.* The owner's read: the opening
@@ -593,6 +611,18 @@ relentless than discrete jumps. Purely speculative.
 
 Kept short — for resolutions whose *reasoning* is worth remembering.
 Anything that's just "built the thing" lives in git and PROGRESS.md.
+
+- **Four built weapons (Blades, Frost, Missile, Immolation Ring) were
+  unreachable in any run.** *(Found and fixed 2026-08-09, Phase 6-0.)*
+  `startRun()` always equipped exactly 3 weapons and `weaponSlots` was
+  always 3, so the `newWeapon` card's free-slot gate was permanently
+  false — both halves individually correct, an interaction neither the
+  380 nor 389 tests caught. Resolved by design, not by patch: the owner's
+  2026-08-09 rule that the pool never offers a weapon at all made
+  `newWeapon` dead code by definition, and the pre-run select screen
+  (`docs/plans/phase-6-0-weapon-select.md`) is now the sole way any
+  weapon is equipped. Verified live — a Blades/Chain/Immolation deck
+  equipped, rendered and ran correctly.
 
 - **Resize used to mean "see more world."** *(Phase 1)* The prototype sized
   its grid to the window, so a wider monitor was a measurably easier game

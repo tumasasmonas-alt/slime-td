@@ -27,8 +27,9 @@ import { runSimulation } from './systems/tick';
 import { updateTowerTick } from './systems/tower';
 import { initHud, updateAnnounceFade, updateHud } from './ui/hud';
 import { closeInventory, initInventory, openInventory } from './ui/inventory';
-import { hideOverlays, initOverlays, showGameOver } from './ui/overlays';
+import { hideOverlays, initOverlays, refreshDeckLines, showGameOver } from './ui/overlays';
 import { initUpgradeCards, syncUpgradeOverlay } from './ui/upgradeCards';
+import { closeWeaponSelect, initWeaponSelect, openWeaponSelect, resolveDeck } from './ui/weaponSelect';
 import { updateBladesWeapon } from './weapons/blades';
 import { updateBoltWeapon } from './weapons/bolt';
 import { updateChainWeapon } from './weapons/chain';
@@ -53,8 +54,14 @@ const hudRefs = initHud();
 // long after the whole module has finished initializing. Same pattern
 // `initOverlays(startRun)` below already relies on.
 const cardRefs = initUpgradeCards(handleOpenInventoryFromLevelUp);
-const overlayRefs = initOverlays(startRun);
+const overlayRefs = initOverlays(startRun, handleOpenWeaponSelect);
 const inventoryRefs = initInventory('loadout-btn', 'inventory-close-btn', handleOpenInventoryFromHud, handleCloseInventory);
+// Phase 6-0 (docs/plans/phase-6-0-weapon-select.md S3): the overlay's own
+// Start button starts a run directly (same callback as Start Run/Try
+// Again); Back just closes it, leaving whichever of the start/game-over
+// screens opened it visible underneath — neither is ever hidden by
+// opening this one on top of it.
+const weaponSelectRefs = initWeaponSelect('weapon-select-start-btn', 'weapon-select-back-btn', startRun, handleCloseWeaponSelect);
 // Tracks which of the two entry points opened the inventory, so closing
 // it knows whether to resume the run or re-show the pending level-up
 // cards rather than silently discarding them.
@@ -80,16 +87,33 @@ function startRun(): void {
   state.grid = buildGrid();
   state.slimeLayer = initSlimeLayer(state.grid);
   state.running = true;
-  // Phase 5B (docs/plans/phase-5b-framework.md S12.4): the settled
-  // starting kit is Bolt/Chain/Poison — single-target, multi-target, area
-  // denial, the three tactical roles rather than three delivery types.
-  // Matches state.weaponSlots' starting count of 3 exactly.
-  state.weapons.bolt = 1;
-  state.weapons.chain = 1;
-  state.weapons.poison = 1;
+  // Phase 6-0 (docs/plans/phase-6-0-weapon-select.md S1): the deck is
+  // chosen on the pre-run select screen and immutable for the run's
+  // duration — no mid-run weapon changes, ever, per the project owner's
+  // 2026-08-09 call. resolveDeck() falls back to the default kit
+  // (Bolt/Chain/Poison, arsenal plan S12.4) if the stored deck's size
+  // ever disagrees with weaponSlots, which can't happen yet but will
+  // once Phase 7 lets a player buy a slot mid-meta.
+  for (const key of resolveDeck(state.weaponSlots)) {
+    state.weapons[key] = 1;
+  }
   hideOverlays(overlayRefs);
   closeInventory(inventoryRefs); // defensive — nothing reaches this mid-run today, but a fresh run should never inherit a stuck overlay
+  closeWeaponSelect(weaponSelectRefs); // defensive, same reasoning — a run starting from the select screen's own Start button must not leave it open underneath
+  refreshDeckLines(overlayRefs);
   updateHud(hudRefs, state);
+}
+
+// Phase 6-0 (docs/plans/phase-6-0-weapon-select.md S3): opened from either
+// the start screen's "Choose Weapons" button or the game-over screen's
+// "Change Loadout" button — both wired to this same handler by
+// ui/overlays.ts, which owns those two screens.
+function handleOpenWeaponSelect(): void {
+  openWeaponSelect(weaponSelectRefs, state.weaponSlots);
+}
+
+function handleCloseWeaponSelect(): void {
+  closeWeaponSelect(weaponSelectRefs);
 }
 
 // Phase 5C (docs/plans/phase-5c-inventory-ui.md S5): opened either from
