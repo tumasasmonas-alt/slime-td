@@ -184,6 +184,151 @@ option is the fix if that bites — don't reuse the field.
 
 ## Bugs and known limitations
 
+### Found in the 2026-08-09 post-6A playtest — the owner's first run on real gems
+
+*Six findings, raised 2026-08-09 immediately after Phase 6A shipped. The
+owner's own framing: "I have play tested the game, which I know is not
+the time."* Triaged below; three are structural rather than balance
+noise, and **#2 and #5 both damage the loop 6A just built**, which is why
+they aren't simply parked for Phase 8 with the rest of the balance work.
+
+#### 🔴 1. The XP curve cannot keep up — still levelling every few seconds at level 50
+
+*Owner: "its ok at the start but im playing at lvl 50 and i level up
+every few seconds still, that is not the intended behavior."*
+
+**This is not a coefficient problem, it's a curve-class problem** — worth
+stating precisely, because raising the constants will not fix it:
+
+- **Cost** is quadratic: `xpToNext(L) = 0.45L² + 6.5L + 12`
+  (`tuning/xp.ts`). At L=10 it's 122; at L=50, 1462 — only ~12× over 40
+  levels.
+- **Income** is proportional to destroyed mass (`gemValueFromRemoved`,
+  `removed * 1.3`, uncapped by deliberate design — Decision 31), so XP
+  per second is proportional to **DPS**.
+- DPS now grows *multiplicatively* in level: enhancement points scale each
+  weapon, and 6A's Amplifier gems multiply damage × area × rate on top,
+  compounding.
+
+Time per level is `O(L²) / O(DPS)`. Once DPS grows faster than
+quadratically — which gem multipliers make near-certain — **time per level
+stops rising and starts falling**, which is exactly the reported symptom.
+No value of `XP_QUADRATIC` fixes a curve that is the wrong *shape*; the
+cost curve needs to grow at least as fast as the power curve
+(geometric/exponential, e.g. a per-level growth factor), or income needs a
+counter-scaling term.
+
+**Decision 61 explicitly sanctions this lever** — *"the pacing lever for
+levelling is what a level costs, never what a kill grants"* — and its own
+note says the curve is *"not finalized."* So retuning is in-bounds. But
+changing the curve's **class** (quadratic → geometric) goes beyond
+retuning its constants, so it wants an explicit owner call rather than
+being done silently. **Do not fix this by nerfing granted XP** — that
+breaks Decision 31's anti-farming guarantee, which depends on granted XP
+staying honest to destroyed mass.
+
+Related: **#6 below is the same root cause.** Enhancement points and gems
+arrive at 1 per level, so a level rate that never slows is *also* the
+reason points and gems feel over-abundant. Fixing the curve likely fixes
+both; that's the thing to try before tuning point/gem grant rates
+separately.
+
+#### 🔴 2. The card pool goes permanently dead once sockets fill — only "Emergency Repair" is offered
+
+*Owner: "When i have no open sockets in the weapons, im only offered
+'emergency repair' and nothing else."*
+
+**Confirmed structural, and it is guaranteed to happen in every long
+run** — not an edge case:
+
+- The socket ladder tops out at **5 sockets per weapon** (24 points,
+  `SOCKET_THRESHOLDS = [0, 3, 8, 15, 24]` in `tuning/sockets.ts`). A
+  3-weapon deck therefore has a hard ceiling of **15 sockets**.
+- `buildWeaponSidePool` skips a weapon's extension when
+  `freeSlots(state, key) <= 0`, and every gem is gated on
+  `gemHasLegalHome`, which itself requires `freeSlots > 0`.
+- `buildCoreGemPool` returns `[]` once all 3 core sockets are filled.
+- So `pickCards` falls through to its `[{ kind: 'heal' }]` fallback —
+  **forever**, from the moment the last socket fills.
+
+Levels are unbounded; sockets are hard-capped. The two were never
+reconciled. The no-dead-card rule (arsenal plan §11) is working exactly
+as written — every individual card correctly refuses to be a dead pick —
+but nobody specified what the pool should offer when *everything* is
+legitimately dead, so the emergency fallback became the steady state.
+
+**Note 6B does not fix this and slightly worsens it**: real extensions add
+three more things per weapon competing for the *same* 15 sockets. This
+needs its own answer. Options, none chosen: extend the socket ladder past
+24 points; let the pool offer duplicate/upgrade gems; add a
+convert-gems-to-something sink; make the fallback genuinely valuable
+(currency, a reroll, a heal that scales) rather than a placeholder.
+
+#### 🟡 4. Core gems cannot be unsocketed
+
+*Owner: "I cannot unsocket the core gems."* Confirmed — `renderCoreRow`
+in `ui/inventory.ts` is pure display, with no click handler at all, while
+weapon gems have had click-to-unsocket since 6A-1. An inconsistency the
+player has no way to explain.
+
+**Two real design questions block a straight fix**, which is likely why
+it was never built:
+
+1. **There is no core-gem inventory to return one to.** `applyCardChoice`
+   writes `state.coreGems[idx] = key` and bumps `state.passives[key]`;
+   `state.gemInventory` holds weapon gems only. Unsocketing needs
+   somewhere for it to go, or it destroys the gem — which would violate
+   the *"no destructive respec, ever"* rule (arsenal plan §5, call 13)
+   that `withdrawPoints()` and `unsocketGem()` both already honour.
+2. **`maxHp` has an irreversible side effect.** Socketing it does
+   `state.tower.maxHp += 20` *and* heals 20. Unsocketing must decide what
+   happens if current HP now exceeds the reduced max — and a
+   socket/unsocket loop must not become a heal exploit.
+
+#### 🟡 5. Socketing is unclear enough that the owner doubted it worked at all
+
+*Owner: "the area that you need to click to socket the gems is very
+unclear, the empty support socket is too small and unintuitive... we need
+to make it way more UI/UX friendly... Even I second guessed if it worked
+or is there a bug that you cant socket anything."*
+
+**This is the project's own worst-known failure mode recurring.** The
+2026-08-05 playtest finding — *"cards appear to do nothing"* — is cited
+across the design docs as the thing to design against, and 6A-1 built the
+open-the-picker-on-pick flow (§10 Q1) specifically to avoid rebuilding
+it. It got rebuilt one layer down: the *pick* is now visible, but the
+*socket* is not.
+
+Concretely, in `ui/weaponRow.ts`:
+- An empty socket is a bare `○` text glyph with no padding, no minimum
+  hit area, and no label — a click target a few pixels across.
+- Its only affordance is a `title` tooltip, which requires already
+  suspecting it's clickable.
+- **There is no persistent view of owned gems.** The only way to see
+  inventory is to click an empty socket to open that weapon's picker,
+  which filters to gems legal *for that weapon* — so an unsocketed gem
+  that fits nothing currently equipped is invisible everywhere.
+
+The owner's requested shape: **a persistent inventory panel beside the
+loadout screen showing all owned gems**, plus a genuinely legible
+socketing interaction. Worth treating as real UI work, not a CSS tweak —
+5C's screen only ever rendered and incremented, and this is the first
+interaction in it that a player must *discover*.
+
+#### 🟢 3 and 6. Slime balance, and point/gem abundance
+
+**#3 (slime balance)** — the owner explicitly deferred it: *"Balancing of
+the slime is very needed, but later."* Belongs with the **Phase 8**
+balance pass alongside `CONTACT_SCALE`/`CREEP_RAMP`; see the *Balance
+pass* entry under *Now*. No action.
+
+**#6 (too many points and gems)** — *"maybe that can be fixed with XP
+required curve drastically increased."* Almost certainly right, and it is
+the same root cause as **#1**: both grant rates are keyed to level-ups (1
+enhancement point per level; gem cards every level-up; a bundle every 5).
+Fix the curve first, then re-measure — tuning the grant rates
+independently before that would be tuning against a moving target.
+
 ### Found in the 2026-08-05 playtest — all absorbed by the rework
 
 **None of these are worth fixing before their phase.** Every one sits
