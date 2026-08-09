@@ -1,24 +1,30 @@
-# Phase 6A-3 — the loop fixes from the post-6A playtest
+# Phase 6A-3 — the loop fixes, and the inventory that makes sockets legible
 
-**Status:** 📋 **Planned 2026-08-09. Awaiting greenlight.** Nothing
+**Status:** 📋 **Planned 2026-08-09, revised the same day after talking
+the scope through with the owner. Awaiting greenlight.** Nothing
 implemented.
 
-**What this is.** A small corrective batch between 6A and 6B, addressing
-three of the six findings from the owner's first playtest on real gems.
-Not new content — every item here is something 6A shipped that doesn't
-survive contact with a real run.
+> **Revision note.** A first draft of this plan was written before the
+> owner had seen it, and was too narrow — it treated the socketing
+> complaint as a click-target problem and proposed keeping extensions out
+> of inventory. The owner's response (*"the inventory itself has to have
+> 3 sections for extensions, core gems and support gems"*) makes this a
+> **banking** batch, not a CSS batch. Scope below is the revised one.
+
+**What this is.** A corrective batch between 6A and 6B, fixing what the
+owner's first playtest on real gems found. Not new content — every item
+is something 6A shipped that doesn't survive contact with a real run.
 
 **Why it comes before 6B.** 6B adds three real extensions per weapon,
-which compete for the same sockets and arrive through the same card pool
-and the same socketing UI. Both are currently broken in ways that would
-make 6B's content unevaluable: the pool goes dead, and the socketing
-interaction is unclear enough that the owner doubted it functioned at
-all. It is also what the **Phase 5 gate** needs — that gate cannot judge
-*"is enhancement a decision or a slider?"* while the pool offers only
-Emergency Repair.
+arriving through the same card pool and the same socketing UI that are
+both currently broken. Building content on top of that means it can't be
+evaluated. It is also what the **Phase 5 gate** needs: that gate cannot
+judge *"is enhancement a decision or a slider?"* while the pool offers
+only Emergency Repair. After this batch, 6B adds extension *content* onto
+finished plumbing rather than being half-plumbing itself.
 
-**Source:** the six playtest findings recorded in `docs/BACKLOG.md`
-("Found in the 2026-08-09 post-6A playtest"); the owner's four answers,
+**Source:** the six playtest findings in `docs/BACKLOG.md` ("Found in the
+2026-08-09 post-6A playtest"); the owner's answers across two rounds,
 2026-08-09; Decisions 31, 61 (the XP economy), 71 (the socket economy),
 74–75 (Phase 6A); `docs/plans/phase-5-6-arsenal.md` §5, §11.
 
@@ -29,84 +35,76 @@ Emergency Repair.
 1. [What the owner settled](#1-what-the-owner-settled)
 2. [The XP curve goes geometric](#2-the-xp-curve-goes-geometric)
 3. [The card pool stops caring about sockets](#3-the-card-pool-stops-caring-about-sockets)
-4. [Socketing becomes legible](#4-socketing-becomes-legible)
-5. [Deferred, with semantics recorded](#5-deferred-with-semantics-recorded)
-6. [Modules touched](#6-modules-touched)
-7. [Tests](#7-tests)
-8. [Order of work](#8-order-of-work)
-9. [Open questions](#9-open-questions)
-10. [Risks](#10-risks)
+4. [Everything banks — three inventories](#4-everything-banks--three-inventories)
+5. [The inventory panel, and click-to-place](#5-the-inventory-panel-and-click-to-place)
+6. [Effects move from pick-time to socket-time](#6-effects-move-from-pick-time-to-socket-time)
+7. [Modules touched](#7-modules-touched)
+8. [Tests](#8-tests)
+9. [Order of work](#9-order-of-work)
+10. [Open questions](#10-open-questions)
+11. [Risks](#11-risks)
 
 ---
 
 ## 1. What the owner settled
 
-Four answers, 2026-08-09, after the playtest.
-
 | # | Call | Consequence |
 |---|---|---|
-| 1 | **The XP curve goes geometric, now** — without measuring the DPS curve first. | §2. Accepted as unmeasured; the constant is isolated so a retune is one line. |
-| 2 | **The card pool should not care whether the player has free sockets.** *"It shouldn't matter if i have open sockets or not, i should still be offered the same pool."* | §3. **Supersedes arsenal plan §11's no-dead-card rule for gems.** |
-| 3 | **Leftover gems become currency** — a small amount on death, and the orbital trade ship recycles them mid-run. | Phase 7 work, not built here. Recorded so §3's "you will accumulate unusable gems" consequence is intentional, not an oversight. |
-| 4 | **Core gems, when unsocketing is built, return to a core-gem inventory**, and removing `maxHp` clamps current HP to the reduced maximum. | §5. Deferred — semantics recorded now so the eventual build doesn't re-litigate it. |
+| 1 | **The XP curve goes geometric, now** — the offered measurement pass was declined in favour of shipping. | §2. Accepted as unmeasured; the constant is isolated so a retune is one line. |
+| 2 | **The card pool should not care whether the player has free sockets.** *"It shouldn't matter if i have open sockets or not, i should still be offered the same pool."* | §3. **Supersedes arsenal plan §11's no-dead-card rule.** |
+| 3 | **Leftover gems become currency** — a small amount on death, and the orbital trade ship recycles them mid-run. | Phase 7. Recorded so §3's "you will accumulate unusable gems" is intentional, not an oversight. |
+| 4 | **The inventory has three sections** — extensions, core gems, support gems — **as a side panel on the loadout screen.** | §4, §5. This is what turns the batch from a CSS fix into a banking change. |
+| 5 | **Unsocketing a core gem removes what it gave.** *"If it give max hp - take it away when unsocketed."* | §6. |
+| 6 | **Extensions stay bound to their weapon** when banked — a Bolt extension only ever fits Bolt. | §4. Preserves the arsenal design's split: extensions are weapon identity, gems are the universal half. |
 
-**One sequencing note.** The owner's answer to *"what should I build
-next"* was *"just #2 and #5 now, defer #1 and #4"* — but the same set of
-answers chose *"go geometric now"* for #1 and volunteered, unprompted,
-that *"the amount of levels the player is getting currently is insane...
-I got up to lvl 80 within like what, not even 10 mins of playing."*
-**#1 is therefore treated as in scope**, on the reading that the level
-rate is upstream of the gem flood #3's answer describes. #4 stays
-deferred. Raised explicitly rather than resolved silently.
+**A sequencing note, resolved.** The owner's first answer was *"just #2
+and #5 now, defer #1 and #4."* The same round then chose *"go geometric
+now"* for #1 and volunteered that the level rate is *"insane... lvl 80
+within not even 10 mins."* And #4 (core-gem unsocket) came back into
+scope on its own once the inventory grew a core-gems section — a section
+with no way to put anything into it would be a dead panel. Both were
+raised explicitly rather than resolved silently, and the owner confirmed
+the wider slice.
 
 ---
 
 ## 2. The XP curve goes geometric
 
-**The diagnosis, restated** (full version in BACKLOG): cost is quadratic
-in level, income is proportional to DPS, and 6A's Amplifier gems make DPS
-grow multiplicatively. Time per level is `O(L²) / O(DPS)` — once DPS
-outgrows `L²`, time per level **falls**. Level 80 in under ten minutes is
-that curve crossing over.
+**The diagnosis** (full version in BACKLOG): cost is quadratic in level,
+income is proportional to DPS, and 6A's Amplifier gems make DPS grow
+multiplicatively. Time per level is `O(L²) / O(DPS)` — once DPS outgrows
+`L²`, time per level **falls**. Level 80 in ten minutes is that crossover.
 
-**The shape.** Keep the existing quadratic as the base and multiply it by
-a per-level growth factor:
+**The shape** — keep the quadratic base, multiply by a growth factor:
 
 ```
 xpToNext(L) = round( (XP_BASE + XP_LINEAR·L + XP_QUADRATIC·L²) · XP_GROWTH^(L-1) )
 ```
 
-**`XP_GROWTH^(L-1)`, not `^L`, is deliberate** — it makes `xpToNext(1)`
-come out *exactly* as it does today (19), preserving Decision 61's
-explicit intent that *"the intended early rush survives."* The curve only
-begins to diverge as the exponent bites.
+**`^(L-1)`, not `^L`, is deliberate**: it makes `xpToNext(1)` come out
+*exactly* as it does today (19), so Decision 61's explicit intent —
+*"the intended early rush survives"* — holds by construction rather than
+by luck.
 
-**First draft: `XP_GROWTH = 1.08`.** What that does, against today:
+**First draft `XP_GROWTH = 1.08`:**
 
 | Level | Today | Proposed | Multiple |
 |---|---|---|---|
 | 1 | 19 | 19 | 1.0× |
-| 5 | 56 | 76 | 1.4× |
 | 10 | 122 | 244 | 2.0× |
-| 20 | 322 | 1 390 | 4.3× |
 | 30 | 612 | 5 700 | 9.3× |
 | 50 | 1 462 | 62 300 | 43× |
 | 80 | 3 412 | 1 460 000 | 428× |
 
-Early game is untouched by construction, the mid-game bends, and the late
-game becomes geometric — which is the only class that outruns a
-multiplicative power curve.
+One named constant in `tuning/xp.ts`, so retuning is a one-line edit. It
+**is a guess** and expected to move — the measurement pass was offered and
+declined, which is a fine call, but the table above is arithmetic, not
+evidence.
 
-**`XP_GROWTH` is one named constant in `tuning/xp.ts`**, so retuning after
-a playtest is a one-line edit. It is a **first draft and expected to
-move** — every constant in this project has, and this one was chosen
-without the measurement pass that was offered and declined.
-
-**What must not change: the income side.** Decision 31's anti-farming
-guarantee depends on granted XP staying honest to destroyed mass. Nerfing
+**The income side must not change.** Decision 31's anti-farming guarantee
+depends on granted XP staying honest to destroyed mass; nerfing
 `gemValueFromRemoved` would make neglecting the field an XP strategy.
-Decision 61 already settled this — *"the pacing lever is what a level
-costs, never what a kill grants"* — and this change stays inside it.
+Decision 61 already settled that the lever is cost, never grant.
 
 ---
 
@@ -116,225 +114,257 @@ costs, never what a kill grants"* — and this change stays inside it.
 open sockets or not i should still be offered the same pool. The pool
 should not care if i have something."*
 
-This **supersedes `phase-5-6-arsenal.md` §11's no-dead-card rule as it
-applies to gems** — recorded as a deliberate, disclosed supersession per
-`CLAUDE.md`'s ground-truth protocol. §11 is not wrong; its premise
-changed. It assumed a gem you cannot socket is *worthless*, which stops
-being true once leftover gems convert to currency (call 3).
+This **supersedes `phase-5-6-arsenal.md` §11's no-dead-card rule** —
+recorded as a deliberate, disclosed supersession per `CLAUDE.md`'s
+ground-truth protocol. §11 was not wrong; **its premise changed.** It
+assumed a card you cannot socket is *worthless*. Once everything banks
+(§4) and leftovers convert to currency (call 3), an unplaceable card is
+merely *deferred*.
 
-**What changes:**
+**What changes in `systems/cards.ts`:**
 
-- `buildWeaponSidePool` stops filtering gems through `gemHasLegalHome` —
-  every gem in `ALL_GEM_KEYS` is always a candidate.
-- `buildBundlePool` stops requiring that every gem in a package has a
-  legal home.
-- Duplicates are fine. The pool does not check what the player already
-  owns or has socketed.
-- `gemHasLegalHome()` loses its only caller and is **deleted** along with
-  its tests. `gemLegalFor()` stays — the socket picker still needs it,
-  and `socketGem()` still refuses illegal placements.
+- `buildWeaponSidePool` stops filtering gems through `gemHasLegalHome`.
+- It also stops gating **extensions** on `freeSlots` — the first draft of
+  this plan kept that gate, because an extension had nowhere to bank.
+  §4 removes that reason, so the pool becomes *uniformly* socket-blind
+  rather than carrying an asymmetry that would need explaining forever.
+- `buildBundlePool` stops requiring every gem in a package to have a home.
+- `buildCoreGemPool` stops returning `[]` when all three core slots are
+  full — core gems bank too.
+- Duplicates are fine. The pool does not consult what the player owns.
+- `gemHasLegalHome()` loses its only caller and is **deleted** with its
+  tests. `gemLegalFor()` stays — the placement UI needs it, and
+  `socketGem()` still refuses illegal placements.
 
-**This deletes finding #2 at the root.** The pool can no longer go dead,
-so no gem-upgrade system, no extended socket ladder, and no scaling
-fallback needs designing. The `{ kind: 'heal' }` fallback stays as a
-genuine last resort but should now be unreachable in practice.
-
-**The asymmetry, flagged rather than decided (see §9).** Extensions
-have **no inventory to bank into** — `applyCardChoice` writes an
-extension straight into a weapon's socket, and there is no
-extension-inventory anywhere in the design (this is also why
-`withdrawPoints()` clamps rather than evicting one). So an extension card
-drawn with no free socket is *genuinely unplaceable*, not merely
-redundant. **This plan keeps the free-socket gate on extensions only**,
-and lets gems and bundles ignore sockets entirely. If the owner wants
-extensions to bank too, that is a larger change (a new inventory, a new
-placement UI) and belongs with 6B, which is where real extensions land.
+**This deletes finding #2 at the root.** No gem-upgrade system, no longer
+socket ladder, no scaling fallback. The `{ kind: 'heal' }` fallback stays
+as a genuine last resort and should become unreachable in practice.
 
 ---
 
-## 4. Socketing becomes legible
+## 4. Everything banks — three inventories
 
-**The finding.** The owner could not tell whether socketing worked:
-*"the area that you need to click to socket the gems is very unclear, the
-empty support socket is too small and unintuitive... Even I second
-guessed if it worked or is there a bug that you cant socket anything."*
+Today only support gems bank. Extensions are written straight into a
+weapon socket at pick-time and can never be removed; core gems are
+written straight into one of three fixed slots. The owner's three-section
+inventory makes all three uniform.
 
-**This is the project's own worst-known failure mode recurring.** The
-2026-08-05 *"cards appear to do nothing"* finding is cited across the
-design docs as the thing to design against, and 6A-1 built the
-open-the-picker-on-pick flow specifically to avoid it. It came back one
-layer down: the **pick** is visible now, the **socket** is not.
+**State (`state.ts`):**
 
-**Three concrete causes, all in `ui/weaponRow.ts` / `index.html`:**
+| Container | Holds | Status |
+|---|---|---|
+| `gemInventory: GemInstance[]` | support gems | exists |
+| `coreGemInventory: CoreGemInstance[]` | core gems | **new** |
+| `extensionInventory: ExtensionInstance[]` | extensions, each bound to a `weaponKey` | **new** |
 
-1. An empty socket is a bare `○` text glyph — no padding, no minimum hit
-   area, no border, no label.
-2. Its only affordance is a `title` tooltip, which you must already
-   suspect is clickable to discover.
-3. **There is no persistent view of owned gems anywhere.** The only path
-   to inventory is clicking an empty socket, which then filters to gems
-   legal *for that weapon* — so a gem that fits nothing currently equipped
-   is invisible in the entire UI. After §3 ships, the player will hold
-   many such gems, which makes this much worse.
+`ExtensionInstance` carries `{ id, weaponKey, kind }` — **bound to its
+weapon** (call 6), so a Bolt extension is only ever legal in a Bolt
+socket. This preserves the arsenal design's load-bearing split:
+extensions are weapon identity, support gems are the universal half.
+
+**A wart this removes.** `withdrawPoints()` currently *clamps* rather than
+closing a socket that holds an extension, purely because an evicted
+extension had nowhere to return to (`minPointsForSockets()` exists only
+for this). With an extension inventory, withdrawal can evict extensions
+the same way it already evicts gems, and the clamp — plus its exported
+helper and the UI code that disables the `−` button on it — can go. That
+is a genuine simplification falling out of the owner's UI request.
+
+---
+
+## 5. The inventory panel, and click-to-place
+
+**The finding.** The owner could not tell whether socketing worked at
+all: *"the area that you need to click to socket the gems is very
+unclear... Even I second guessed if it worked or is there a bug."*
+
+**The root cause is visibility, not hit area.** Today the only route to
+inventory is clicking a small empty socket, which then filters to gems
+legal *for that one weapon* — so a gem that fits nothing currently
+equipped appears **nowhere in the UI**. After §3 the player will hold
+many of those. Bigger dots would not have fixed this.
 
 **What ships:**
 
-- **A persistent gem inventory panel** beside the loadout list, showing
-  every owned gem grouped by kind with a count, its icon and name. This
-  is the owner's explicit request: *"we should have in the loadout screen
-  sort of an inventory section to the side of the loadout screen, where
-  you could see all of your available gems."*
-- **Click-to-place as the primary interaction.** Clicking a gem in the
-  panel enters a *placing* state: every socket it can legally go into
-  highlights across all weapon rows, and illegal ones visibly dim.
-  Clicking a highlighted socket places it; clicking the gem again, or
-  anywhere else, cancels.
-- **Real click targets.** An empty socket becomes a proper control — a
-  minimum ~28×28px hit area, a dashed border, a `+` glyph rather than a
-  near-invisible `○`, and a hover state. Filled gem sockets keep
-  click-to-unsocket but gain the same sizing and an explicit hover cue.
-- **An instruction line**, because discovery has already been shown to
-  fail here once: a short *"Click a gem, then an empty socket"* hint above
-  the panel. Explicit beats discoverable for an interaction this
-  load-bearing.
+- **A persistent inventory panel** beside the weapon list on the loadout
+  screen, with the owner's three sections: Extensions, Core gems, Support
+  gems. Each entry shows icon, name, and (for stacked duplicates) a
+  count. Empty sections render a quiet "None yet" rather than vanishing,
+  so the structure is legible before it is full.
+- **Click-to-place as the primary interaction.** Click an inventory entry
+  → it enters a *placing* state. Every socket it can legally enter
+  highlights; illegal ones and full weapons dim. Click a highlighted
+  socket to place; click the entry again, or press Escape, to cancel.
+  **Legality is shown, not hidden** — the current picker silently omits
+  illegal targets, which is indistinguishable from the feature being
+  broken, which is precisely what happened.
+- **Real controls.** An empty socket becomes ~30px with a dashed border
+  and a `+`, not a bare `○` glyph; a filled socket gets a solid accent
+  border and keeps click-to-unsocket, with an explicit hover cue.
+- **An instruction line** — *"Click a gem, then click a socket"* —
+  updating to *"Placing: Amplifier — click a lit socket, or the gem again
+  to cancel"* while held. Discovery has already failed here once; stating
+  it beats trusting an affordance.
 - The existing click-empty-socket-to-open-a-picker path **stays** as a
-  second route — it works, it is tested, and removing a working path to
-  replace it wholesale is a bigger change than the finding warrants.
+  second route. It works and is tested; removing a working path wholesale
+  is a bigger change than the finding warrants (see §11 risk 4).
+
+Not drag-and-drop: nicer to use, worse to build, breaks on touch, and
+nothing else in this game drags. Two clicks are robust and reversible.
 
 ---
 
-## 5. Deferred, with semantics recorded
+## 6. Effects move from pick-time to socket-time
 
-**Finding #4 — core gems cannot be unsocketed — is not built in this
-batch**, per the owner's sequencing answer. The design questions that
-blocked it are now answered, so the eventual build doesn't re-open them:
+This is the subtle half of §4, and the part most likely to cause a bug if
+rushed.
 
-- **A core gem returns to a new core-gem inventory**, never destroyed —
-  consistent with the *"no destructive respec, ever"* rule (arsenal plan
-  §5, call 13) that `unsocketGem()` and `withdrawPoints()` both already
-  honour. This means a new inventory container, since `state.gemInventory`
-  holds weapon gems only.
-- **Removing `maxHp` reduces max HP by 20 and clamps current HP to it.**
-  Socketing currently does `maxHp += 20` *and* heals 20; without the
-  clamp, a socket/unsocket loop is a free heal.
+**Today** `applyCardChoice` applies a core gem's *effect* at pick-time:
+it writes `state.coreGems[idx]`, increments `state.passives[key]`, and
+for `maxHp` does `tower.maxHp += 20` plus a 20 heal. **Once core gems
+bank, the card grants only the instance** — the effect must move to
+`socketCoreGem()`, and be undone by `unsocketCoreGem()`.
 
-**Findings #3 (slime balance) and #6 (point/gem abundance) stay deferred**
-as the owner directed. #6 shares a root cause with §2 — re-measure it
-after the curve change rather than tuning grant rates against a moving
-target.
+**The owner's rule** (call 5): *"Unsocketing the core gem should remove
+what it give, if it give max hp - take it away when unsocketed."*
+
+- Socket → `passives[key] += 1`; for `maxHp`, `maxHp += 20` and heal 20.
+- Unsocket → `passives[key] -= 1` (deleting the key at zero); for
+  `maxHp`, `maxHp -= 20` **and clamp `hp = min(hp, maxHp)`**.
+
+**The clamp is what stops a socket/unsocket loop being a free heal**, and
+it is the one piece of this that a test must pin explicitly: socket,
+take damage, unsocket, and assert HP never exceeds the reduced maximum.
+Round-trip conservation (`passives` returns to its starting value after
+socket → unsocket) gets the same treatment, mirroring the round-trip
+tests `investPoints`/`withdrawPoints` already carry.
 
 ---
 
-## 6. Modules touched
+## 7. Modules touched
 
 | Module | Change |
 |---|---|
-| `tuning/xp.ts` | `XP_GROWTH` constant; `xpToNext` gains the geometric term |
-| `systems/cards.ts` | Gems and bundles stop gating on free sockets; extensions keep their gate |
-| `systems/gemSockets.ts` | Delete `gemHasLegalHome` (loses its only caller) |
-| `ui/inventory.ts` | The gem inventory panel; placing-state ownership |
-| `ui/weaponRow.ts` | Socket controls resized/relabelled; highlight + dim states for placing mode |
-| `index.html` | Panel markup, panel/socket/highlight CSS, layout for the side panel |
+| `tuning/xp.ts` | `XP_GROWTH`; `xpToNext` gains the geometric term |
+| `state.ts` | `coreGemInventory`, `extensionInventory`, their instance types |
+| `systems/cards.ts` | Pool becomes uniformly socket-blind; extension/core-gem picks grant instances instead of applying |
+| `systems/gemSockets.ts` | Delete `gemHasLegalHome`; add extension + core-gem socket/unsocket |
+| `systems/sockets.ts` | `withdrawPoints` evicts extensions to inventory; `minPointsForSockets` clamp removed |
+| `systems/passives.ts` | Core-gem effect application/removal moves here from card-pick |
+| `ui/inventory.ts` | The three-section panel; placing-state ownership; core row becomes interactive |
+| `ui/weaponRow.ts` | Socket controls resized/relabelled; highlight + dim states |
+| `index.html` | Panel markup, two-column layout, socket/highlight CSS |
 
-Deliberately untouched: `systems/xp.ts` (`grantXp` is unchanged — only
-the cost function moves), `tuning/sockets.ts` (the ladder stays as it is;
-§3 removes the reason to extend it), and every weapon module.
+Deliberately untouched: `systems/xp.ts` (`grantXp` is unchanged — only the
+cost function moves), `tuning/sockets.ts` (the ladder stays; §3 removes
+the reason to extend it), and every weapon module.
 
 ---
 
-## 7. Tests
+## 8. Tests
 
-**Curve invariants, not coefficients** (Decision 20 — test the invariant,
-not the mechanism, so a retune doesn't break the suite):
-
-- `xpToNext(1)` is unchanged from the pre-6A-3 value — the early rush is
-  preserved by construction, not by luck.
+**Curve — invariants, not coefficients** (Decision 20):
+- `xpToNext(1)` is unchanged from its pre-6A-3 value.
 - `xpToNext` is strictly increasing.
-- The **ratio** `xpToNext(L+1) / xpToNext(L)` exceeds any fixed polynomial
-  ratio for large `L` — i.e. the curve is genuinely superpolynomial. This
-  is the property that fixes the bug; asserting a specific value at
-  L=50 would just pin a constant that is expected to move.
+- The ratio `xpToNext(L+1)/xpToNext(L)` exceeds any fixed polynomial ratio
+  for large `L` — i.e. genuinely superpolynomial. Pinning a value at L=50
+  would just fix a constant that is expected to move.
 
-**Pool invariants:**
+**Pool:**
+- Every card kind is still offered with **zero** free sockets — the exact
+  case that produced the bug, asserted per kind (gem, extension, bundle,
+  core gem).
+- The pool never degrades to `[{ kind: 'heal' }]` while anything is
+  ownable — the regression test for the reported symptom.
 
-- A gem is offered when the player has **zero** free sockets — the exact
-  case that produced the bug.
-- The pool never degrades to `[{ kind: 'heal' }]` while any gem exists
-  (the regression test for the reported symptom).
-- An extension is still **not** offered without a free socket — the
-  asymmetry in §3 is deliberate and should be pinned so it isn't
-  "cleaned up" later.
-- Bundles are offered regardless of socket availability.
+**Banking and placement:**
+- An extension card grants an inventory instance and does **not** touch
+  the weapon.
+- An extension is legal only in its own weapon's sockets.
+- `withdrawPoints` now evicts an extension to inventory rather than
+  clamping; round-trip conservation holds.
+- `socketGem` still refuses illegal or socket-less placement — loosening
+  the pool must not loosen placement.
 
-**Socketing:**
-
-- `socketGem` still refuses an illegal or socket-less placement — the pool
-  loosening must not loosen placement itself.
-- Placing-mode state transitions: selecting a gem, placing it, cancelling.
+**Core gems (§6):**
+- Round trip: `passives` returns to its starting value after socket →
+  unsocket.
+- **The heal exploit**: socket `maxHp`, take damage, unsocket, assert
+  `hp <= maxHp` and that no healing occurred.
 
 ---
 
-## 8. Order of work
+## 9. Order of work
 
 | # | Step | Checkpoint |
 |---|---|---|
-| 1 | `XP_GROWTH` + the curve, and its invariant tests | Suite green; a run visibly levels slower |
-| 2 | Ungate gems/bundles in `cards.ts`; delete `gemHasLegalHome` | Pool tests green, including the zero-free-sockets case |
-| 3 | Socket controls: sizing, border, `+`, hover | Sockets are obviously clickable before any new UI exists |
-| 4 | The inventory panel: markup, CSS, render | Every owned gem visible without opening a picker |
-| 5 | Placing mode: select → highlight → place → cancel | Both routes work; the old picker path still passes its tests |
-| 6 | **Verify live in the browser** — level pacing at a high level, a full-sockets card draw, and a socket performed *only* via the new panel | Zero console errors; typecheck, tests, build clean |
+| 1 | `XP_GROWTH` + curve + invariant tests | Suite green; a run visibly levels slower |
+| 2 | Pool goes socket-blind; delete `gemHasLegalHome` | Pool tests green, including zero-free-sockets per kind |
+| 3 | The two new inventories + instance types | Types land; nothing reads them yet |
+| 4 | Extension banking; `withdrawPoints` eviction; clamp removal | Round-trip tests green |
+| 5 | Core-gem banking; effects move to socket-time; the `maxHp` clamp | Heal-exploit test green |
+| 6 | Socket controls: sizing, border, `+`, hover | Sockets obviously clickable before any new UI exists |
+| 7 | The three-section panel: markup, CSS, render | Everything owned is visible without opening a picker |
+| 8 | Placing mode: select → highlight → place → cancel | Both routes work; the old picker path still passes |
+| 9 | **Verify live** — level pacing at a high level, a full-sockets draw, and a socket performed *only* via the panel | Zero console errors; typecheck, tests, build clean |
 
-**Step 6 matters more than usual here.** Two of the three items in this
-batch are *"the player couldn't tell what was happening"* bugs, which by
-definition cannot be verified by a passing test suite.
-
----
-
-## 9. Open questions
-
-**1. Should extensions bank like gems, or keep the free-socket gate?**
-§3 keeps the gate, because an extension has nowhere to go and would
-otherwise be a genuinely dead card — the exact thing the owner's rule is
-trying to prevent, arriving from the other direction. Making extensions
-bankable needs an extension inventory and a placement flow, which is 6B
-work. **Flagged for a yes/no rather than assumed.**
-
-**2. `XP_GROWTH = 1.08` is an unmeasured first draft.** The measurement
-pass was offered and declined in favour of shipping now, which is a fine
-call — but the number is a guess, and the table in §2 is arithmetic, not
-evidence. Expect one retune after a playtest.
+**Step 9 matters more than usual.** Two of the three findings are *"the
+player couldn't tell what was happening"* bugs, which by definition a
+passing test suite cannot verify.
 
 ---
 
-## 10. Risks
+## 10. Open questions
+
+**1. What does a banked extension instance mean when the weapon already
+has that extension?** Extensions level 1→3 today, via a card that reads
+the current level and grants the next. Once they bank, the cleanest model
+is: placing an instance into a free socket installs it at Lv1; placing a
+*duplicate* onto a weapon that already carries it **upgrades it in place
+and consumes no additional socket**. That preserves both the 1→3 ladder
+and the "one socket per extension" cost. **Proposed, not assumed** — and
+since 6B is what makes extensions real content, 6B may want to revisit it.
+
+**2. `XP_GROWTH = 1.08` is an unmeasured first draft.** Expect one retune
+after a playtest.
+
+---
+
+## 11. Risks
 
 **1. The curve could overshoot into feeling grindy.** 43× at level 50 is
-a large correction, and the failure mode on the other side (levels stop
-arriving, the build stops developing) is less obviously wrong during a
-playtest than the current one — it reads as "hard" rather than "broken."
-Watch for it specifically; it is the reason `XP_GROWTH` is isolated.
+a large correction, and the failure on the other side (levels stop
+arriving, the build stops developing) reads as *"hard"* rather than
+*"broken"* during a playtest — so it is less obvious than the current
+problem, not more. This is why `XP_GROWTH` is isolated.
 
-**2. Ungating the pool trades one problem for a milder one.** The player
-will now accumulate gems they cannot use. That is intentional (call 3 —
-they become currency), but the currency sink is **Phase 7** and does not
-exist yet, so between this batch and then, surplus gems are simply
-surplus. Worth confirming that reads as "saving up" rather than "these
-cards are junk."
+**2. Moving core-gem effects to socket-time touches live balance.** The
+effects themselves don't change, but *when* they apply does, and
+`maxHp`'s heal is the kind of thing that silently double-applies if the
+refactor is sloppy. §8's round-trip and heal-exploit tests exist for
+exactly this.
 
-**3. The inventory panel competes for space** on a screen that already
-lists every weapon with stats, sockets and a `+`/`−`. On a small viewport
-this could crowd. The panel should collapse or scroll rather than push
-the weapon list off-screen.
+**3. Surplus gems have no sink until Phase 7.** Ungating the pool is
+intentional (call 3 — leftovers become currency), but the currency and
+the trade ship are Phase 7. Until then, surplus is just surplus. Worth
+confirming in the playtest that it reads as *"saving up"* rather than
+*"these cards are junk."*
 
-**4. Two socketing routes could confuse rather than clarify.** Keeping the
-old picker alongside the new panel is the conservative choice, but two
-ways to do one thing is its own UX smell. If the panel proves clearly
-better in live testing, retiring the picker is the follow-up — noted so
-the duplication is a decision, not a leftover.
+**4. Two socketing routes could confuse rather than clarify.** Keeping
+the old picker alongside the new panel is conservative, but two ways to
+do one thing is its own smell. If the panel proves clearly better live,
+retiring the picker is the follow-up — noted so the duplication stays a
+decision rather than a leftover.
+
+**5. This batch is bigger than it started.** It began as "fix three
+playtest findings" and is now also a banking refactor across three
+container types plus a UI rework. That is the right call — 6B would
+otherwise inherit half of it — but it is worth naming, since every
+oversized batch in this project so far has been split, and this one has
+a natural seam at step 5 if it needs one.
 
 ---
 
-*Planned 2026-08-09. §9's two questions are open; nothing here is in
-`docs/DECISIONS.md` yet — per the project's posture, these go in as
-decisions when the batch ships.*
+*Planned and revised 2026-08-09. §10's two questions are open; nothing
+here is in `docs/DECISIONS.md` yet — per the project's posture, these go
+in as decisions when the batch ships.*
