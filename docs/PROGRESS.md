@@ -232,25 +232,37 @@ owner-playtested end to end the way Phase 4 was.
    arsenal catalogue's three design revisions, then 5A/5B/5C built back to
    back: the pre-refactor audit, the UI/UX question that reordered Phase
    6's batches, assist credit designed-then-dropped, and the
-   `withdrawPoints` bug 5C found in 5B. Read this one before starting
-   Phase 6 — it's the freshest context and covers the most ground.
-5. **`docs/DECISIONS.md` #23–#72** — the load-bearing calls in short form.
+   `withdrawPoints` bug 5C found in 5B.
+5. **`docs/sessions/2026-08-09-phase-6-replan-and-6a.md`** — Phase 6
+   re-planned into nine batches, then 6-0 and all of 6A built against the
+   new plan: the four-unreachable-weapons finding, the `DeliveryKind`
+   archetype abstraction, the owner's *"don't just not give the player
+   gems"* correction and what it changed, and the two bugs the **test
+   suite** caught for once. **Read this one before starting Phase 6B** —
+   it's the freshest context and covers the most ground.
+6. **`docs/DECISIONS.md` #23–#75** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
    68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
    enhancement/socket/card-pool economy); 72 is Phase 5C (the pause +
-   inventory screen — **Phase 5 closes here**). #47–72 are
-   implementation-time findings, not from a design session — see the
-   notes at the top of each of those sections.
-6. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
+   inventory screen — **Phase 5 closes here**); 73 is Phase 6-0 (the
+   pre-run weapon select); 74–75 are Phase 6A (the gem foundation and the
+   Behaviour class). #47–75 are implementation-time findings, not from a
+   design session — see the notes at the top of each of those sections.
+7. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
    **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
    design and the shipped 5B/5C economy and screen, including the
    assist-credit finding (dropped) and the withdrawPoints bug 5C found
    and fixed in 5B's plumbing.
-7. **`docs/BACKLOG.md`** *Now* section — Phase 6-0 (a minimal pre-run
-   weapon select) is the concrete next step. Phase 3/4's own follow-ups
-   (event tuning, the coagulant formation drain visual, more AoE weapons,
-   spontaneous coagulation, behemoth timing) are in *Ideas* and *Bugs*.
+8. **`docs/plans/phase-6-roadmap.md`**,
+   **`docs/plans/phase-6a1-gem-foundation.md`**,
+   **`docs/plans/phase-6a2-behaviour-gems.md`** — the nine-batch Phase 6
+   phasing, and the two shipped 6A halves with their as-built deltas.
+9. **`docs/BACKLOG.md`** *Now* section — Phase 6B (real extensions for the
+   seven incumbent weapons, plus Immolation Ring's remaining balance gap)
+   is the concrete next step. Phase 3/4's own follow-ups (event tuning,
+   the coagulant formation drain visual, more AoE weapons, spontaneous
+   coagulation, behemoth timing) are in *Ideas* and *Bugs*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -331,9 +343,11 @@ src/
 
 ### 2026-08-09 (latest) — Phase 6A ships in full: gem foundation + Behaviour class. Decisions 74–75. Immolation Ring's visual fixed.
 
-**Full account:** `docs/plans/phase-6a1-gem-foundation.md` (6A-1: delivery
-archetypes, `weaponMods`, the six Amplifier gems, sockets/inventory, the
-DPS readout, as-built delta at the top) and
+**Full account:** `docs/sessions/2026-08-09-phase-6-replan-and-6a.md`
+(the whole day, including the owner's scope correction and the
+rejected-ideas table), plus `docs/plans/phase-6a1-gem-foundation.md`
+(6A-1: delivery archetypes, `weaponMods`, the six Amplifier gems,
+sockets/inventory, the DPS readout, as-built delta at the top) and
 `docs/plans/phase-6a2-behaviour-gems.md` (6A-2: the four mechanisms —
 RESOLVE options, projectile flags, deferred emissions, emission
 multiplication — the fourteen Behaviour gems, the bundle card, as-built
@@ -512,12 +526,14 @@ project's own documented Vite self-reload quirk mid-session (BACKLOG) —
 recognized from its signature (a duplicate `[vite] connecting/connected`
 pair) and re-verified cleanly afterward, not mistaken for a new bug.
 
-**Not committed or pushed** — the owner's explicit instruction this
-session was to report when 6-0 was achieved, not to commit.
+**Committed as `feb01b9`** and pushed, after the owner reviewed the
+report — the instruction during the build itself was to report when 6-0
+was achieved, not to commit, so the commit came in a second step.
 
 **Planned** — **Phase 6A** next (Amplifier + Behaviour gems, deleting the
 legacy `damage`/`atkSpeed` passives in the same batch), per the
-re-planned order. No blockers.
+re-planned order. No blockers. *(Shipped the same day — see the entry
+above.)*
 
 ### 2026-08-08 — Phase 5C: the pause + inventory screen ships. Decision 72. Phase 5 closes.
 

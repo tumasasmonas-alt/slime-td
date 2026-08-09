@@ -5,8 +5,9 @@ verified live in-browser (§7's invariant tests + a full manual pass:
 selection, the capacity refusal, both entry points, a non-default deck
 actually equipping and rendering, Try Again preserving it, and the
 existing 5C inventory screen confirmed unaffected). 393/393 tests,
-typecheck clean, build clean. Not yet committed — the owner asked for a
-report before anything is pushed.
+typecheck clean, build clean. **Committed as `feb01b9` and pushed** —
+the owner asked for a report first, so the commit came in a second step.
+See DECISIONS.md #73.
 
 **What this is.** A screen shown before a run starts, where the player
 chooses which weapons to bring. A list, a selection, a start button.
@@ -390,7 +391,9 @@ fix and it is a few lines whenever it becomes irritating.
 
 ---
 
-*Planned 2026-08-09. Awaiting greenlight. All five design calls settled
-by the owner the same session; §1's supersession of arsenal plan §5's
-optional-slot clause is the only decision-record change this batch
-carries.*
+*Planned 2026-08-09, shipped 2026-08-09 (commit `feb01b9`). All five
+design calls were settled by the owner the same session; §1's
+supersession of arsenal plan §5's optional-slot clause is the only
+decision-record change this batch carries. DECISIONS.md #73 records the
+shipped decision; the day's session record is
+`docs/sessions/2026-08-09-phase-6-replan-and-6a.md`.*

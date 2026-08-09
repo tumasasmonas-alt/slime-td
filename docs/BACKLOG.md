@@ -26,6 +26,9 @@ Full account: `docs/plans/phase-6-0-weapon-select.md` (6-0),
 `docs/plans/phase-6a1-gem-foundation.md` (6A-1),
 `docs/plans/phase-6a2-behaviour-gems.md` (6A-2). Decisions 73–75. The
 Phase 6 re-plan that scheduled all three: `docs/plans/phase-6-roadmap.md`.
+Session record for the whole day, including the owner's scope correction
+and the two bugs the test suite caught:
+`docs/sessions/2026-08-09-phase-6-replan-and-6a.md`.
 
 **6-0 shipped:** a `Choose Weapons` / `Change Loadout` overlay reachable
 from the start and game-over screens, enforcing an exact-count deck

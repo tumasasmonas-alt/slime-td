@@ -1893,7 +1893,8 @@ debug bridge's removal.
 > re-planned Phase 6. Full account: `docs/plans/phase-6-roadmap.md` (the
 > re-plan and its five findings) and
 > `docs/plans/phase-6-0-weapon-select.md` (6-0's own plan and as-built
-> delta).
+> delta). Session record for the whole day:
+> `docs/sessions/2026-08-09-phase-6-replan-and-6a.md`.
 
 **73. The deck fills every slot, is fixed for the run, and the card pool
 never offers a weapon at all.** ✅ *2026-08-09.*
@@ -1944,9 +1945,12 @@ ever equipped. 393/393 tests, typecheck clean, build clean, verified live
 > Phase 6A in one sitting, greenlit in full by the owner with explicit
 > autonomy. Plans, as-built deltas, and full reasoning:
 > `docs/plans/phase-6a1-gem-foundation.md` (6A-1) and
-> `docs/plans/phase-6a2-behaviour-gems.md` (6A-2). Folded into the same
-> batch on the owner's request: a persistent visual for Immolation Ring,
-> open since the Phase 2 port.
+> `docs/plans/phase-6a2-behaviour-gems.md` (6A-2). Session record for the
+> whole day, including the owner's *"don't just not give the player
+> gems"* correction and the rejected-ideas table:
+> `docs/sessions/2026-08-09-phase-6-replan-and-6a.md`. Folded into the
+> same batch on the owner's request: a persistent visual for Immolation
+> Ring, open since the Phase 2 port.
 
 **74. Gems reason about a weapon's `DeliveryKind` archetype, not the
 weapon itself — and 6A-1 builds everything needed to make a gem change a
