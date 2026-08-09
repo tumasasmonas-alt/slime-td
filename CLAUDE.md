@@ -67,9 +67,10 @@ goes in `docs/BACKLOG.md`.
 - **Never mutate state during a draw call.** Three separate prototype bugs
   came from this (see DECISIONS.md #4 and #7). Lifetimes and decay belong
   in an update pass.
-- **The simulation tick** (growth spread, node influence, frontier
-  targeting, contact damage) runs on a fixed timestep via an accumulator,
-  independent of render framerate. Keep that decoupling.
+- **The simulation tick** (growth spread, infection events, coagulant
+  formation/movement, frontier targeting, contact damage) runs on a fixed
+  timestep via an accumulator, independent of render framerate. Keep that
+  decoupling.
 - **Numeric tuning constants live in `src/tuning/`** so balance work is one
   directory rather than a hunt through logic. They are not finalized — see
   the balance pass at the top of `docs/BACKLOG.md`.
@@ -89,9 +90,10 @@ Full detail in `docs/DECISIONS.md` under "Documented prototype bugs."
   a threshold before a cell is actually visible.
 - Collectibles must always drift toward the (stationary) core — never gate
   drifting behind a pickup radius, or XP can never accumulate.
-- Tower-centered weapon radii must never be smaller than `safeRadius`;
-  use `towerCenteredRadius()` in `tuning/weaponGeometry.ts`. Getting this
-  wrong made a whole weapon silently non-functional in the prototype.
+- Tower-centered weapon radii must never be smaller than `perimeter`
+  (renamed from `safeRadius` in Phase 3A); use `towerCenteredRadius()` in
+  `tuning/weaponGeometry.ts`. Getting this wrong made a whole weapon
+  silently non-functional in the prototype.
 
 ## Workflow
 

@@ -48,27 +48,38 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-07 (Phase 4C shipped — **Phase 4 is complete**)
+**Last updated:** 2026-08-08 (Phase 5 shipped in full — **Phase 5 is
+complete**: 5A, 5B, 5C)
 
-**Phase 3 and all of Phase 4 are built.** 3A–3D are playtested and
-confirmed — verdict on 3D: *"it plays much better now."* **4A** added the
-maturity field (Decisions 63–65); **4B** made both axes readable, verdict
-*"looks nice, I like the more colour gradient"* (Decisions 66–67); **4C**
-completed the coagulant roster — Sclerotic, Blastoma (4C-1, Decision 68),
-Carrier, Bulwark (4C-2, Decision 69) — so all seven kinds from §10 now
-exist and all four of its identity readings (mass, maturity, mass shape,
-corridor density) are wired up. Weapon damage raised 50% alongside armour
-landing, at the owner's instruction, so the mechanic is visible without
-ending runs in 30 seconds.
+**Phases 3, 4 and 5 are all built.** 3A–3D and 4A–4C are playtested and
+confirmed (see the 2026-08-07 entries below for verdicts). **Phase 5**
+landed in one long session on 2026-08-08: **5A** put all seven weapons on
+a shared pipeline (Decision 70); **5B** built the enhancement-point,
+socket and card-pool economy, deleting weapon-level cards for good
+(Decision 71); **5C** built the pause + inventory screen that makes 5B's
+economy actually spendable (Decision 72). Alongside this, the **Phase 6
+arsenal catalogue** — 18 weapons, 65 support gems — went through three
+review passes with the owner and is fully designed, not yet built.
+
+**The Phase 5 gate was moved to after Phase 6A**, settled during 5C's
+planning: its central question — *"is enhancement a decision or a
+slider?"* — can't be answered while every socket is empty, since opening
+one buys nothing until real gems exist to put in it. Build order is
+unchanged (5C → 6-0 → 6A); only the point where the full gate runs moved.
+5C still passed its own small immediate check live (opens/closes
+correctly from both entry points, `+`/`−` read legibly, the extension
+clamp visibly disables rather than silently no-op'ing).
 
 **Every phase since 4A has found real bugs only by running the game**, not
 by the test suite — worth internalizing before trusting a formula's first
-draft. 4A took five rounds (one made 22% of the arena permanently
-invisible); 4C-1 found two — a bloom's own formation attempt fires before
-most of its maturity budget accumulates, and the Sclerotic threshold was
-set from a number (0.55) that mean-based flood-fill dilution made
-unreachable in practice (fixed to 0.4). Full accounts in the session
-records; the pattern, not just the fixes, is the thing worth reading.
+draft. 4A took five rounds; 4C-1 found two; **5A's pre-refactor audit**
+found six flags before a line of code was written; **5B's implementation
+found a design flaw in its own plan** (assist credit didn't solve the
+problem it was written for — dropped, see BACKLOG *Ideas*); **5C found a
+real bug in 5B's own plumbing** (`withdrawPoints()` never returned points
+to the bank — inert until 5C's `−` button became its first live caller).
+Full accounts in the session records; the pattern, not just the fixes, is
+the thing worth reading.
 
 **Balance itself is still explicitly not gradeable** — the owner's own
 scoping: weapon damage numbers, slime speed and overall game feel need the
@@ -77,36 +88,33 @@ Phase 8 (Decision 13's supersession), not a reason to reorder anything.
 
 | | |
 |---|---|
-| Tests | 337 passing (35 test files) — one known flake, see BACKLOG |
-| Source | 64 modules under `src/` |
+| Tests | 389 passing (38 test files) — one known flake, see BACKLOG |
+| Source | 72 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main` |
-| Code state | **Phase 3 complete (3A–3D) + Phase 4 complete (4A–4C).** Phase 5 onward is still design-only. |
-| Blockers | **None.** Next is Phase 5 (arsenal framework), linearly. |
+| Code state | **Phase 3 + Phase 4 + Phase 5 (5A/5B/5C) all complete.** Phase 6 catalogue is design-only, not built. |
+| Blockers | **None.** Next is Phase 6-0 (minimal pre-run weapon select), linearly. |
 
-**What works today:** the horde-economy loop, end to end, playtested
-repeatedly. Infection grows as a density field across a **fixed
-perimeter**, hardening into a scar ring where the player fights while the
-wilderness stays soft (Decisions 63–65), rendered on two independent
-visual axes (Decisions 66–67). **Infection Events** (branching veins,
-radial blooms) inject growth and maturity and, at their peak, spark
-**coagulants** out of whatever contiguous mass a bounded flood-fill
-finds — with a visible rise/fade telegraph before one can move or be
-targeted (Decision 54). Identity now reads all four of §10's signals:
-**Mote/Congealer/Behemoth** from mass alone, **Sclerotic** from hardened
-ground, **Blastoma** from a fragmented mass shape (splitting into two
-fragments partway through a fight), **Carrier** from a thick corridor back
-to the core (and feeds off it as it travels), **Bulwark** from high mass
-*and* high maturity, rendered as a genuinely non-circular wall (Decisions
-68–69). A coagulant is pure mass with no separate HP — every weapon
-damages it through the same formula that clears grid tissue, scaled by how
-much of the hit actually overlaps its body, now armoured for kinds born of
-hardened ground. Kill one and it's gone, converted to XP; let one reach the
-core and it dumps its full remaining mass as tower damage and a field
-breach. Six auto-firing weapons (damage raised 50% alongside armour
-landing), eight passives via level-up cards, contact damage, flavour-only
-tiers, game over, restart with a fresh maze.
+**What works today:** the horde-economy loop from Phase 3/4, unchanged and
+still playtested — infection as a density field across a fixed perimeter,
+hardening into a scar ring (Decisions 63–65), rendered on two visual axes
+(66–67), Infection Events sparking a seven-kind coagulant roster reading
+all four of §10's identity signals (68–69) — **plus the full Phase 5
+arsenal framework on top of it.** Every weapon (Bolt, Blades, Chain,
+Frost, Poison, Missile, and Immolation Ring — promoted from a
+misclassified passive in 5A) now runs on a shared four-stage pipeline.
+Levelling up no longer hands out weapon-level cards at all: enhancement
+points bank automatically and are spent via a `+`/`−` in a pause +
+inventory screen, opening sockets on a fixed ladder as points go in.
+Five of the old flat passives now socket into three fixed core slots
+instead of stacking without limit. The card pool offers new weapons
+(gated on free deck slots, starting at 3), a placeholder extension that
+levels 1→3 and then leaves the pool for good, and a guaranteed core-gem
+slot every second level-up. Nothing socketable exists on the *weapon*
+side yet — that's Phase 6A content — so the inventory screen's gem
+sockets render as empty, labelled affordances rather than functioning
+picks.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -131,23 +139,26 @@ and coagulant speed were cut a second time (Decision 57's second half).
 > **Don't add answers that there are no questions for yet.**
 
 **Phase 4 added the questions** (armor, penetration, range-vs-callus, the
-whole maturity axis, the full coagulant roster). **Phase 5/6 add the
-answers** (gems, extensions, 20 weapons) — and as of this session, **Phase
-4 is complete**, so those answers finally have a settled threat model to
-be authored against. Building them any earlier would have meant authoring
-content against a target that kept moving, which §13 of the design record
-warns against and which is the same ordering mistake Decision 36 argued
-down once before.
+whole maturity axis, the full coagulant roster). **Phase 5 built the
+answer mechanism** (the enhancement/socket/card-pool economy and the
+screen to use it) **without yet authoring the answers themselves** — the
+18-weapon, 65-gem catalogue is fully designed (`docs/plans/phase-5-6-arsenal.md`)
+but nothing in it is built. That's deliberate: 5A/5B/5C are framework, and
+**Phase 6 is where the actual content lands**, now onto a framework that's
+tested and live rather than being designed and built at the same time.
 
 The agreed direction is a **slime and arsenal rework** — the field becomes
 the horde's economy, growth nodes are deleted and replaced by infection
 events, coagulants become the threat, passives dissolve into a PoE-style
-gem system, and the tier table is demoted to flavour. **All of Phase 3 and
-Phase 4 are done and playtested.** Phase 4's gate was run by the project
+gem system, and the tier table is demoted to flavour. **All of Phase 3,
+Phase 4, and Phase 5 are done.** Phase 4's gate was run by the project
 owner on 2026-08-08 — *"I have played it, all good"* — so the full
 coagulant roster, armour, and the scar ring are confirmed in real play,
 not just through the debug harness. The design's own risk #4 (the scar
-ring feeling oppressive) did not materialise.
+ring feeling oppressive) did not materialise. **Phase 5's own gate moved
+to after Phase 6A** (§ below) since it can't be judged with empty
+sockets — so Phase 5 is code-complete and verified, but not yet
+owner-playtested end to end the way Phase 4 was.
 
 **Start here, in order:**
 
@@ -165,10 +176,15 @@ ring feeling oppressive) did not materialise.
    **`2026-08-07-phase-4a-maturity.md`**, **`2026-08-07-phase-4c-wave2.md`**
    (4B has no separate session file — its plan,
    `docs/plans/phase-4b-two-axis-visuals.md`, carries the same
-   reasoning) — the rest of this project's most productive single day:
-   Phase 3D, 4A, 4B, and 4C, each with a real bug found only by running
-   the game. Read these before trusting a new formula's first draft.
-4. **`docs/DECISIONS.md` #23–#72** — the load-bearing calls in short form.
+   reasoning) — Phase 3D, 4A, 4B, and 4C, each with a real bug found only
+   by running the game.
+4. **`docs/sessions/2026-08-08-phase-5-arsenal-framework.md`** — the
+   arsenal catalogue's three design revisions, then 5A/5B/5C built back to
+   back: the pre-refactor audit, the UI/UX question that reordered Phase
+   6's batches, assist credit designed-then-dropped, and the
+   `withdrawPoints` bug 5C found in 5B. Read this one before starting
+   Phase 6 — it's the freshest context and covers the most ground.
+5. **`docs/DECISIONS.md` #23–#72** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
    68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
@@ -176,12 +192,12 @@ ring feeling oppressive) did not materialise.
    inventory screen — **Phase 5 closes here**). #47–72 are
    implementation-time findings, not from a design session — see the
    notes at the top of each of those sections.
-5. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
+6. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
    **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
    design and the shipped 5B/5C economy and screen, including the
    assist-credit finding (dropped) and the withdrawPoints bug 5C found
    and fixed in 5B's plumbing.
-6. **`docs/BACKLOG.md`** *Now* section — Phase 6-0 (a minimal pre-run
+7. **`docs/BACKLOG.md`** *Now* section — Phase 6-0 (a minimal pre-run
    weapon select) is the concrete next step. Phase 3/4's own follow-ups
    (event tuning, the coagulant formation drain visual, more AoE weapons,
    spontaneous coagulation, behemoth timing) are in *Ideas* and *Bugs*.
@@ -229,12 +245,20 @@ src/
               geometry), coagulant formation (bounded flood-fill) and
               lifecycle (movement/arrival/death/collision), contact damage,
               frontier targeting, projectiles, gems, xp, particles,
-              passives, tower, fx lifetimes
-  weapons/    one module per weapon (behavior only — data lives in tuning/)
+              passives, tower, fx lifetimes — plus, since Phase 5: cards.ts
+              (pure card-pool build/pick/apply logic) and sockets.ts
+              (enhancement spend/withdraw, socket-count helpers)
+  weapons/    one module per weapon (behavior only — data lives in tuning/),
+              all seven built on pipeline.ts's shared ready/acquire/deliver
+              stages since Phase 5A
   render/     canvas draw calls, strictly separated from update logic
   tuning/     all numeric knobs: weapons, tiers, growth, events, coagulants,
-              xp, geometry
-  ui/         DOM/CSS HUD, upgrade cards, start/game-over overlays
+              xp, geometry — plus, since Phase 5B: sockets.ts (the socket
+              ladder), coreGems.ts, extensions.ts (the placeholder pending
+              Phase 6 content)
+  ui/         DOM/CSS HUD, upgrade cards, start/game-over overlays, and
+              since Phase 5C: inventory.ts (the pause + inventory screen)
+              and weaponRow.ts (its shared row renderer, reused by 6-0)
   state.ts    the single central GameState + freshState()
   main.ts     game loop, run lifecycle, render order
 ```
@@ -321,8 +345,10 @@ mechanism doesn't solve the problem it was written for — XP is a single
 global pool, not tracked per weapon anywhere, so any kill by any weapon in
 a deck already pays full credit today. Raised for the owner rather than
 built or silently dropped, per the ground-truth override protocol —
-`docs/plans/phase-5b-framework.md` §5 has the full reasoning and is
-awaiting confirmation.
+`docs/plans/phase-5b-framework.md` §5 has the full reasoning. **Confirmed
+dropped by the owner later the same session** — *"it's fine to drop
+assist credit if the player will still get the XP after the mass is
+dead"* — and moved to `docs/BACKLOG.md` *Ideas*.
 
 **Verified live**: an 8-level card-pool dump confirmed the core-gem
 cadence and the permanent absence of any weapon-level card; applying

@@ -57,7 +57,8 @@ in that doc's §13.
 Plans: `docs/plans/phase-5-6-arsenal.md` (the catalogue design),
 `docs/plans/phase-5b-framework.md` (the economy, including the
 assist-credit finding), `docs/plans/phase-5c-inventory-ui.md` (the
-screen, including the withdrawPoints bug fix). Decisions 70–72.
+screen, including the withdrawPoints bug fix). Decisions 70–72. Session
+record for the whole day: `docs/sessions/2026-08-08-phase-5-arsenal-framework.md`.
 
 ### Phase 4C — done, for reference
 

@@ -387,9 +387,8 @@ weapon would then duplicate.
 - **Whether the gate can conclude anything about enhancement-as-slider**
   with an empty weapon-gem pool. Probably not — see §1. That is the
   known limit of this gate, not a defect in it.
-- **Assist credit** (§5) — awaiting the owner's confirmation that it
-  should be dropped, or correction if there's a per-weapon consumer
-  planned that this implementation pass didn't know about.
+- ~~**Assist credit** (§5) — awaiting the owner's confirmation~~ — settled
+  the same session: confirmed dropped, moved to `docs/BACKLOG.md` *Ideas*.
 
 ### One implementation-time call, not written down anywhere before now
 
