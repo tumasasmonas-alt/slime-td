@@ -1887,6 +1887,223 @@ debug bridge's removal.
 
 ---
 
+## Phase 6-0 — the pre-run weapon select
+
+> Decision 73 came out of the 2026-08-09 session that reviewed and
+> re-planned Phase 6. Full account: `docs/plans/phase-6-roadmap.md` (the
+> re-plan and its five findings) and
+> `docs/plans/phase-6-0-weapon-select.md` (6-0's own plan and as-built
+> delta).
+
+**73. The deck fills every slot, is fixed for the run, and the card pool
+never offers a weapon at all.** ✅ *2026-08-09.*
+
+**The finding that forced this.** Reviewing `phase-5-6-arsenal.md` §13's
+phasing table against **shipped** Phase 5 code (rather than the design it
+was written against) found four built weapons — Blades, Frost, Missile,
+Immolation Ring — were unreachable in any run. `startRun()` always
+equipped exactly 3 weapons and `state.weaponSlots` was always 3, so the
+`newWeapon` card's only gate (a free deck slot) was permanently false.
+Both halves were individually correct; the interaction was not, and
+neither the 380 nor the 389 tests then in the suite caught it, because
+the deck-full case is exactly the scenario the gating test asserts should
+offer nothing.
+
+**The owner's answer reclassified the finding from bug to missing UI.**
+Asked whether a pre-run deck must fill every slot, the answer set the
+whole design: *"All of the slots equipped, as you will be able to buy
+more slots with currency, there is no way to change weapons mid-run. And
+the player should not be offered any weapons in the pool — only
+weapon-specific extensions, support gems and core gems."* This
+**supersedes** one clause of `phase-5-6-arsenal.md` §5 ("an unlocked slot
+is optional to use") — a deliberate, disclosed supersession per
+`CLAUDE.md`'s ground-truth override protocol, not a silent one.
+
+**What shipped.** A `Choose Weapons` / `Change Loadout` overlay reachable
+from the start and game-over screens, built on `ui/weaponRow.ts`'s
+`'select'` mode (scaffolded in 5C for exactly this), enforcing an
+exact-count deck with a visible capacity refusal on unselected rows once
+full; a deck line of weapon icons on both screens so the current
+selection is legible without opening anything; `Try Again` keeps the deck
+in-memory (not `localStorage` — session persistence, not cross-reload,
+per the owner's ask). The `newWeapon` `CardChoice` kind is deleted
+outright from `systems/cards.ts` — with the owner's rule in place it was
+dead code by definition, not a variant left disabled.
+
+**This closes the four-unreachable-weapons finding by design, not by
+patch** — the pre-run select screen is now the sole way any weapon is
+ever equipped. 393/393 tests, typecheck clean, build clean, verified live
+(a Blades/Chain/Immolation deck equipped, rendered, and ran correctly;
+`Change Loadout` opens pre-checked with the run's actual deck).
+
+---
+
+## Phase 6A — the gem foundation and the Behaviour class
+
+> Decisions 74–75 came out of the 2026-08-09 session that built all of
+> Phase 6A in one sitting, greenlit in full by the owner with explicit
+> autonomy. Plans, as-built deltas, and full reasoning:
+> `docs/plans/phase-6a1-gem-foundation.md` (6A-1) and
+> `docs/plans/phase-6a2-behaviour-gems.md` (6A-2). Folded into the same
+> batch on the owner's request: a persistent visual for Immolation Ring,
+> open since the Phase 2 port.
+
+**74. Gems reason about a weapon's `DeliveryKind` archetype, not the
+weapon itself — and 6A-1 builds everything needed to make a gem change a
+number.** ✅ *2026-08-09.*
+
+**The abstraction.** `DeliveryKind` (`projectile | orbital | pulse |
+cloud | ring`) sorts the seven weapons by *how they deliver damage*, not
+by name. A gem is authored once per archetype instead of once per weapon
+— the N×M authoring cost the arsenal plan's own pipeline design (Decision
+70) exists to avoid. Reading the seven shipped weapons back showed the
+earlier cost estimate ("18 × 20 authored meanings") had assumed
+reinterpretation happens per weapon; it doesn't, it happens per
+archetype, which is a small fixed set.
+
+**`weaponMods(state, key)`** computes a per-weapon
+damage/rate/area/duration/velocity multiplier struct from socketed
+Amplifier gems. Every weapon's `stats()` and pipeline read it instead of
+the deleted global `damageMult()`/`atkSpeedMult()` — power is now a
+per-weapon composition of socketed gems, not two flat global passives.
+Six Amplifier gems shipped (Amplifier, Overclock, Expansion, Extension,
+Velocity, Attunement), sized large enough to compensate for the deleted
+passives rather than at face value, per the owner's call.
+
+**Gem cards open the socket picker immediately on pick** (`onGemPicked`,
+mirroring the module-level-callback pattern `ui/weaponSelect.ts` already
+used) — the same *"just picked it, want to spend it now"* moment 5C
+already built Manage Loadout for, avoiding a repeat of the 2026-08-05
+*"cards appear to do nothing"* playtest finding, this time for gems
+rather than weapon levels.
+
+**The HUD's `DMG`/`SPD` readout becomes one smoothed overall-DPS
+number**, the owner's own answer when asked how the modifier readout
+should represent a multi-weapon, multi-gem build — better than the three
+options offered. `systems/dps.ts` accumulates `clearAt`'s removal total
+each frame and exponentially smooths it (`DPS_TIME_CONSTANT = 1.5`)
+rather than showing an instantaneous, spiky number.
+
+**A real bug found and fixed during implementation:** `WeaponDef.stats()`
+was pure `(lvl) => string` with no gem awareness, so the inventory
+screen's live stat line silently ignored every socketed gem — passed its
+own tests because nothing had tested it *with* a gem socketed. Fixed by
+adding a `mods` parameter (default `IDENTITY_MODS`), threading
+`weaponMods(state, key)` through `ui/weaponRow.ts`. Verified live: Bolt
+Turret's line moved from "15 pwr" to "22 pwr" after socketing one
+Amplifier gem (15 × 1.45 = 21.75 → 22).
+
+495/495 tests (up from 393 across this session's two halves combined —
+see Decision 75 for 6A-2's share), typecheck clean, build clean.
+
+**75. The Behaviour class ships with the machinery Phase 5A deferred, and
+every gem reinterprets creatively across every archetype rather than
+refusing on ones it wasn't designed for.** ✅ *2026-08-09.*
+
+**Four mechanisms, deferred in 5A precisely because nothing needed them
+yet, built now against real gems:**
+- **RESOLVE-stage options** as new `ClearOptions` fields on `clearAt`
+  (`ignoreResistance`, `flattenFalloff`, `overflow`, `kickback`,
+  `priming`) — carrying Splash, Overflow, Kickback, Priming.
+- **Projectile behaviour flags** (`pierce`, `forks`, `chains`, `bounces`,
+  `homing`, `ricochet`) generalizing Chain's existing native hop
+  machinery, shared via `advanceHop()`.
+- **A weapon registry** (`weapons/registry.ts`) driving all seven weapons
+  from one `updateAllWeapons(state, dt)` loop instead of `main.ts` calling
+  seven functions by hand, plus a deferred-emissions queue
+  (`state.pendingEmissions`) for Echo/Barrage. **Load-bearing beyond this
+  batch**: a registry that can invoke any weapon's `deliver` by key is
+  exactly what Trigger (Phase 6I — *"this weapon deals no damage itself;
+  on impact it fires the weapon socketed below it"*) needs, and the
+  arsenal plan calls Trigger the single most build-generating mechanic in
+  the catalogue. Building the registry here for Echo makes Trigger close
+  to free later.
+- **Emission multiplication** (Multishot, Formation) via a shared
+  `emissionAngles()` helper.
+
+All 14 Behaviour gems shipped on top of these four, plus a bundle card
+(`tuning/bundles.ts`, six themed packages) every `BUNDLE_INTERVAL = 5`
+levels, pre-empting the normal draw and granting every gem in the package
+in one pick — deliberately held back from 6A-1 since six Amplifier gems
+alone can't form a package worth offering ("Amplifier + Overclock"
+teaches nothing a single card doesn't; twenty gems can).
+
+**The owner's mid-planning correction shaped the whole batch, and matters
+more than any single mechanism.** An early draft would have refused
+Pierce/Bounce/Ricochet on non-projectile weapons as "doesn't apply." The
+owner's response: *"lets revisit the pierce bounce and ricochet gems and
+think what they could do if slotted in not projective weapon. You have to
+be creative and not just not give the player gems."* The resolving
+insight: every archetype has its own real analogue of "what stops a hit
+from doing more" — a per-target hit-cooldown window for orbitals and
+rings, the density-resistance curve itself for pulses and clouds — so
+Pierce/Fork/Chain/Bounce/Ricochet reinterpret against *that*, per
+archetype, rather than being whitelisted per weapon or shipped as inert
+placeholders.
+
+**One exception, deliberately scoped and disclosed rather than hidden:**
+Homing and Multishot/Formation are not wired for Immolation Ring
+specifically. Either would desync its persistent ring visual from its
+actual hit logic — the ring is drawn once at a fixed radius around the
+core, and both mechanics assume a discrete, per-shot origin. Left as a
+documented gap in the weapon file, not silently dropped.
+
+**Immolation Ring's missing visual, folded in on request.** Persistent
+`#39ff6a` bright-green ring stroke (`render/immolationRing.ts`) at
+`immolationRadius(lvl, perimeter) * mods.area`, closing the oldest open
+item on the BACKLOG — open since the Phase 2 port, when Ward Pulse (now
+Immolation Ring) was a weapon misfiled as a passive and so never got a
+render pass at all (Decision 70's reclassification fixed the mechanic;
+the visual waited for this batch). Two of Immolation's three other
+long-open balance gaps (no Overclock response, no Amplifier response) are
+now closed for free by `weaponMods` applying uniformly to every weapon
+including this one; the third (the missing 4C-1 `WEAPON_DAMAGE_SCALE`
++50% pass) is deliberately left open for Phase 6B, alongside Immolation's
+real extensions and its dead `maxLevel` field. See BACKLOG.
+
+**A real bug found and fixed during implementation, caught by the test
+suite before ever reaching the browser.** `spawnForks()` pushed forked
+children directly onto `state.projectiles` while `updateProjectiles` was
+still mid-iteration over that same array via `for...of`; since the
+function ends by reassigning `state.projectiles = remaining`, every
+forked child was silently discarded the instant it was created. Fixed by
+changing the function's signature to return the children
+(`spawnForks(p): Projectile[]`) for the caller to
+`remaining.push(...spawnForks(p))` instead of mutating the live array
+mid-loop.
+
+**Deliberately not extended, and recorded rather than silently limited:**
+Fork/Chaining/Bounce/Ricochet are real (not placeholder) only on the
+`projectile` archetype. Extending them meaningfully to orbital/pulse/
+cloud/ring weapons would need `clearAt` itself to report per-target kill
+events back to the caller — a real architectural change, out of scope for
+"make the existing gems mean something" and not attempted here.
+
+**Verified live, with a documented environment workaround.** The Browser
+pane was not compositing frames this session
+(`document.visibilityState === 'hidden'`, confirmed directly), which
+throttles `requestAnimationFrame` to near zero and makes screenshot
+capture time out — an environment constraint, not a code bug. Per
+Decision 59's own precedent (a deterministic debug harness for exactly
+this situation), a temporary `window.__debugTick(n, dt)` /
+`window.__debugState()` bridge was added to `main.ts`, used to drive
+roughly 700 manual ticks confirming the full gem pipeline end to end —
+socketing, `weaponMods`, RESOLVE options, projectile flags, deferred
+emissions, and the Immolation ring visual — then removed completely.
+Typecheck, the full test pass, and the production build were re-run after
+removal; the bundle hash was byte-identical before and after the bridge
+existed, confirming the removal left no trace. A final fresh-tab smoke
+test confirmed zero console errors and `window.__debugTick === undefined`.
+
+495/495 tests passing (up from 393 combined across 6A-1 and 6A-2 — 45
+test files, 6 new: `weaponMods.test.ts`, `gemSockets.test.ts`,
+`resolveOpts.test.ts`, `emissions.test.ts`, `registry.test.ts`, plus
+extensive extensions to existing suites), typecheck clean, build clean,
+production bundle byte-identical after the debug bridge's removal.
+**Committed and pushed.**
+
+---
+
 ## Documented prototype bugs
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real

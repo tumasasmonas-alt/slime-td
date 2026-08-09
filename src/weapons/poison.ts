@@ -1,5 +1,6 @@
 import type { BubbleSeed, GameState } from '../state';
-import { damageMult } from '../systems/passives';
+import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { weaponMods } from '../systems/weaponMods';
 import { poisonCooldown, poisonDamage, poisonRadius } from '../tuning/weapons';
 import { rand } from '../util/math';
 import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -7,30 +8,47 @@ import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline 
 const CLOUD_LIFE = 3.4;
 const CLOUD_COLOR = '#8aff4d';
 const BUBBLE_COUNT = 4;
+// Phase 6A-2: Multishot/Formation's extra clouds scatter around the
+// target point by this fraction of the cloud's own radius.
+const MULTISHOT_OFFSET_FRACTION = 0.6;
 
-const poisonPipeline: WeaponPipeline = {
+export const poisonPipeline: WeaponPipeline = {
   ready: cooldownReady('poison', poisonCooldown),
   acquire: frontierAcquire,
-  deliver: (state, lvl, target) => {
+  deliver: (state, lvl, target, powerMult = 1) => {
     if (!target) return;
-    state.clouds.push({
-      x: target.x,
-      y: target.y,
-      radius: poisonRadius(lvl),
-      life: CLOUD_LIFE,
-      maxLife: CLOUD_LIFE,
-      dmgPerSec: poisonDamage(lvl) * damageMult(state),
-      color: CLOUD_COLOR,
-      tickTimer: 0,
-      bubbleSeeds: spawnBubbleSeeds(),
-    });
+    const mods = weaponMods(state, 'poison');
+    const opts = resolveOpts(state, 'poison');
+    const plan = emissionPlan(state, 'poison');
+    const homing = hasHomingGem(state, 'poison');
+    const life = CLOUD_LIFE * mods.duration;
+    const radius = (poisonRadius(lvl) * mods.area) / (plan.count > 1 ? 1.4 : 1);
+    const perDmg = (poisonDamage(lvl) * mods.damage * powerMult) / plan.count;
+
+    for (let i = 0; i < plan.count; i++) {
+      const angle = (i / plan.count) * Math.PI * 2;
+      const spreadDist = plan.count > 1 ? radius * MULTISHOT_OFFSET_FRACTION : 0;
+      state.clouds.push({
+        x: target.x + Math.cos(angle) * spreadDist,
+        y: target.y + Math.sin(angle) * spreadDist,
+        radius,
+        life,
+        maxLife: life,
+        dmgPerSec: perDmg,
+        color: CLOUD_COLOR,
+        tickTimer: 0,
+        bubbleSeeds: spawnBubbleSeeds(),
+        homing,
+        ...opts,
+      });
+    }
   },
 };
 
 export function updatePoisonWeapon(state: GameState, dt: number): void {
   const lvl = state.weapons.poison;
   if (!lvl) return;
-  runWeaponPipeline(state, dt, lvl, poisonPipeline);
+  runWeaponPipeline(state, dt, lvl, poisonPipeline, 'poison');
 }
 
 function spawnBubbleSeeds(): BubbleSeed[] {

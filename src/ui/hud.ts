@@ -3,7 +3,7 @@ import { TIERS_LIST } from '../tuning/tiers';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import type { WeaponKey } from '../types';
 import { clamp, fmtTime } from '../util/math';
-import { armorMult, atkSpeedMult, damageMult, pickupMult, xpMult } from '../systems/passives';
+import { armorMult, pickupMult, xpMult } from '../systems/passives';
 
 const ANNOUNCE_DURATION = 2.6;
 
@@ -105,18 +105,26 @@ function updateWeaponTray(refs: HudRefs, state: GameState): void {
   }
 }
 
-// Always-visible readout of the four multiplier passives plus armor, so a
-// pick's effect is confirmable the instant it's made rather than only
-// inferable from play — see docs/BACKLOG.md "Upgrade cards give no
-// visible confirmation of what they changed".
+// Always-visible readout, so a pick's effect is confirmable the instant
+// it's made rather than only inferable from play — see docs/BACKLOG.md
+// "Upgrade cards give no visible confirmation of what they changed".
+//
+// Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10a): DMG/SPD are
+// gone — both became per-weapon once Amplifier/Overclock moved from
+// global passives to socketed gems, so a whole-game multiplier for
+// either stopped meaning anything. Replaced by a single overall-DPS
+// readout (state.dps, systems/dps.ts) — mass destroyed, not damage
+// requested, sourced from the one choke point every weapon's damage
+// already routes through (grid/clear.ts). The confirmation job DMG/SPD
+// used to do moved to the inventory screen's live per-weapon stat lines
+// (5C), which update immediately on a socket change — strictly better
+// per-pick confirmation than a global number ever gave.
 function updateModifiers(refs: HudRefs, state: GameState): void {
-  const dmg = damageMult(state);
-  const spd = atkSpeedMult(state);
   const pick = pickupMult(state);
   const xp = xpMult(state);
   const armorPct = Math.round((1 - armorMult(state)) * 100);
   refs.modifiers.textContent =
-    `DMG ${dmg.toFixed(2)}x   SPD ${spd.toFixed(2)}x   ARMOR ${armorPct}%   ` +
+    `DPS ${state.dps.toFixed(0)}   ARMOR ${armorPct}%   ` +
     `PICKUP ${pick.toFixed(2)}x   XP ${xp.toFixed(2)}x   ` +
     // Phase 5B (docs/plans/phase-5b-framework.md S3): points bank here
     // until 5C's +/- control can spend them — Decision 65's rule that a

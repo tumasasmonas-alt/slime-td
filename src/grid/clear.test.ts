@@ -22,6 +22,7 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     sourceMaturity: 0,
     parts: [],
     startMass: 50,
+    lastHitAt: -Infinity,
     ...overrides,
   };
 }
@@ -364,6 +365,180 @@ describe('clearAt', () => {
       // tuning/coagulants.ts's COAGULANT_SPLATTER, applied by
       // systems/coagulants.ts's splatterOnDeath.
       expect(after).toBeGreaterThan(before);
+    });
+  });
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S2): the RESOLVE
+  // stage, as new ClearOptions rather than a new damage path.
+  describe('RESOLVE options (Phase 6A-2)', () => {
+    it('ignoreResistance (Pierce) removes strictly more from dense tissue than the same hit without it', () => {
+      const plain = freshState();
+      plain.grid = makeTestGrid();
+      const idx = 10 * plain.grid.cols + 10;
+      plain.grid.growth[idx] = 0.95; // dense — resistance normally near its floor
+      clearAt(plain, 105, 105, 10, { radiusPx: 15 });
+      const plainRemoved = 0.95 - plain.grid.growth[idx]!;
+
+      const pierced = freshState();
+      pierced.grid = makeTestGrid();
+      pierced.grid.growth[idx] = 0.95;
+      clearAt(pierced, 105, 105, 10, { radiusPx: 15, ignoreResistance: true });
+      const piercedRemoved = 0.95 - pierced.grid.growth[idx]!;
+
+      expect(piercedRemoved).toBeGreaterThan(plainRemoved);
+    });
+
+    it('flattenFalloff (Splash) removes strictly more at the rim of the hit than without it', () => {
+      const rimIdx = 10 * 20 + 13; // 30px east of the hit origin, inside a 40px radius
+      const plain = freshState();
+      plain.grid = makeTestGrid();
+      plain.grid.growth[rimIdx] = 0.5;
+      clearAt(plain, 105, 105, 50, { radiusPx: 40 });
+      const plainRemoved = 0.5 - plain.grid.growth[rimIdx]!;
+
+      const splashed = freshState();
+      splashed.grid = makeTestGrid();
+      splashed.grid.growth[rimIdx] = 0.5;
+      clearAt(splashed, 105, 105, 50, { radiusPx: 40, flattenFalloff: true });
+      const splashedRemoved = 0.5 - splashed.grid.growth[rimIdx]!;
+
+      expect(splashedRemoved).toBeGreaterThan(plainRemoved);
+    });
+
+    describe('overflow', () => {
+      it('carries overkill damage to the single nearest surviving coagulant, outside the hit’s own reach', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const weak = makeCoagulant({ x: 105, y: 105, mass: 1 }); // dies to a tiny fraction of the hit
+        // Outside the direct hit's own reach (radiusPx 20 + this body's
+        // radius 5) — only overflow can touch it, isolating the effect
+        // under test from ordinary direct-overlap damage.
+        const survivor = makeCoagulant({ x: 105, y: 145, mass: 500, radius: 5 });
+        state.coagulants = [weak, survivor];
+
+        clearAt(state, 105, 105, 500, { radiusPx: 20, overflow: true });
+
+        expect(weak.mass).toBe(0);
+        expect(survivor.mass).toBeLessThan(500);
+      });
+
+      it('never applies overflow when the option is absent — no more than the direct hit is removed', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const weak = makeCoagulant({ x: 105, y: 105, mass: 1 });
+        // Placed outside the hit disc's own reach (radiusPx 20 + this
+        // body's own radius) so only overflow — not direct overlap —
+        // could ever touch it, isolating exactly what's under test.
+        const survivor = makeCoagulant({ x: 105, y: 145, mass: 500, radius: 5 });
+        state.coagulants = [weak, survivor];
+
+        clearAt(state, 105, 105, 500, { radiusPx: 20 }); // no overflow option
+
+        expect(weak.mass).toBe(0);
+        expect(survivor.mass).toBe(500); // untouched — the excess was discarded, not carried
+      });
+
+      it('conserves mass — excess applied to the survivor is never more than what overkilled the first target', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const weak = makeCoagulant({ x: 105, y: 105, mass: 5 });
+        const survivor = makeCoagulant({ x: 108, y: 105, mass: 1000 });
+        state.coagulants = [weak, survivor];
+
+        const removed = clearAt(state, 105, 105, 500, { radiusPx: 20, overflow: true });
+
+        // totalRemoved returned by clearAt already accounts for exactly
+        // what left both bodies — no double counting, no invention.
+        const actualRemoved = 5 - weak.mass + (1000 - survivor.mass);
+        expect(removed).toBeCloseTo(actualRemoved, 5);
+      });
+    });
+
+    it('kickback displaces a hit coagulant away from the hit origin', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ x: 110, y: 105, mass: 50, radius: 5 });
+      state.coagulants = [c];
+      const beforeDist = Math.hypot(c.x - 105, c.y - 105);
+
+      clearAt(state, 105, 105, 30, { radiusPx: 20, kickback: 40 });
+
+      const afterDist = Math.hypot(c.x - 105, c.y - 105);
+      expect(afterDist).toBeGreaterThan(beforeDist);
+    });
+
+    it('kickback keeps a coagulant inside the arena bounds', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ x: 5, y: 5, mass: 50, radius: 5 }); // near the corner
+      state.coagulants = [c];
+
+      clearAt(state, 10, 10, 30, { radiusPx: 20, kickback: 10000 }); // absurdly large push
+
+      expect(c.x).toBeGreaterThanOrEqual(c.radius);
+      expect(c.y).toBeGreaterThanOrEqual(c.radius);
+    });
+
+    describe('priming', () => {
+      it('applies the bonus multiplier to a coagulant not hit within the priming window', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000 }); // never hit — lastHitAt: -Infinity
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, priming: 3 });
+        const primedRemoved = 1000 - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: 1000 });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 }); // no priming
+        const unprimedRemoved = 1000 - cControl.mass;
+
+        expect(primedRemoved).toBeCloseTo(unprimedRemoved * 3, 5);
+      });
+
+      it('does not apply the bonus to a coagulant hit again inside the priming window', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000 });
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, priming: 3 }); // first hit — primed, bonus applies
+        const afterFirst = c.mass;
+        clearAt(state, 105, 105, 50, { radiusPx: 20, priming: 3 }); // immediately again — inside the window
+        const secondRemoved = afterFirst - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: afterFirst });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 }); // one unprimed hit, same starting mass
+        const controlRemoved = afterFirst - cControl.mass;
+
+        expect(secondRemoved).toBeCloseTo(controlRemoved, 5);
+      });
+
+      it('re-applies the bonus once the priming window has elapsed', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000, lastHitAt: 0 });
+        state.coagulants = [c];
+        state.time = 10; // well past PRIMING_WINDOW since the last hit
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, priming: 3 });
+        const primedRemoved = 1000 - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: 1000 });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const unprimedRemoved = 1000 - cControl.mass;
+
+        expect(primedRemoved).toBeCloseTo(unprimedRemoved * 3, 5);
+      });
     });
   });
 });

@@ -61,7 +61,7 @@ describe('withdrawPoints — no destructive respec (arsenal plan S5)', () => {
     state.weapons.chain = 24; // socketCount(24) = 5
     state.weaponSockets.chain = {
       extensions: [],
-      gems: [1, 2, 3, 4, 5].map((id) => ({ id, kind: 'x' })),
+      gems: [1, 2, 3, 4, 5].map((id) => ({ id, kind: 'amplifier' as const })),
     };
     const totalBefore = state.weaponSockets.chain!.gems.length + state.gemInventory.length;
 

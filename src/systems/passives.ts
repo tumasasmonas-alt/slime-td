@@ -10,13 +10,9 @@ function passiveMult(state: GameState, key: PassiveKey, perLevel: number, cap?: 
   return cap !== undefined ? Math.min(value, cap) : value;
 }
 
-export function damageMult(state: GameState): number {
-  return 1 + passiveMult(state, 'damage', 0.1);
-}
-
-export function atkSpeedMult(state: GameState): number {
-  return 1 + passiveMult(state, 'atkSpeed', 0.09);
-}
+// Phase 6A-1: damageMult()/atkSpeedMult() are gone — Amplifier and
+// Overclock are per-weapon socketed gems now (systems/weaponMods.ts),
+// not whole-game passives. See docs/plans/phase-6a1-gem-foundation.md S7.
 
 export function pickupMult(state: GameState): number {
   return 1 + passiveMult(state, 'pickup', 0.35);

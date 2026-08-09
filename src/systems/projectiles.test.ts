@@ -20,6 +20,7 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     sourceMaturity: 0,
     parts: [],
     startMass: 50,
+    lastHitAt: -Infinity,
     ...overrides,
   };
 }
@@ -56,7 +57,7 @@ describe('updateProjectiles — bolt', () => {
   it('travels and is removed once its life expires', () => {
     const state = freshState();
     state.grid = makeTestGrid();
-    state.projectiles.push({ type: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 0.05 });
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 0.05 });
 
     updateProjectiles(state, 0.1);
 
@@ -66,7 +67,7 @@ describe('updateProjectiles — bolt', () => {
   it('is removed once it travels off the world bounds', () => {
     const state = freshState();
     state.grid = makeTestGrid();
-    state.projectiles.push({ type: 'bolt', x: -100, y: 300, vx: -1000, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5 });
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: -100, y: 300, vx: -1000, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5 });
 
     updateProjectiles(state, 0.1);
 
@@ -77,7 +78,7 @@ describe('updateProjectiles — bolt', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     const idx = revealAt(state.grid, 305, 300, 0.6);
-    state.projectiles.push({ type: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 30, radius: 4, color: '#fff', life: 5 });
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 30, radius: 4, color: '#fff', life: 5 });
 
     updateProjectiles(state, 0.1);
 
@@ -88,7 +89,7 @@ describe('updateProjectiles — bolt', () => {
   it('keeps traveling while nothing revealed is in its path', () => {
     const state = freshState();
     state.grid = makeTestGrid();
-    state.projectiles.push({ type: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5 });
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5 });
 
     updateProjectiles(state, 0.1);
 
@@ -104,7 +105,7 @@ describe('updateProjectiles — bolt', () => {
     state.grid = makeTestGrid();
     const c = makeCoagulant({ x: 305, y: 300, radius: 10, mass: 50 });
     state.coagulants = [c];
-    state.projectiles.push({ type: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 30, radius: 4, color: '#fff', life: 5 });
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 30, radius: 4, color: '#fff', life: 5 });
 
     updateProjectiles(state, 0.1);
 
@@ -121,6 +122,7 @@ describe('updateProjectiles — chain', () => {
     revealAt(state.grid, 340, 300, 0.6); // next hop target, within CHAIN_HOP_SEARCH_RADIUS (150)
     state.projectiles.push({
       type: 'chain',
+      src: 'chain',
       x: 300,
       y: 300,
       vx: 10,
@@ -153,6 +155,7 @@ describe('updateProjectiles — chain', () => {
     revealAt(state.grid, 340, 300, 0.6);
     state.projectiles.push({
       type: 'chain',
+      src: 'chain',
       x: 300,
       y: 300,
       vx: 10,
@@ -177,6 +180,7 @@ describe('updateProjectiles — chain', () => {
     revealAt(state.grid, 305, 300, 0.6); // only this one revealed, nothing else nearby
     state.projectiles.push({
       type: 'chain',
+      src: 'chain',
       x: 300,
       y: 300,
       vx: 10,
@@ -206,6 +210,7 @@ describe('updateProjectiles — chain', () => {
     state.coagulants = [makeCoagulant({ x: 301, y: 260, radius: 10 })];
     state.projectiles.push({
       type: 'chain',
+      src: 'chain',
       x: 300,
       y: 300,
       vx: 10,
@@ -236,6 +241,7 @@ describe('updateProjectiles — missile', () => {
     state.grid = makeTestGrid();
     state.projectiles.push({
       type: 'missile',
+      src: 'missile',
       x: 300,
       y: 300,
       vx: 0,
@@ -265,6 +271,7 @@ describe('updateProjectiles — missile', () => {
     const idx = revealAt(state.grid, 305, 300, 0.6); // near the target, within splash
     state.projectiles.push({
       type: 'missile',
+      src: 'missile',
       x: 300,
       y: 300,
       vx: 0,
@@ -290,6 +297,7 @@ describe('updateProjectiles — missile', () => {
     revealAt(state.grid, 305, 300, 0.6); // where this frame's step will land
     state.projectiles.push({
       type: 'missile',
+      src: 'missile',
       x: 300,
       y: 300,
       vx: 300,
@@ -319,6 +327,7 @@ describe('updateProjectiles — missile', () => {
     state.coagulants = [c];
     state.projectiles.push({
       type: 'missile',
+      src: 'missile',
       x: 300,
       y: 300,
       vx: 300,
@@ -336,5 +345,203 @@ describe('updateProjectiles — missile', () => {
 
     expect(state.projectiles).toHaveLength(0);
     expect(c.mass).toBeLessThan(50);
+  });
+});
+
+// Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S3): the generic
+// behaviour flags — a non-chain-type projectile (Bolt/Missile) gaining
+// one of Chain's mechanics, or a wholly new one, via a socketed gem.
+describe('updateProjectiles — behaviour flags', () => {
+  it('pierce: passes through a hit instead of despawning, consuming one charge', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, pierce: 2 });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(1);
+    expect(state.projectiles[0]!.pierce).toBe(1);
+  });
+
+  it('pierce: despawns once its last charge is spent', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, pierce: 0 });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('without pierce, an ordinary bolt still despawns on impact (no behaviour-flag regression)', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5 });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('forks: splits into children on first impact, each carrying a damage share', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, forks: 2 });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(2);
+    for (const child of state.projectiles) {
+      expect(child.forks).toBe(0);
+      expect(child.dmg).toBeLessThan(10);
+      expect(child.dmg).toBeGreaterThan(0);
+    }
+  });
+
+  it('forks: a child never forks again', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    // Reveal a wide patch so the forked children also find something to hit.
+    for (let dx = -20; dx <= 20; dx += 10) revealAt(state.grid, 305 + dx, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, forks: 2 });
+
+    updateProjectiles(state, 0.1); // first impact — forks into 2
+    const afterFirst = state.projectiles.length;
+    updateProjectiles(state, 0.1); // children may hit again, but must not fork further
+
+    expect(afterFirst).toBe(2);
+    expect(state.projectiles.length).toBeLessThanOrEqual(2);
+  });
+
+  it('chains: a non-chain-type projectile hops to a nearby coagulant, decaying damage', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const c = makeCoagulant({ x: 320, y: 300, radius: 10 });
+    state.coagulants = [c];
+    state.projectiles.push({
+      type: 'bolt',
+      src: 'bolt',
+      x: 300,
+      y: 300,
+      vx: 300, // moves to x=309 in one 0.03s tick — inside the coagulant's 304..336 hit window
+      vy: 0,
+      dmg: 20,
+      radius: 6,
+      color: '#fff',
+      life: 5,
+      chains: 2,
+    });
+
+    updateProjectiles(state, 0.03);
+
+    expect(state.projectiles).toHaveLength(1);
+    expect(state.projectiles[0]!.dmg).toBeLessThan(20);
+    expect(state.projectiles[0]!.chains).toBe(1);
+  });
+
+  it('chains: despawns once its hop budget is exhausted', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, chains: 1 });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('bounces: hops between coagulants only, ignoring a revealed grid cluster', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 302, 300, 0.6); // a closer grid cluster bounces must ignore
+    const c = makeCoagulant({ x: 320, y: 300, radius: 10 }); // reachable in one 0.03s tick, matching the chains test above
+    state.coagulants = [c];
+    state.projectiles.push({
+      type: 'bolt',
+      src: 'bolt',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      dmg: 20,
+      radius: 6,
+      color: '#fff',
+      life: 5,
+      bounces: 1,
+    });
+
+    updateProjectiles(state, 0.03);
+
+    // With bounces exhausted at 0 and no second coagulant to hop to, it despawns —
+    // the point under test is that the coagulant was hit at all (bounces fired).
+    expect(c.mass).toBeLessThan(50);
+  });
+
+  it('bounces: never triggers on a plain grid-cluster hit, only a coagulant hit', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, bounces: 3 });
+
+    updateProjectiles(state, 0.1);
+
+    // No coagulant anywhere — the bounce condition (hitCoagulant) never
+    // holds, so this behaves like a plain bolt: despawns on the grid hit.
+    expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('ricochet: reverses once along its path instead of despawning', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, ricochet: true });
+
+    updateProjectiles(state, 0.1);
+
+    expect(state.projectiles).toHaveLength(1);
+    expect(state.projectiles[0]!.vx).toBeLessThan(0); // reversed
+    expect(state.projectiles[0]!.ricocheted).toBe(true);
+  });
+
+  it('ricochet: only reverses once — a second impact despawns it normally', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    revealAt(state.grid, 295, 300, 0.6); // on the reversed path
+    state.projectiles.push({ type: 'bolt', src: 'bolt', x: 300, y: 300, vx: 10, vy: 0, dmg: 10, radius: 4, color: '#fff', life: 5, ricochet: true });
+
+    updateProjectiles(state, 0.1); // first impact — reverses
+    updateProjectiles(state, 0.1); // second impact — already ricocheted, despawns
+
+    expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('priority: forks takes precedence over chains when a projectile carries both', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.6);
+    state.projectiles.push({
+      type: 'bolt',
+      src: 'bolt',
+      x: 300,
+      y: 300,
+      vx: 10,
+      vy: 0,
+      dmg: 10,
+      radius: 4,
+      color: '#fff',
+      life: 5,
+      forks: 2,
+      chains: 3,
+    });
+
+    updateProjectiles(state, 0.1);
+
+    // Forked into two children, not hopped as a single chaining projectile.
+    expect(state.projectiles).toHaveLength(2);
   });
 });

@@ -2,7 +2,9 @@ import type { GameState } from '../state';
 import { clearAt } from '../grid/clear';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { findCoagulantHit } from '../systems/coagulants';
-import { damageMult } from '../systems/passives';
+import { nearestFrontierPoint } from '../systems/frontier';
+import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { weaponMods } from '../systems/weaponMods';
 import { WEAPON_DEFS, bladeCount, bladeDamage, bladeRadius } from '../tuning/weapons';
 import { runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
@@ -27,20 +29,59 @@ const BLADE_GLOW_COLOR = '#6df0ff';
 // equipped; the per-slot hit cooldown that would elsewhere live in READY
 // or ACQUIRE is intrinsic to DELIVER here, since it's per-blade, not
 // per-weapon. Self-centered — no ACQUIRE stage.
-const bladesPipeline: WeaponPipeline = {
+export const bladesPipeline: WeaponPipeline = {
   ready: () => true,
-  deliver: (state, lvl) => {
+  deliver: (state, lvl, _target, powerMult = 1) => {
     const grid = state.grid;
     if (!grid) return;
     const t = state.tower;
-    const count = bladeCount(lvl);
-    const dmg = bladeDamage(lvl) * damageMult(state);
-    const spin = state.time * SPIN_SPEED;
-    const radius = bladeRadius(lvl, grid.perimeter);
+    const mods = weaponMods(state, 'blades');
+    const opts = resolveOpts(state, 'blades');
+    const plan = emissionPlan(state, 'blades');
+    // Multishot's "+2 blades" reading — emissionPlan()'s count (1, or
+    // 1+MULTISHOT_BONUS per Multishot/Formation gem socketed) minus its
+    // own baseline of 1 gives how many *extra* blades to add on top of
+    // bladeCount(lvl), rather than treating the whole ring as N separate
+    // "shots."
+    const extra = plan.count - 1;
+    const count = bladeCount(lvl) + extra;
+    const dmg = (bladeDamage(lvl) * mods.damage * powerMult) / (extra > 0 ? plan.count : 1);
+    // Rate and Velocity read differently here than on every other
+    // archetype (docs/plans/phase-6a1-gem-foundation.md's Overclock note):
+    // orbital has no cooldown, so Overclock shrinks the per-blade re-hit
+    // gate (attack frequency) instead, while Velocity — travel speed on
+    // every other archetype — is genuinely the blade's own orbital speed.
+    // Two gems both meaning "spin faster" would be a duplicate; keeping
+    // them on separate axes is what avoids that.
+    const spin = state.time * SPIN_SPEED * mods.velocity;
+    const radius = bladeRadius(lvl, grid.perimeter) * mods.area;
+    // Pierce: no per-blade hit cooldown — never stopped by what it cuts.
+    // Reusing ignoreResistance as the signal (only Pierce ever sets it)
+    // rather than adding a dedicated field just for this one archetype.
+    const hitCooldown = opts.ignoreResistance ? 0 : HIT_COOLDOWN / mods.rate;
+
+    // Homing: blades bias toward the threatened side of the arena.
+    // Formation: instead of spreading evenly around the full circle,
+    // blades lock into a narrow arc — centred on the threat if Homing is
+    // also socketed, otherwise a fixed forward arc.
+    let baseAngle = 0;
+    if (hasHomingGem(state, 'blades') || plan.formation) {
+      const threat = nearestFrontierPoint(state);
+      if (threat) baseAngle = Math.atan2(threat.y - t.y, threat.x - t.x);
+    }
+    const arcSpan = plan.formation ? Math.PI * 0.6 : Math.PI * 2;
+    const arcStart = plan.formation ? baseAngle - arcSpan / 2 : baseAngle;
+    // Homing without Formation nudges the evenly-spread ring's phase
+    // toward the threat rather than narrowing it into an arc — a lighter
+    // touch than Formation's hard lock, matching the card's own
+    // "biases toward" language rather than "locks to."
+    const homingPhase = !plan.formation && hasHomingGem(state, 'blades') ? baseAngle : 0;
 
     state.orbitals = [];
     for (let i = 0; i < count; i++) {
-      const a = spin + (i / count) * Math.PI * 2;
+      const a = plan.formation
+        ? arcStart + (count <= 1 ? arcSpan / 2 : (i / (count - 1)) * arcSpan) + spin * 0.15
+        : spin + homingPhase + (i / count) * Math.PI * 2;
       const bx = t.x + Math.cos(a) * radius;
       const by = t.y + Math.sin(a) * radius;
       state.orbitals.push({
@@ -60,10 +101,16 @@ const bladesPipeline: WeaponPipeline = {
       // blob sitting there, which isRevealedIdx alone can't see.
       const onTarget = isRevealedIdx(grid, ci) || findCoagulantHit(state, bx, by, HIT_RADIUS) !== null;
       if (onTarget && state.time >= nextAllowed) {
-        clearAt(state, bx, by, dmg, { radiusPx: HIT_RADIUS, coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1 });
-        state.bladeNextHit[i] = state.time + HIT_COOLDOWN;
+        clearAt(state, bx, by, dmg, { radiusPx: HIT_RADIUS, coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1, ...opts });
+        state.bladeNextHit[i] = state.time + hitCooldown;
       }
     }
+  },
+  // Phase 6A-2: declared on the pipeline itself so
+  // weapons/registry.ts's generic updateAllWeapons() loop preserves this
+  // without needing to know Blades is special.
+  cleanup: (state) => {
+    state.orbitals = [];
   },
 };
 
@@ -73,8 +120,8 @@ const bladesPipeline: WeaponPipeline = {
 export function updateBladesWeapon(state: GameState, _dt: number): void {
   const lvl = state.weapons.blades;
   if (!lvl || !state.grid) {
-    state.orbitals = [];
+    bladesPipeline.cleanup?.(state);
     return;
   }
-  runWeaponPipeline(state, _dt, lvl, bladesPipeline);
+  runWeaponPipeline(state, _dt, lvl, bladesPipeline, 'blades');
 }

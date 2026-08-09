@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { freshState } from '../state';
-import { applyCardChoice, buildCoreGemPool, buildWeaponSidePool, pickCards, shuffled, type CardChoice } from './cards';
+import { BUNDLE_INTERVAL } from '../tuning/bundles';
+import { applyCardChoice, buildBundlePool, buildCoreGemPool, buildWeaponSidePool, pickCards, shuffled, type CardChoice } from './cards';
 
 describe('shuffled', () => {
   it('returns a permutation — same elements, same length', () => {
@@ -19,7 +20,7 @@ describe('shuffled', () => {
 });
 
 describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', () => {
-  it('never offers a weapon-level card kind — only extension/passive', () => {
+  it('never offers a weapon-level card kind — only extension/gem/coreGem/heal', () => {
     const state = freshState();
     state.weapons.bolt = 5;
     const pool = buildWeaponSidePool(state);
@@ -40,7 +41,7 @@ describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', ()
     state.weapons.bolt = 1;
 
     const pool = buildWeaponSidePool(state);
-    const allowedKinds: CardChoice['kind'][] = ['extension', 'coreGem', 'passive', 'heal'];
+    const allowedKinds: CardChoice['kind'][] = ['extension', 'gem', 'coreGem', 'heal'];
     for (const c of pool) {
       expect(allowedKinds).toContain(c.kind);
     }
@@ -75,17 +76,43 @@ describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', ()
     if (ext?.kind === 'extension') expect(ext.nextLevel).toBe(2);
   });
 
-  it('only pools the legacy passives (damage, atkSpeed), never the five core-gem keys', () => {
+  // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S6a): gems replace
+  // the legacy damage/atkSpeed passive cards entirely.
+  it('offers gem cards for an equipped weapon with a free socket', () => {
     const state = freshState();
+    state.weapons.bolt = 1; // socketCount(1) = 1, free
     const pool = buildWeaponSidePool(state);
-    const passiveKeys = pool.filter((c) => c.kind === 'passive').map((c) => (c.kind === 'passive' ? c.key : null));
-    expect(passiveKeys).toContain('damage');
-    expect(passiveKeys).toContain('atkSpeed');
-    expect(passiveKeys).not.toContain('maxHp');
-    expect(passiveKeys).not.toContain('regen');
-    expect(passiveKeys).not.toContain('armor');
-    expect(passiveKeys).not.toContain('pickup');
-    expect(passiveKeys).not.toContain('xpGain');
+    const gemKeys = pool.filter((c) => c.kind === 'gem').map((c) => (c.kind === 'gem' ? c.key : null));
+    expect(gemKeys).toContain('amplifier'); // supports every archetype, bolt included
+  });
+
+  it('never offers a gem with no free socket anywhere in the deck', () => {
+    const state = freshState();
+    state.weapons.bolt = 0; // socketCount(0) = 1
+    state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'amplifier' }] }; // the one socket is full
+    const pool = buildWeaponSidePool(state);
+    expect(pool.some((c) => c.kind === 'gem')).toBe(false);
+  });
+
+  it('never offers a gem already socketed in every equipped weapon that could hold it', () => {
+    const state = freshState();
+    state.weapons.bolt = 3; // socketCount(3) = 2, one free
+    state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'amplifier' }] };
+    const pool = buildWeaponSidePool(state);
+    // amplifier is already IN bolt, but bolt still has a free socket — the
+    // gem is legal there for a DIFFERENT kind, but not a second amplifier.
+    const amplifierOffered = pool.some((c) => c.kind === 'gem' && c.key === 'amplifier');
+    expect(amplifierOffered).toBe(false);
+  });
+
+  it('never offers Extension or Velocity for an archetype that refuses them', () => {
+    const state = freshState();
+    state.weapons.immolation = 1; // 'ring' — Extension and Velocity both refuse it
+    const pool = buildWeaponSidePool(state);
+    const gemKeys = pool.filter((c) => c.kind === 'gem').map((c) => (c.kind === 'gem' ? c.key : null));
+    expect(gemKeys).not.toContain('extension');
+    expect(gemKeys).not.toContain('velocity');
+    expect(gemKeys).toContain('amplifier'); // still legal — universal
   });
 });
 
@@ -148,9 +175,7 @@ describe('pickCards — core-gem cadence (settled 2026-08-08: every second level
     const state = freshState();
     state.tower.level = 3; // odd, no core slot
     state.coreGems = ['maxHp', 'regen', 'armor'];
-    state.passives.damage = 8; // maxLevel, no more legacy passive cards
-    state.passives.atkSpeed = 8;
-    // no weapons equipped -> no extension candidates either
+    // no weapons equipped -> no extension or gem candidates either
     const choices = pickCards(state);
     expect(choices).toEqual([{ kind: 'heal' }]);
   });
@@ -194,10 +219,23 @@ describe('applyCardChoice', () => {
     expect(state.passives.pickup).toBeUndefined();
   });
 
-  it('passive: still works for the legacy damage/atkSpeed keys', () => {
+  // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10 Q1): grants an
+  // instance into inventory only — it does NOT auto-socket. The UI layer
+  // (ui/upgradeCards.ts) is what opens the picker immediately afterward.
+  it('gem: grants an unsocketed instance into gemInventory with a fresh id', () => {
     const state = freshState();
-    applyCardChoice(state, { kind: 'passive', key: 'damage', nextLevel: 1, isNew: true });
-    expect(state.passives.damage).toBe(1);
+    const before = state.nextGemId;
+    applyCardChoice(state, { kind: 'gem', key: 'amplifier' });
+    expect(state.gemInventory).toEqual([{ id: before, kind: 'amplifier' }]);
+    expect(state.nextGemId).toBe(before + 1);
+  });
+
+  it('gem: two picks grant two distinct instances, never merged into a stack', () => {
+    const state = freshState();
+    applyCardChoice(state, { kind: 'gem', key: 'amplifier' });
+    applyCardChoice(state, { kind: 'gem', key: 'amplifier' });
+    expect(state.gemInventory).toHaveLength(2);
+    expect(state.gemInventory[0]!.id).not.toBe(state.gemInventory[1]!.id);
   });
 
   it('heal: restores hp to max', () => {
@@ -205,5 +243,79 @@ describe('applyCardChoice', () => {
     state.tower.hp = 10;
     applyCardChoice(state, { kind: 'heal' });
     expect(state.tower.hp).toBe(state.tower.maxHp);
+  });
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S8): a bundle
+  // grants every gem it holds in one pick.
+  it('bundle: grants an instance of every gem in the package', () => {
+    const state = freshState();
+    const before = state.nextGemId;
+    applyCardChoice(state, {
+      kind: 'bundle',
+      bundle: { name: 'Test Package', gems: ['multishot', 'pierce', 'velocity'] },
+    });
+    expect(state.gemInventory).toEqual([
+      { id: before, kind: 'multishot' },
+      { id: before + 1, kind: 'pierce' },
+      { id: before + 2, kind: 'velocity' },
+    ]);
+  });
+});
+
+describe('buildBundlePool — Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S8)', () => {
+  it('is empty with no weapons equipped — nothing is legal anywhere', () => {
+    const state = freshState();
+    expect(buildBundlePool(state)).toHaveLength(0);
+  });
+
+  it('offers a bundle once every gem it holds has a legal home', () => {
+    const state = freshState();
+    state.weapons.bolt = 5; // socketCount(5) = 2, room for several gems on a projectile weapon
+    const pool = buildBundlePool(state);
+    const names = pool.map((c) => (c.kind === 'bundle' ? c.bundle.name : null));
+    expect(names).toContain('Ballistics Package'); // multishot/pierce/velocity — all legal on a projectile weapon
+  });
+
+  it('never offers a bundle containing a gem with nowhere legal to go', () => {
+    const state = freshState();
+    state.weapons.immolation = 1; // 'ring' — Velocity refuses it, and no other weapon is equipped
+    const pool = buildBundlePool(state);
+    const names = pool.map((c) => (c.kind === 'bundle' ? c.bundle.name : null));
+    expect(names).not.toContain('Ballistics Package'); // needs Velocity, which has nowhere to go
+  });
+});
+
+describe('pickCards — bundle levels (Phase 6A-2)', () => {
+  it('draws bundles instead of the normal pool on a bundle-interval level', () => {
+    const state = freshState();
+    state.tower.level = BUNDLE_INTERVAL;
+    state.weapons.bolt = 5;
+
+    const choices = pickCards(state);
+
+    expect(choices.length).toBeGreaterThan(0);
+    for (const c of choices) expect(c.kind).toBe('bundle');
+  });
+
+  it('falls back to the ordinary draw on a bundle level when no bundle is legal', () => {
+    const state = freshState();
+    state.tower.level = BUNDLE_INTERVAL;
+    // No weapons equipped at all -> gemHasLegalHome is false for every
+    // gem in every bundle, so none can be offered.
+
+    const choices = pickCards(state);
+
+    expect(choices.length).toBeGreaterThan(0);
+    expect(choices.some((c) => c.kind === 'bundle')).toBe(false);
+  });
+
+  it('draws the ordinary pool on a non-bundle level', () => {
+    const state = freshState();
+    state.tower.level = BUNDLE_INTERVAL + 1;
+    state.weapons.bolt = 5;
+
+    const choices = pickCards(state);
+
+    expect(choices.some((c) => c.kind === 'bundle')).toBe(false);
   });
 });

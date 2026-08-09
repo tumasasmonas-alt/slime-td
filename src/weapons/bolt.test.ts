@@ -76,19 +76,111 @@ describe('updateBoltWeapon', () => {
     expect(state.projectiles).toHaveLength(1);
   });
 
-  it('fires faster with Overclock (atkSpeed) leveled', () => {
+  // Phase 6A-1: Overclock is a per-weapon socketed gem now
+  // (systems/weaponMods.ts), not a global atkSpeed passive.
+  it('fires faster with an Overclock gem socketed', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     state.tower.x = 150;
     state.tower.y = 150;
     state.weapons.bolt = 1;
-    state.passives.atkSpeed = 5;
+    state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'overclock' }] };
     revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
     computeFrontier(state);
 
     updateBoltWeapon(state, 0.016);
 
-    // boltCooldown(1) / atkSpeedMult with atkSpeed=5 -> 0.55 / (1 + 5*0.09)
-    expect(state.weaponTimers.bolt).toBeCloseTo(0.55 / (1 + 5 * 0.09), 5);
+    // boltCooldown(1) / (1 + 0.4) — Overclock's +40% rate delta
+    expect(state.weaponTimers.bolt).toBeCloseTo(0.55 / 1.4, 5);
+  });
+
+  it('an Overclock gem socketed in a DIFFERENT weapon has no effect on bolt', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.bolt = 1;
+    state.weapons.chain = 1;
+    state.weaponSockets.chain = { extensions: [], gems: [{ id: 1, kind: 'overclock' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updateBoltWeapon(state, 0.016);
+
+    expect(state.weaponTimers.bolt).toBeCloseTo(0.55, 5);
+  });
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S5): emission
+  // multiplication — Multishot/Formation.
+  describe('Multishot / Formation', () => {
+    it('fires more than one projectile with a Multishot gem socketed', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.bolt = 1;
+      state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'multishot' }] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateBoltWeapon(state, 0.016);
+
+      expect(state.projectiles.length).toBeGreaterThan(1);
+    });
+
+    it('splits power across the extra shots rather than multiplying total damage', () => {
+      const withGem = freshState();
+      withGem.grid = makeTestGrid();
+      withGem.tower.x = 150;
+      withGem.tower.y = 150;
+      withGem.weapons.bolt = 1;
+      withGem.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'multishot' }] };
+      revealCellEastOfTower(withGem.grid, withGem.tower.x, withGem.tower.y);
+      computeFrontier(withGem);
+      updateBoltWeapon(withGem, 0.016);
+      const totalWithGem = withGem.projectiles.reduce((sum, p) => sum + p.dmg, 0);
+
+      const without = freshState();
+      without.grid = makeTestGrid();
+      without.tower.x = 150;
+      without.tower.y = 150;
+      without.weapons.bolt = 1;
+      revealCellEastOfTower(without.grid, without.tower.x, without.tower.y);
+      computeFrontier(without);
+      updateBoltWeapon(without, 0.016);
+      const totalWithoutGem = without.projectiles.reduce((sum, p) => sum + p.dmg, 0);
+
+      expect(totalWithGem).toBeCloseTo(totalWithoutGem, 5);
+    });
+
+    it('Formation fires the same shot count as plain Multishot, deterministically spread', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.bolt = 1;
+      state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'formation' }] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateBoltWeapon(state, 0.016);
+
+      expect(state.projectiles.length).toBeGreaterThan(1);
+    });
+  });
+
+  it('Pierce lets a bolt survive its first impact instead of despawning', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.bolt = 1;
+    state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'pierce' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updateBoltWeapon(state, 0.016);
+
+    expect(state.projectiles[0]!.pierce).toBeGreaterThan(0);
   });
 });

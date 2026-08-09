@@ -2,7 +2,7 @@ import { CORE_SOCKET_COUNT, type CoreGemKey } from './tuning/coreGems';
 import { EVENT_INITIAL_DELAY } from './tuning/events';
 import { xpToNext } from './tuning/xp';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './tuning/world';
-import type { PassiveKey, WeaponKey } from './types';
+import type { GemKey, PassiveKey, WeaponKey } from './types';
 
 // Fully typed port of the prototype's freshState() object. Game state
 // lives in this one central object (CLAUDE.md convention) — systems added
@@ -59,6 +59,66 @@ interface ProjectileBase {
   radius: number;
   color: string;
   life: number;
+  // Phase 6A-1: which weapon fired this, needed the moment a gem's effect
+  // has to be read at impact time rather than at spawn time — Expansion's
+  // area scaling on a projectile's impact radius (systems/projectiles.ts)
+  // is the first caller. Pulled forward from 6A-2's plan (which needed it
+  // for `resolveOpts` and the behaviour flags) since Expansion needed it
+  // first; see docs/plans/phase-6a2-behaviour-gems.md S3.
+  src: WeaponKey;
+  // Phase 6A-1: Expansion's area scaling on a projectile's impact
+  // radius — the projectile's own radius (above) is its *visual* size,
+  // unrelated to how big a hit it lands. Defaults to 1 via `?? 1` at
+  // every read site, so a projectile spawned before this field existed
+  // (impossible in practice, but matches the pattern) degrades safely.
+  impactAreaMult?: number;
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S3): projectile
+  // behaviour flags — the entity carries its own behaviour, the same
+  // pattern that already makes rendering entity-driven (arsenal plan
+  // S9½). Chain's own hopsLeft/visited/legStart (below) is the template
+  // this generalizes: `chains` is that same mechanic, promoted to a flag
+  // any projectile can carry instead of Chain's private implementation.
+  pierce?: number; // pass-throughs remaining before despawning on impact
+  forks?: number; // splits into this many children on first impact (consumed then)
+  chains?: number; // arcs to any nearby target (grid or coagulant) after resolving, decaying damage each hop
+  bounces?: number; // like `chains`, but coagulant-only — Bounce's distinct reading from Chaining
+  homing?: boolean; // steers toward its target point each tick
+  ricochet?: boolean; // reverses once along its incoming path, damaging again
+  // Runtime bookkeeping for chains/bounces (which target has this
+  // projectile already visited, so a hop never lands on the same spot
+  // twice) and the one-shot flags below. Optional because most
+  // projectiles carry none of this — only ones with a Behaviour gem do.
+  // Separate sets for `chains` and `bounces`, deliberately: they index
+  // into different spaces (grid cell index vs. coagulant array index),
+  // and a weapon can carry both gems at once (nothing stops it), so
+  // sharing one set would let a grid-cell index and a coagulant index
+  // collide as false "already visited" matches.
+  visited?: Set<number>;
+  bounceVisited?: Set<number>;
+  forked?: boolean;
+  ricocheted?: boolean;
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S2): RESOLVE
+  // options baked in at spawn time (systems/resolveOpts.ts), read back by
+  // systems/projectiles.ts when the impact actually resolves — the same
+  // pattern `impactAreaMult` already established. Individual fields
+  // rather than one nested ClearOptions, so this file doesn't need a
+  // type-only import from grid/clear.ts (which already imports GameState
+  // from here) for what both sides already agree are exactly grid/clear.ts's
+  // ClearOptions field names.
+  ignoreResistance?: boolean;
+  flattenFalloff?: boolean;
+  overflow?: boolean;
+  kickback?: number;
+  priming?: number;
+
+  // Phase 6A-2: Homing's steering target for a non-missile projectile —
+  // missile already has its own required `targetPoint` (below); this is
+  // the same idea made optional for Bolt/Chain when the Homing gem is
+  // socketed. Captured once at spawn (the point the weapon was aiming at
+  // when it fired), not re-acquired mid-flight.
+  homingTarget?: { x: number; y: number };
 }
 
 export interface BoltProjectile extends ProjectileBase {
@@ -134,6 +194,20 @@ export interface CausticCloud {
   // docs/DECISIONS.md #4). Required, not optional, since it's
   // always populated up front.
   bubbleSeeds: BubbleSeed[];
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S6): the Homing
+  // gem's cloud reading — "drifts toward the nearest mass instead of
+  // sitting still," applied per-tick in systems/clouds.ts rather than
+  // once at spawn, since a cloud lives for several seconds and the
+  // nearest mass can change during that time. RESOLVE options mirror
+  // ProjectileBase's individual-field pattern for the same reason (no
+  // type-only import cycle with grid/clear.ts).
+  homing?: boolean;
+  ignoreResistance?: boolean;
+  flattenFalloff?: boolean;
+  overflow?: boolean;
+  kickback?: number;
+  priming?: number;
 }
 
 export interface Particle {
@@ -274,11 +348,9 @@ export type CoagulantPhase = 'forming' | 'active';
 // objects, not a stacked count.
 export interface GemInstance {
   id: number;
-  // No real gem kinds exist until Phase 6A populates them (arsenal plan
-  // S1) — left as `string` rather than a union with one placeholder
-  // member, since a real union will replace this wholesale rather than
-  // grow from a seed value.
-  kind: string;
+  // Phase 6A-1: narrowed from a placeholder `string` to the real GemKey
+  // union now that Phase 6A populates one (arsenal plan S1).
+  kind: GemKey;
 }
 
 // One entry per extension *type* currently held on a weapon, tracking its
@@ -341,6 +413,12 @@ export interface Coagulant {
   // feedCarrier). Equal to `mass` at formation for every kind; harmless
   // and unused for anything that doesn't feed.
   startMass: number;
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S2): last state.time
+  // this coagulant took damage — Priming's "not hit recently" read.
+  // -Infinity at creation so the very first hit always counts as fresh.
+  // Written unconditionally in grid/clear.ts on every hit (cheap, one
+  // field), read only by weapons carrying the Priming gem.
+  lastHitAt: number;
 }
 
 export interface GameState {
@@ -402,6 +480,31 @@ export interface GameState {
   simAcc: number;
   announceTimer: number;
   contactPressure: number;
+
+  // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10a): the HUD's
+  // overall-DPS readout, replacing the deleted global DMG/SPD passives
+  // readout. `dpsAccum` is mass destroyed since the last frame — every
+  // `clearAt` call adds to it (grid/clear.ts), and systems/dps.ts drains
+  // it once per frame in the update pass (never a draw call, per
+  // Decisions 4/7) into `dps`, an exponentially-smoothed rate so the
+  // number reads as a live readout rather than jumping per hit.
+  dpsAccum: number;
+  dps: number;
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S4): Echo/Barrage's
+  // deferred emissions — a weapon firing again later than the tick that
+  // decided to fire. Drained each simulation frame by
+  // systems/emissions.ts, never inside a draw call. The same weapon
+  // registry this rides on (weapons/registry.ts's WEAPON_PIPELINES) is
+  // what Trigger (Phase 6I) needs to fire a different weapon by key, so
+  // this queue is also that mechanic's first real caller.
+  pendingEmissions: {
+    weapon: WeaponKey;
+    at: number;
+    lvl: number;
+    target: { x: number; y: number; dist: number } | null;
+    powerMult: number;
+  }[];
 
   // Counts level-ups an XP grant produced that the upgrade-card UI hasn't
   // shown a card for yet, consumed one at a time — see systems/xp.ts and
@@ -472,7 +575,10 @@ export function freshState(): GameState {
     simAcc: 0,
     announceTimer: 0,
     contactPressure: 0,
+    dpsAccum: 0,
+    dps: 0,
 
+    pendingEmissions: [],
     pendingLevelUps: 0,
     pendingAnnouncements: [],
   };

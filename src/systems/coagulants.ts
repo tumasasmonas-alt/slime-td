@@ -186,6 +186,7 @@ function splitCoagulant(c: Coagulant, towardX: number, towardY: number): [Coagul
     sourceMaturity: c.sourceMaturity,
     parts: [], // a fragment is always a plain circle, even splitting off a Bulwark someday
     startMass: fragmentMass,
+    lastHitAt: -Infinity, // a fresh fragment hasn't been hit yet, even though its parent had
   });
   return [make(1), make(-1)];
 }

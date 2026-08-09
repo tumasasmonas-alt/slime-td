@@ -1,4 +1,4 @@
-import type { GameState } from '../state';
+import type { Coagulant, GameState } from '../state';
 import { clamp, dist, rand } from '../util/math';
 import {
   COAGULANT_ARMOR_FLOOR,
@@ -7,6 +7,7 @@ import {
 } from '../tuning/coagulants';
 import { MATURITY_MAX, SCAR_PER_DENSITY, ageFloorAt, maturityBucket, maturityYieldMult } from '../tuning/maturity';
 import { COAGULANT_XP_RISK_PREMIUM, gemValueFromRemoved } from '../tuning/xp';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../tuning/world';
 import { dropGemShower } from '../systems/gems';
 import { coagulantOverlapArea, splatterOnDeath } from '../systems/coagulants';
 import { spawnParticles } from '../systems/particles';
@@ -19,7 +20,49 @@ export interface ClearOptions {
   // tuning/weapons.ts's WeaponDef.coagulantMult. Weapons that don't pass
   // one (tests, ad-hoc calls) get the neutral default.
   coagulantMult?: number;
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S2): the RESOLVE
+  // stage, added as new ClearOptions fields rather than a real pipeline
+  // stage — arsenal plan S4's one hard constraint is that stage 4 "may
+  // add new ClearOptions; it may not add a second damage path," and
+  // clearAt already is that one path (Decision 42). Built by
+  // systems/resolveOpts.ts from a weapon's socketed gems; every field
+  // here is a Behaviour-class gem's effect on this call.
+
+  // Pierce, on the three area archetypes (pulse/cloud/ring): the grid
+  // loop's density-resistance curve is skipped, so the hit lands at full
+  // power into thick tissue instead of being blunted where it matters
+  // most — a partial answer to "nothing scales up against density"
+  // (arsenal plan S3). Grid-only; a coagulant's own resistance constant
+  // represents "already maximum density" and has nothing to bypass.
+  ignoreResistance?: boolean;
+  // Splash, on the three area archetypes: flattens the linear distance
+  // falloff so the rim of the hit reads close to full power instead of
+  // trailing to zero — distinct from Expansion (bigger radius, same
+  // shape) rather than a duplicate of it.
+  flattenFalloff?: boolean;
+  // Overflow: damage that would overkill a coagulant carries to the
+  // single nearest surviving coagulant instead of being discarded by the
+  // clamp below. One hop only, applied once after the main coagulant
+  // loop — never chained further, so it terminates by construction.
+  overflow?: boolean;
+  // Kickback: every coagulant hit is shoved this many pixels outward from
+  // the hit's origin, clamped to stay inside the arena. Establishes the
+  // displacement primitive Repulsor (6F) and Inversion (6I) later reuse.
+  kickback?: number;
+  // Priming: a coagulant not hit in the last PRIMING_WINDOW seconds takes
+  // this multiplier on the hit that breaks that streak. Coagulant-only —
+  // see systems/resolveOpts.ts for why grid cells don't carry the same
+  // per-cell "last hit" state (the exact cost that got assist credit
+  // dropped in 5B).
+  priming?: number;
 }
+
+// "Not hit recently," for Priming — long enough that a weapon has to
+// genuinely spread its fire to keep triggering it, short enough that a
+// single weapon cycling through a small group of coagulants still gets
+// there.
+const PRIMING_WINDOW = 2.0;
 
 const GEM_DROP_THRESHOLD = 0.08;
 // Shared by both the grid loop and the coagulant loop below, so a future
@@ -74,8 +117,9 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       }
       const dens = grid.growth[i]!;
       if (dens <= 0.001) continue;
-      const falloff = 1 - d / radiusPx;
-      const resistance = clamp(1.3 - dens, 0.12, 1.3);
+      const rawFalloff = 1 - d / radiusPx;
+      const falloff = opts.flattenFalloff ? Math.max(rawFalloff, 0.85) : rawFalloff;
+      const resistance = opts.ignoreResistance ? 1.3 : clamp(1.3 - dens, 0.12, 1.3);
       // Phase 4A: maturity further reduces yield, floored so nothing is
       // ever unclearable (Decision 44's guarantee restated for terrain).
       const matYield = maturityYieldMult(grid.maturity[i]!);
@@ -119,6 +163,11 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   // coagulantOverlapArea, which sums per-part overlap for a non-circular
   // body (Bulwark) instead of treating it as one big circle.
   const weaponMult = opts.coagulantMult ?? 1;
+  // Phase 6A-2: Overflow's excess is summed across every coagulant this
+  // call overkills, then applied once, after the loop, to the single
+  // nearest survivor — never chained into a second overflow, which is
+  // what makes it terminate by construction rather than by a visited set.
+  let overflowExcess = 0;
   for (const c of state.coagulants) {
     if (c.mass <= 0) continue;
     if (dist(x, y, c.x, c.y) > radiusPx + c.radius) continue; // cheap reject before the trig
@@ -126,17 +175,54 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     if (overlap <= 0) continue;
     const cellsEquivalent = overlap / (grid.cellSize * grid.cellSize);
     const effectivePower = Math.max(power - c.armor, power * COAGULANT_ARMOR_FLOOR);
-    const removeAmt = clamp(
-      effectivePower * DAMAGE_COEFF * cellsEquivalent * COAGULANT_RESISTANCE * weaponMult * COAGULANT_DAMAGE_SCALE,
-      0,
-      c.mass,
-    );
+    // Priming: a coagulant not hit in the last PRIMING_WINDOW seconds
+    // takes the bonus on the hit that breaks the streak.
+    const primed = opts.priming !== undefined && state.time - c.lastHitAt >= PRIMING_WINDOW;
+    const primingMult = primed ? opts.priming! : 1;
+    const raw =
+      effectivePower * DAMAGE_COEFF * cellsEquivalent * COAGULANT_RESISTANCE * weaponMult * COAGULANT_DAMAGE_SCALE * primingMult;
+    const removeAmt = clamp(raw, 0, c.mass);
     if (removeAmt <= 0) continue;
+    c.lastHitAt = state.time;
     c.mass -= removeAmt;
     totalRemoved += removeAmt;
     coagulantRemoved += removeAmt;
+    if (opts.overflow && raw > removeAmt) overflowExcess += raw - removeAmt;
+    if (opts.kickback && opts.kickback > 0) {
+      const angle = Math.atan2(c.y - y, c.x - x);
+      c.x = clamp(c.x + Math.cos(angle) * opts.kickback, c.radius, WORLD_WIDTH - c.radius);
+      c.y = clamp(c.y + Math.sin(angle) * opts.kickback, c.radius, WORLD_HEIGHT - c.radius);
+    }
     if (c.mass <= 0) splatterOnDeath(state, c);
   }
+
+  if (overflowExcess > 0) {
+    let nearest: Coagulant | null = null;
+    let nearestDist = Infinity;
+    for (const c of state.coagulants) {
+      if (c.mass <= 0) continue;
+      const d = dist(x, y, c.x, c.y);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = c;
+      }
+    }
+    if (nearest) {
+      const applied = clamp(overflowExcess, 0, nearest.mass);
+      nearest.mass -= applied;
+      totalRemoved += applied;
+      coagulantRemoved += applied;
+      nearest.lastHitAt = state.time;
+      if (nearest.mass <= 0) splatterOnDeath(state, nearest);
+    }
+  }
+
+  // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10a): the HUD's
+  // overall-DPS readout. Mass destroyed, not damage requested — the gap
+  // between the two (resistance, maturity, coagulant armor, all applied
+  // above) is exactly what makes this readout worth having over a raw
+  // damage-number sum. systems/dps.ts drains this once per frame.
+  state.dpsAccum += totalRemoved;
 
   if (totalRemoved > GEM_DROP_THRESHOLD) {
     // Risk premium applies only to the coagulant share of what was

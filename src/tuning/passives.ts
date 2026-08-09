@@ -13,12 +13,14 @@ export interface PassiveDef {
   readonly desc: string;
 }
 
+// Phase 6A-1: `atkSpeed`/`damage` (Overclock/Amplifier as whole-game
+// passives) are deleted — they're per-weapon socketed gems now
+// (tuning/gems.ts, systems/weaponMods.ts). What remains here is exactly
+// the five core-gem keys (tuning/coreGems.ts's CoreGemKey).
 export const PASSIVE_DEFS: Readonly<Record<PassiveKey, PassiveDef>> = {
   maxHp: { name: 'Vitality', icon: '❤️', maxLevel: 8, desc: '+20 max core integrity, heals on pickup.' },
   regen: { name: 'Regeneration', icon: '💧', maxLevel: 8, desc: '+0.3 integrity regen per second.' },
   armor: { name: 'Armor Plating', icon: '🛡️', maxLevel: 6, desc: '-7% damage taken from contact.' },
-  atkSpeed: { name: 'Overclock', icon: '⏱️', maxLevel: 8, desc: '+9% attack speed, all weapons.' },
-  damage: { name: 'Amplifier', icon: '💥', maxLevel: 8, desc: '+10% damage, all weapons.' },
   pickup: { name: 'Magnetism', icon: '🧲', maxLevel: 6, desc: 'Gems drift toward the core faster.' },
   xpGain: { name: 'Insight', icon: '📖', maxLevel: 6, desc: '+14% experience gained.' },
 };

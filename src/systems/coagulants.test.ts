@@ -48,6 +48,7 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     sourceMaturity: 0,
     parts: [],
     startMass: 50,
+    lastHitAt: -Infinity,
     ...overrides,
   };
 }

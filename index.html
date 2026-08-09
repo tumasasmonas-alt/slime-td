@@ -413,6 +413,49 @@
       .socket-dot.filled {
         color: var(--accent);
       }
+      .socket-dot-gem {
+        cursor: pointer;
+      }
+      .socket-dot-gem:hover {
+        text-shadow: 0 0 6px var(--accent);
+      }
+      .socket-dot:not(.filled) {
+        cursor: pointer;
+      }
+      .socket-dot:not(.filled):hover {
+        color: var(--accent);
+      }
+      .gem-picker {
+        margin-top: 8px;
+        padding: 8px;
+        background: #0006;
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .gem-picker-empty {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .gem-picker-btn {
+        background: #150c13;
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 11px;
+        padding: 5px 9px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      .gem-picker-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .gem-picker-icon {
+        margin-right: 3px;
+      }
       .weapon-row-toggle {
         width: 17px;
         height: 17px;

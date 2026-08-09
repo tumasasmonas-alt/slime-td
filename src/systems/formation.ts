@@ -218,6 +218,7 @@ export function attemptFormation(state: GameState, sx: number, sy: number): Coag
     sourceMaturity: meanMaturity,
     parts,
     startMass: mass,
+    lastHitAt: -Infinity,
   };
   state.coagulants.push(coagulant);
   return coagulant;

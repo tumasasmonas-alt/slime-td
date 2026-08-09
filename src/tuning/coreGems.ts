@@ -5,13 +5,15 @@ import type { PassiveKey } from '../types';
 // bounded, low-risk work, unlike the other 60 weapon-side gems, which are
 // genuine Phase 6 content. Reusing PassiveKey's own values here rather
 // than inventing new identifiers keeps state.passives as the single field
-// driving damageMult/atkSpeedMult/etc. — no translation layer needed.
+// driving pickupMult/xpMult/armorMult/etc. — no translation layer needed.
 //
-// `damage` and `atkSpeed` are deliberately excluded: per the arsenal plan
-// S9A/S9F, Amplifier and Overclock become per-weapon socketed gems in
-// Phase 6A, not core gems. Until then they stay on the old unrestricted
-// passive-card mechanism, untouched by this file — see
-// docs/plans/phase-5b-framework.md S6.
+// `damage` and `atkSpeed` (Amplifier/Overclock) were the other two
+// PassiveKey members — per the arsenal plan S9A/S9F they became
+// per-weapon socketed gems in Phase 6A, not core gems, and 6A-1 deleted
+// them from PassiveKey entirely once the gems existed to replace them.
+// This Extract<> is now the identity of PassiveKey; kept as an Extract
+// rather than collapsed to `= PassiveKey` so a future core-gem-only key
+// re-diverging from PassiveKey is a type error here, not a silent drift.
 export type CoreGemKey = Extract<PassiveKey, 'maxHp' | 'regen' | 'armor' | 'pickup' | 'xpGain'>;
 
 export const CORE_GEM_KEYS: readonly CoreGemKey[] = ['maxHp', 'regen', 'armor', 'pickup', 'xpGain'];

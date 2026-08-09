@@ -11,6 +11,7 @@ import { drawClouds } from './render/clouds';
 import { drawCoagulants } from './render/coagulants';
 import { drawInfectionEvents } from './render/events';
 import { drawGems } from './render/gems';
+import { drawImmolationRing } from './render/immolationRing';
 import { drawNovaFx } from './render/novaFx';
 import { drawOrbitals } from './render/orbitals';
 import { drawParticles } from './render/particles';
@@ -19,6 +20,7 @@ import { drawTower } from './render/tower';
 import { freshState, type GameState } from './state';
 import { updateChainFx } from './systems/chainFx';
 import { updateClouds } from './systems/clouds';
+import { updateDps } from './systems/dps';
 import { updateGems } from './systems/gems';
 import { updateNovaFx } from './systems/novaFx';
 import { updateParticles } from './systems/particles';
@@ -30,13 +32,7 @@ import { closeInventory, initInventory, openInventory } from './ui/inventory';
 import { hideOverlays, initOverlays, refreshDeckLines, showGameOver } from './ui/overlays';
 import { initUpgradeCards, syncUpgradeOverlay } from './ui/upgradeCards';
 import { closeWeaponSelect, initWeaponSelect, openWeaponSelect, resolveDeck } from './ui/weaponSelect';
-import { updateBladesWeapon } from './weapons/blades';
-import { updateBoltWeapon } from './weapons/bolt';
-import { updateChainWeapon } from './weapons/chain';
-import { updateFrostWeapon } from './weapons/frost';
-import { updateImmolationWeapon } from './weapons/immolation';
-import { updateMissileWeapon } from './weapons/missile';
-import { updatePoisonWeapon } from './weapons/poison';
+import { drainPendingEmissions, updateAllWeapons } from './weapons/registry';
 
 const canvasEl = document.querySelector<HTMLCanvasElement>('#game-canvas');
 if (!canvasEl) throw new Error('#game-canvas not found');
@@ -53,7 +49,10 @@ const hudRefs = initHud();
 // declarations hoist, and these callbacks only ever run from a click,
 // long after the whole module has finished initializing. Same pattern
 // `initOverlays(startRun)` below already relies on.
-const cardRefs = initUpgradeCards(handleOpenInventoryFromLevelUp);
+// Phase 6A-1: onGemPicked reuses the exact same "open inventory,
+// remember we came from level-up" flow as Manage Loadout — a gem card's
+// only extra behaviour is which callback fires when it's clicked.
+const cardRefs = initUpgradeCards(handleOpenInventoryFromLevelUp, handleOpenInventoryFromLevelUp);
 const overlayRefs = initOverlays(startRun, handleOpenWeaponSelect);
 const inventoryRefs = initInventory('loadout-btn', 'inventory-close-btn', handleOpenInventoryFromHud, handleCloseInventory);
 // Phase 6-0 (docs/plans/phase-6-0-weapon-select.md S3): the overlay's own
@@ -152,13 +151,8 @@ function update(dt: number): void {
 
   state.time += dt;
   runSimulation(state, dt); // includes ambient growth and contact damage
-  updateBoltWeapon(state, dt);
-  updateBladesWeapon(state, dt);
-  updateChainWeapon(state, dt);
-  updateFrostWeapon(state, dt);
-  updatePoisonWeapon(state, dt);
-  updateMissileWeapon(state, dt);
-  updateImmolationWeapon(state, dt);
+  updateAllWeapons(state, dt); // Phase 6A-2: one registry-driven loop, replacing seven hand-written calls
+  drainPendingEmissions(state); // Echo/Barrage follow-ups due this frame
   updateProjectiles(state, dt);
   updateGems(state, dt);
   updateParticles(state, dt);
@@ -170,6 +164,7 @@ function update(dt: number): void {
   if (state.grid && state.slimeLayer) {
     flushDirtyCells(state.grid, state.slimeLayer, state.dirty);
   }
+  updateDps(state, dt); // drains this frame's clearAt accumulation — after every weapon/cloud update, before the HUD reads it
   syncUpgradeOverlay(cardRefs, state);
   updateHud(hudRefs, state);
 
@@ -201,6 +196,7 @@ function render(): void {
     drawClouds(ctx, state);
     drawNovaFx(ctx, state);
     drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.perimeter, state.contactPressure);
+    drawImmolationRing(ctx, state);
     drawInfectionEvents(ctx, state);
     drawGems(ctx, state);
     drawOrbitals(ctx, state);

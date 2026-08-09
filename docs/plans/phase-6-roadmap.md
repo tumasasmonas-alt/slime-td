@@ -214,7 +214,8 @@ are new or moved** relative to `phase-5-6-arsenal.md` §13.
 | Batch | Content | Why here |
 |---|---|---|
 | **6-0** | ✅ **Shipped 2026-08-09.** Pre-run weapon select — list, checkboxes, exact-count enforcement, default deck, deck lines on both screens. No currency, no unlocks. | Unchanged in position, **upgraded in importance** by finding 1: it was not a convenience, it is the only route to most of the roster. Full account: `docs/plans/phase-6-0-weapon-select.md`. |
-| **6A** | Gems: Amplifier (6) + Behaviour (14). The bundle card. **Delete the legacy `damage`/`atkSpeed` passives** (finding 5). | Unchanged. Still the cheapest batch to prove the architecture on — 17 free, 3 modifier, 0 new on the visual-cost table — and the first real test of whether 5A's pipeline made gems O(1) in weapons. If a gem here needs a per-weapon special case, 5A was wrong and this is the cheapest possible place to find out. |
+| **6A-1** | **Split from 6A on 2026-08-09.** The gem foundation: delivery archetypes, the per-weapon modifier lookup, gem cards/inventory, **the socketing UI 5C left unbuilt**, the 6 Amplifier gems, **legacy `damage`/`atkSpeed` passives deleted** (finding 5). Plan: `docs/plans/phase-6a1-gem-foundation.md`. | The half that genuinely is O(1) in weapons, and therefore the honest test of 5A's central bet. Also the half that makes sockets *usable* — without it the Phase 5 gate cannot ask its question at all. |
+| **6A-2** | Behaviour gems (14) on four new mechanisms: the **RESOLVE stage** 5A deferred (as `ClearOptions`), **projectile behaviour flags**, **deferred emissions + a weapon registry**, and emission multiplication. Plus the bundle card. Plan: `docs/plans/phase-6a2-behaviour-gems.md`. | ⚠️ **The estimate that made 6A look cheap was measured on the wrong axis** — §9½'s 17-free/3-modifier/0-new is a *rendering* table. By implementation, only 2 of the 14 are the "one function on stage 3" §4 assumes; 4 need RESOLVE and 6 are projectile-flight properties outside the four-stage model entirely. The weapon registry built here is also what **Trigger** (6I) needs, so the catalogue's most build-generating gem gets most of its cost paid early. |
 | **6B** | **New batch.** The seven incumbents' content: **21 real extensions** replacing *Prototype Mount*; **Immolation Ring's visual**; its three balance gaps (BACKLOG); `maxLevel` deleted. | Finding 2 — the incumbents appear in no batch at all, and their extensions are the other half of what a socket holds. Also clears every standing item on Immolation in one pass instead of four. |
 | **▶ THE GATE** | *Moved from after 6A (finding 3).* Judge the socketing loop, the gem count, and *is enhancement a decision or a slider?* | The first point at which **both** things a socket can hold are real content. |
 | **6C** | Weapons: Lance, Shockwave, Fission Charge — **with their nine extensions**. | Unchanged content, unchanged reasoning: the three that need nothing beyond the pipeline, and the two that most directly fix the owner's named single-target and AoE gaps. Establishes **beam rendering** (Lance) for Cauterizer to reuse. |
@@ -225,10 +226,10 @@ are new or moved** relative to `phase-5-6-arsenal.md` §13.
 | **6H** | Gems: Transformative, **the eight cheap ones** — Trigger, Orbital Conversion, Reclamation, Fission Cascade, Sympathetic Link, Culture, Metronome, Overload. | Splits the old 6F by visual cost, which is the axis that actually predicts effort (§9½). Trigger is here, and it is the single most build-generating mechanic in the document — it deserves a gate where it is not competing for attention with six new renderers. |
 | **6I** | Gems: Transformative, **the six expensive ones** — Detonation, Sustained, Inversion, Siphon, Conversion, Emplacement. | Every gem needing genuinely new rendering, last, on a visual vocabulary fully established by 6C/6E/6F/6G. Preserves §9½'s ordering constraint exactly: Repulsor (6F) before Inversion, Antibody Swarm and Mycelium (6G) before Conversion and Culture. |
 
-**Nine batches plus a gate, against the original six plus a gate.** No
+**Ten batches plus a gate, against the original six plus a gate.** No
 content was added or removed — the deltas are one new batch for content
-that had no batch (6B), three splits, one gate move, and Marker Beacon
-changing batches.
+that had no batch (6B), four splits (6A on 2026-08-09, plus 6D/6E/6F),
+one gate move, and Marker Beacon changing batches.
 
 ---
 

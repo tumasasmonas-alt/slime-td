@@ -86,19 +86,48 @@ describe('updateImmolationWeapon', () => {
     expect(grid.growth[i]).toBeLessThan(0.5);
   });
 
-  it("does not respond to Overclock (atkSpeed) — matches Ward Pulse's prior behaviour, flagged as a discovered gap", () => {
-    // Discovered during Phase 5A (docs/plans/phase-5-6-arsenal.md S12.6):
-    // Ward Pulse's tick never divided by atkSpeedMult, unlike every
-    // cooldown-based weapon built on pipeline.ts's cooldownReady().
-    // Preserved deliberately rather than silently granted a new passive
-    // interaction — this test pins that decision so it isn't undone by
-    // accident in a later refactor.
+  // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md's Immolation note,
+  // tuning/weapons.ts's IMMOLATION_TICK comment): this used to pin the
+  // OPPOSITE of what it asserts now. Ward Pulse never divided by the old
+  // GLOBAL atkSpeedMult passive, which was a real, flagged balance gap.
+  // That passive is gone; Immolation is now built on the same
+  // cooldownReady()/weaponMods() every other weapon uses, and Overclock is
+  // a per-weapon gem instead of a whole-game multiplier. Responding to a
+  // gem explicitly socketed into THIS weapon is correct, not a regression
+  // of the old gap — see BACKLOG.md.
+  it('responds to an Overclock gem socketed into it, unlike the old global atkSpeed passive it used to ignore', () => {
     const state = freshState();
     state.grid = makeTestGrid();
     state.weapons.immolation = 1;
-    state.passives.atkSpeed = 8; // would cut the interval roughly in half if respected
+    state.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'overclock' }] };
 
     updateImmolationWeapon(state, 0.1);
-    expect(state.weaponTimers.immolation).toBeCloseTo(1.1, 5);
+
+    // IMMOLATION_TICK / (1 + 0.4) — Overclock's +40% rate delta
+    expect(state.weaponTimers.immolation).toBeCloseTo(1.1 / 1.4, 5);
+  });
+
+  it('an Amplifier gem socketed into it scales its damage', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.weapons.immolation = 1;
+    state.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'amplifier' }] };
+    state.tower.x = 100;
+    state.tower.y = 100;
+    const i = 10 * state.grid.cols + 10;
+    state.grid.growth[i] = 0.9;
+
+    const stateNoGem = freshState();
+    stateNoGem.grid = makeTestGrid();
+    stateNoGem.weapons.immolation = 1;
+    stateNoGem.tower.x = 100;
+    stateNoGem.tower.y = 100;
+    stateNoGem.grid.growth[i] = 0.9;
+
+    updateImmolationWeapon(state, 0.1);
+    updateImmolationWeapon(stateNoGem, 0.1);
+
+    // Amplified damage clears strictly more density than the un-amplified run.
+    expect(state.grid.growth[i]!).toBeLessThan(stateNoGem.grid.growth[i]!);
   });
 });

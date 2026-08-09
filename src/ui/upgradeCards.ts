@@ -4,6 +4,7 @@ import {
   PLACEHOLDER_EXTENSION_MAX_LEVEL,
   PLACEHOLDER_EXTENSION_NAME,
 } from '../tuning/extensions';
+import { gemGenericDesc, gemIcon, gemName } from '../tuning/gems';
 import { PASSIVE_DEFS } from '../tuning/passives';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import { applyCardChoice, pickCards, type CardChoice } from '../systems/cards';
@@ -25,9 +26,21 @@ function requireEl(id: string): HTMLElement {
 // and hunt for the HUD button. main.ts owns the actual open/close
 // coordination (which of the two overlays is "underneath"), same as
 // initOverlays(onStart) already does for the start/restart buttons.
-export function initUpgradeCards(onManageLoadout: () => void): CardRefs {
+//
+// Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10 Q1): picking a
+// 'gem' card routes through the same open-the-inventory path as Manage
+// Loadout, via onGemPicked (captured below, same module-level-callback
+// pattern ui/weaponSelect.ts already uses for its transient UI state) —
+// "just picked a gem" is exactly the same "want to spend it now" moment
+// 5C already built this path for, so a gem is never invisible between
+// the pick and the socket the way the 2026-08-05 "cards appear to do
+// nothing" playtest finding described.
+let onGemPicked: () => void = () => {};
+
+export function initUpgradeCards(onManageLoadout: () => void, onGemPickedCb: () => void): CardRefs {
   const refs = { overlay: requireEl('upgrade-overlay'), cards: requireEl('cards') };
   requireEl('manage-loadout-btn').addEventListener('click', onManageLoadout);
+  onGemPicked = onGemPickedCb;
   return refs;
 }
 
@@ -65,18 +78,21 @@ function describeCard(choice: CardChoice): { icon: string; name: string; rank: s
       desc: PLACEHOLDER_EXTENSION_DESC(choice.nextLevel),
     };
   }
+  if (choice.kind === 'gem') {
+    return { icon: gemIcon(choice.key), name: gemName(choice.key), rank: 'GEM', desc: gemGenericDesc(choice.key) };
+  }
+  if (choice.kind === 'bundle') {
+    const names = choice.bundle.gems.map((g) => gemName(g)).join(' + ');
+    return {
+      icon: gemIcon(choice.bundle.gems[0]!),
+      name: choice.bundle.name,
+      rank: 'BUNDLE',
+      desc: `Grants all of: ${names}.`,
+    };
+  }
   if (choice.kind === 'coreGem') {
     const def = PASSIVE_DEFS[choice.key];
     return { icon: def.icon, name: def.name, rank: 'CORE GEM', desc: def.desc };
-  }
-  if (choice.kind === 'passive') {
-    const def = PASSIVE_DEFS[choice.key];
-    return {
-      icon: def.icon,
-      name: def.name,
-      rank: choice.isNew ? 'NEW' : `Level ${choice.nextLevel} / ${def.maxLevel}`,
-      desc: def.desc,
-    };
   }
   return { icon: '✚', name: 'Emergency Repair', rank: 'FULL HEAL', desc: 'Restore all core integrity.' };
 }
@@ -85,7 +101,14 @@ function selectCard(refs: CardRefs, state: GameState, choice: CardChoice): void 
   applyCardChoice(state, choice);
   state.pendingLevelUps = Math.max(0, state.pendingLevelUps - 1);
   refs.overlay.classList.add('hidden');
-  if (state.pendingLevelUps > 0) {
+  if (choice.kind === 'gem' || choice.kind === 'bundle') {
+    // S10 Q1 — drop straight into the socket picker rather than
+    // re-showing cards or silently unpausing; the inventory close
+    // handler (main.ts) already knows how to resume whichever pending
+    // level-ups are left once the player closes it. A bundle grants
+    // several gems at once, which makes this more useful here, not less.
+    onGemPicked();
+  } else if (state.pendingLevelUps > 0) {
     showUpgradeCards(refs, state);
   } else {
     state.paused = false;

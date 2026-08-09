@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid } from '../state';
 import { freshState } from '../state';
+import { computeFrontier } from '../systems/frontier';
 import { frostRadius } from '../tuning/weapons';
 import { updateFrostWeapon } from './frost';
 
@@ -80,5 +81,42 @@ describe('updateFrostWeapon', () => {
     for (let lvl = 1; lvl <= 8; lvl++) {
       expect(frostRadius(lvl, state.grid.perimeter)).toBeGreaterThan(state.grid.perimeter);
     }
+  });
+
+  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S6): Homing's pulse
+  // reading — the pulse's centre offsets toward the nearest threat.
+  it('Homing offsets the pulse away from dead-centre when a threat exists', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'homing' }] };
+    const idx = 50 * state.grid.cols + 55; // east of the tower — the only revealed cell, so it's the nearest threat
+    state.grid.threshold[idx] = 0.1;
+    state.grid.growth[idx] = 0.5;
+    computeFrontier(state);
+
+    updateFrostWeapon(state, 0.016);
+
+    expect(state.novaFx).toHaveLength(1);
+    expect(state.novaFx[0]!.x).toBeGreaterThan(500); // offset toward the threat, east
+  });
+
+  it('without Homing, the pulse stays centred on the tower even with a threat nearby', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    const idx = 50 * state.grid.cols + 55;
+    state.grid.threshold[idx] = 0.1;
+    state.grid.growth[idx] = 0.5;
+    computeFrontier(state);
+
+    updateFrostWeapon(state, 0.016);
+
+    expect(state.novaFx[0]!.x).toBe(500);
+    expect(state.novaFx[0]!.y).toBe(500);
   });
 });

@@ -48,18 +48,34 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-09 (Phase 6 re-planned into nine batches; Phase
-6-0, the pre-run weapon select, shipped — **not yet committed or pushed**)
+**Last updated:** 2026-08-09 (Phase 6A ships in full — 6A-1 the gem
+foundation, 6A-2 the Behaviour class — plus the Immolation Ring visual
+fix, folded in per the owner's call. Committed and pushed.)
 
-**Phases 3, 4 and 5 are all built.** 3A–3D and 4A–4C are playtested and
-confirmed (see the 2026-08-07 entries below for verdicts). **Phase 5**
+**Phases 3, 4, 5 and 6-0 are all built.** 3A–3D and 4A–4C are playtested
+and confirmed (see the 2026-08-07 entries below for verdicts). **Phase 5**
 landed in one long session on 2026-08-08: **5A** put all seven weapons on
 a shared pipeline (Decision 70); **5B** built the enhancement-point,
 socket and card-pool economy, deleting weapon-level cards for good
 (Decision 71); **5C** built the pause + inventory screen that makes 5B's
-economy actually spendable (Decision 72). Alongside this, the **Phase 6
-arsenal catalogue** — 18 weapons, 65 support gems — went through three
-review passes with the owner and is fully designed, not yet built.
+economy actually spendable (Decision 72). **6-0** shipped 2026-08-09, the
+pre-run weapon-select screen (Decision 73).
+
+**Phase 6A now ships too, both halves in one session (2026-08-09):**
+**6A-1** is the gem foundation — the `DeliveryKind` archetype abstraction,
+per-weapon `weaponMods()`, the six Amplifier gems, gem sockets/inventory,
+the overall-DPS HUD readout, and deletion of the legacy `damage`/
+`atkSpeed` passives (Decision 74). **6A-2** is the Behaviour class — the
+RESOLVE-stage `ClearOptions` extensions, projectile behaviour flags
+(pierce/fork/chain/bounce/homing/ricochet), a weapon registry with
+deferred emissions (Echo/Barrage), emission multiplication (Multishot/
+Formation), all 14 Behaviour gems, and the bundle card (Decision 75). The
+Immolation Ring's missing visual (open since the Phase 2 port) is fixed
+in the same batch — a persistent bright-green ring around the core at its
+actual radius. All of Phase 6A's gems reinterpret meaningfully across
+every weapon archetype, including the four non-projectile weapons, per
+the owner's explicit "be creative, don't just refuse" directive — see
+Decision 74/75 for the per-archetype reinterpretations.
 
 **The Phase 5 gate was moved to after Phase 6A**, settled during 5C's
 planning: its central question — *"is enhancement a decision or a
@@ -86,33 +102,46 @@ scoping: weapon damage numbers, slime speed and overall game feel need the
 remaining systems in place before they can be tuned honestly. That is
 Phase 8 (Decision 13's supersession), not a reason to reorder anything.
 
-**2026-08-09: Phase 6 was reviewed and re-planned before any content
-shipped**, and **Phase 6-0 (the pre-run weapon select) built the same
-session.** Full account: `docs/plans/phase-6-roadmap.md` (the re-plan)
-and `docs/plans/phase-6-0-weapon-select.md` (6-0 itself). The review
-found a live consequence of a design gap — four built weapons (Blades,
-Frost, Missile, Immolation Ring) were unreachable in any run, because the
-deck was always full and the card pool's only weapon-granting path was
-gated on a free slot that never existed. The owner's answer reclassified
-this from bug to missing UI: **the deck always fills every slot, is fixed
-for the run, and the card pool never offers a weapon at all** — 6-0 is
-now the sole way any weapon is equipped, and it ships that way. The
-Phase 6 batch table also gained a new **6B** (real extensions for the
-seven existing weapons, absent from every previous phasing) and the Phase
-5 gate moved again, from after 6A to after 6B, since it needs both things
-a socket can hold to be real content before "decision or slider?" means
-anything. Nine batches total now, none of the catalogue's content
-touched. **Not yet committed** — the owner asked for a report first.
+**2026-08-09: Phase 6 was reviewed and re-planned, then 6-0 and all of 6A
+shipped in the same day.** Full account: `docs/plans/phase-6-roadmap.md`
+(the re-plan), `docs/plans/phase-6-0-weapon-select.md` (6-0),
+`docs/plans/phase-6a1-gem-foundation.md` and
+`docs/plans/phase-6a2-behaviour-gems.md` (6A). The review found a live
+consequence of a design gap — four built weapons (Blades, Frost, Missile,
+Immolation Ring) were unreachable in any run, because the deck was always
+full and the card pool's only weapon-granting path was gated on a free
+slot that never existed. The owner's answer reclassified this from bug to
+missing UI: **the deck always fills every slot, is fixed for the run, and
+the card pool never offers a weapon at all** — 6-0 is now the sole way any
+weapon is equipped, and it shipped that way (Decision 73).
+
+**6A followed the same day, greenlit in full** — both 6A-1 (gem
+foundation) and 6A-2 (Behaviour class), with the owner's explicit
+instruction to also fold in the Immolation Ring's missing visual and to
+be creative rather than refuse gems on non-projectile weapons. Every one
+of the 20 new gems (6 Amplifier, 14 Behaviour) reinterprets against every
+weapon's `DeliveryKind` archetype instead of being whitelisted per weapon
+— see Decision 74/75 for the mechanism and the per-archetype reading of
+Pierce/Fork/Chain/Bounce/Ricochet on non-projectile weapons. Two real bugs
+were found and fixed during implementation, both by the test suite before
+ever reaching the browser: `WeaponDef.stats()` didn't take gem mods, so
+the inventory screen's live stat line silently ignored every socketed
+gem; and `spawnForks()` pushed its children onto the same array
+`updateProjectiles` was mid-iteration over, so forked projectiles were
+silently discarded every time. Full account and the deliberate scope
+limits (Fork/Chain/Bounce/Ricochet are real only on the `projectile`
+archetype; Homing/Multishot/Formation aren't wired for Immolation Ring,
+to avoid desyncing its persistent ring visual) are in Decision 75.
 
 | | |
 |---|---|
-| Tests | 393 passing (39 test files) — one known flake, see BACKLOG |
-| Source | 73 modules under `src/` |
+| Tests | 495 passing (45 test files) — one known flake, see BACKLOG |
+| Source | 82 modules under `src/` |
 | Typecheck | clean |
 | Build | clean |
-| Branch | `main` (working tree has uncommitted Phase 6-0 changes) |
-| Code state | **Phase 3 + Phase 4 + Phase 5 (5A/5B/5C) all complete. Phase 6-0 shipped, uncommitted.** Phase 6 catalogue is still design-only past 6-0. |
-| Blockers | **None.** Next is Phase 6A (Amplifier + Behaviour gems), per the re-planned nine-batch order. |
+| Branch | `main`, committed and pushed |
+| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A (6A-1/6A-2) all complete.** Phase 6B (incumbent-weapon extensions, Immolation's remaining balance gaps) is next. |
+| Blockers | **None.** Next is Phase 6B, per the re-planned nine-batch order — then the Phase 5 gate. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
 still playtested — infection as a density field across a fixed perimeter,
@@ -126,13 +155,16 @@ Levelling up no longer hands out weapon-level cards at all: enhancement
 points bank automatically and are spent via a `+`/`−` in a pause +
 inventory screen, opening sockets on a fixed ladder as points go in.
 Five of the old flat passives now socket into three fixed core slots
-instead of stacking without limit. The card pool offers new weapons
-(gated on free deck slots, starting at 3), a placeholder extension that
-levels 1→3 and then leaves the pool for good, and a guaranteed core-gem
-slot every second level-up. Nothing socketable exists on the *weapon*
-side yet — that's Phase 6A content — so the inventory screen's gem
-sockets render as empty, labelled affordances rather than functioning
-picks.
+instead of stacking without limit. The card pool offers a placeholder
+extension that levels 1→3 and then leaves the pool for good, a guaranteed
+core-gem slot every second level-up, and — as of Phase 6A — real gems: 6
+Amplifier gems (flat multipliers on damage/rate/area/duration/velocity)
+and 14 Behaviour gems (Pierce, Fork, Chaining, Bounce, Homing, Ricochet,
+Multishot, Formation, Echo, Barrage, Splash, Overflow, Kickback, Priming),
+every one of them legal and meaningfully different on every weapon
+archetype, plus a bundle card every 5 levels granting a themed 2–3 gem
+package in one pick. The pre-run weapon select (Phase 6-0) is the only
+way any weapon is ever equipped — the card pool never offers one.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -297,7 +329,117 @@ src/
 
 *Newest first.*
 
-### 2026-08-09 (latest) — Phase 6 reviewed and re-planned; Phase 6-0 ships
+### 2026-08-09 (latest) — Phase 6A ships in full: gem foundation + Behaviour class. Decisions 74–75. Immolation Ring's visual fixed.
+
+**Full account:** `docs/plans/phase-6a1-gem-foundation.md` (6A-1: delivery
+archetypes, `weaponMods`, the six Amplifier gems, sockets/inventory, the
+DPS readout, as-built delta at the top) and
+`docs/plans/phase-6a2-behaviour-gems.md` (6A-2: the four mechanisms —
+RESOLVE options, projectile flags, deferred emissions, emission
+multiplication — the fourteen Behaviour gems, the bundle card, as-built
+delta at the top).
+
+**Shipped, greenlit in full by the owner with explicit autonomy** ("I
+greenlight full 6A with full autonomy for you. You got it, make it good"),
+plus a scope addition folded in on request — a bright-green persistent
+ring visual for Immolation Ring, drawn at its actual radius around the
+core, closing a gap open since the Phase 2 port.
+
+**6A-1 — the foundation.** `DeliveryKind` (`projectile | orbital | pulse |
+cloud | ring`) replaces `WeaponKey` as what a gem reasons about, so a gem
+is authored once against an archetype rather than once per weapon —
+avoiding the N×M cost the arsenal plan's own pipeline design exists to
+prevent. `weaponMods(state, key)` computes a per-weapon
+damage/rate/area/duration/velocity multiplier struct from socketed
+Amplifier gems; every weapon's `stats()` and pipeline now read it instead
+of the deleted global `damageMult()`/`atkSpeedMult()`. Six Amplifier
+gems, gem sockets/inventory (`systems/gemSockets.ts`), a `'gem'`
+`CardChoice` kind that opens the socket picker immediately on pick (same
+pattern 5C already built for Manage Loadout), and the HUD's old `DMG`/
+`SPD` readout replaced by a single smoothed `DPS` number
+(`systems/dps.ts`, exponential smoothing off `clearAt`'s own removal
+total — the owner's own suggestion, better than the three options
+offered). The legacy `damage`/`atkSpeed` passives are deleted outright.
+
+**6A-2 — the Behaviour class and the machinery it needed.** Four pieces
+of machinery Phase 5A deliberately deferred, built now against real gems:
+RESOLVE-stage options on `clearAt` (`ignoreResistance`, `flattenFalloff`,
+`overflow`, `kickback`, `priming`); projectile behaviour flags (pierce,
+fork, chain, bounce, homing, ricochet) generalizing Chain's existing hop
+machinery; a weapon registry (`weapons/registry.ts`) driving all seven
+weapons from one loop instead of `main.ts` calling each by hand, plus a
+deferred-emissions queue for Echo/Barrage — also architecturally what
+Trigger (Phase 6I) will need, built here for free; and emission
+multiplication (Multishot/Formation) via a shared `emissionAngles()`
+helper. All 14 Behaviour gems shipped, plus a bundle card every 5 levels
+granting a themed 2–3 gem package.
+
+**The owner's mid-planning correction shaped the whole batch.** Before
+committing to 6A-2, the owner pushed back on an early draft that would
+have refused Pierce/Bounce/Ricochet on non-projectile weapons: *"lets
+revisit the pierce bounce and ricochet gems and think what they could do
+if slotted in not projective weapon. You have to be creative and not just
+not give the player gems."* The eventual answer: every archetype has its
+own analogue of "what stops a hit from doing more" (a hit-cooldown window
+for orbitals/rings, the density-resistance curve for pulses/clouds), and
+each gem reinterprets against that instead of being whitelisted per
+weapon. The one deliberate exception is disclosed, not hidden: Homing and
+Multishot/Formation are not wired for Immolation Ring specifically, since
+either would desync its persistent ring visual from its actual hit logic
+— left as a documented gap, not a silent refusal.
+
+**Two real bugs found during implementation, both by the test suite
+before ever reaching the browser** — exactly the outcome the project's
+"guard bugs with tests" convention (Decision 20) exists to produce:
+- `WeaponDef.stats()` was `(lvl) => string` with no gem awareness, so the
+  inventory screen's live stat line silently ignored every socketed gem.
+  Fixed by adding a `mods` parameter, threading `weaponMods(state, key)`
+  through `ui/weaponRow.ts`. Verified live: Bolt Turret's stat line moved
+  from "15 pwr" to "22 pwr" after socketing one Amplifier gem
+  (15 × 1.45 = 21.75 → 22).
+- `spawnForks()` pushed forked children onto `state.projectiles` while
+  `updateProjectiles` was mid-iteration over that same array via
+  `for...of`; since the function ends by reassigning
+  `state.projectiles = remaining`, every forked child was silently
+  discarded. Fixed by having `spawnForks` return its children for the
+  caller to push onto `remaining` instead of mutating the live array.
+
+**Verified live, with a documented methodology note.** The Browser pane
+was not compositing frames this session (`document.hidden === true`,
+confirmed via `document.visibilityState`), which throttles
+`requestAnimationFrame` to near zero and makes screenshots time out. Per
+Decision 59's own precedent (a deterministic debug harness for exactly
+this situation), a temporary `window.__debugTick(n, dt)` /
+`window.__debugState()` bridge was added to `main.ts`, used to drive
+roughly 700 manual ticks and confirm the full gem pipeline end to end —
+socketing, weaponMods, RESOLVE options, projectile flags, deferred
+emissions, the Immolation ring visual — then removed completely.
+Typecheck, full test pass, and build were re-run after removal; the
+production bundle hash was byte-identical before and after the bridge
+existed, confirming a clean removal. A final fresh-tab smoke test
+confirmed zero console errors and `window.__debugTick === undefined`.
+
+495/495 tests passing (up from 393 — 45 test files, 6 new), typecheck
+clean, build clean.
+
+**Not done, deliberately, and recorded rather than silently skipped:**
+Fork/Chaining/Bounce/Ricochet are real (not placeholder) only on the
+`projectile` archetype — extending them to report per-target kill events
+on other archetypes would need `clearAt` itself to change, a larger
+change out of scope for "make gems mean something," not a refusal.
+Immolation Ring's three pre-existing balance gaps (no Overclock/Amplifier
+response was two of the three — **both now closed** by `weaponMods`
+applying uniformly; the still-open third is the missing `WEAPON_DAMAGE_SCALE`
++50% pass from Phase 4C-1, deliberately left for 6B alongside Immolation's
+real extensions) — see BACKLOG.
+
+**Committed and pushed.**
+
+**Planned** — **Phase 6B** next (real extensions for the seven incumbent
+weapons, Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` gap and
+`maxLevel` dead-field cleanup), then the Phase 5 gate.
+
+### 2026-08-09 — Phase 6 reviewed and re-planned; Phase 6-0 ships
 
 **Full account:** `docs/plans/phase-6-roadmap.md` (the re-plan, its five
 findings, and the owner's four settled calls) and
@@ -1542,12 +1684,13 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Phase 5 is complete — 5A, 5B, 5C, no outstanding items. Phase 3 and
-Phase 4 are complete too.** 3A/3B/3C shipped 2026-08-06 (plus a
-playtest-and-fix round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A/5B/5C
-all on 2026-08-08 — see the *Session log* above. Read the session records
-before assuming a new formula's first draft is right; every phase so far
-has found at least one real bug only by running the game.
+**Phases 3, 4, 5, 6-0, and now 6A are all complete, no outstanding
+items.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round),
+3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A/5B/5C all on 2026-08-08, 6-0 and
+6A (both halves) on 2026-08-09 — see the *Session log* above. Read the
+session records before assuming a new formula's first draft is right;
+every phase so far has found at least one real bug only by running the
+game.
 
 **Assist credit (5B-5) was dropped, confirmed by the owner** — XP is a
 global pool with no per-weapon tracking, so any kill already pays full
@@ -1559,11 +1702,16 @@ credited them back to the bank — inert in 5B with no live caller, a
 genuine bug the moment 5C's `−` button became one. Fixed as part of
 wiring it.
 
-**Next is Phase 6-0** — a minimal pre-run weapon select, reusing
-`ui/weaponRow.ts`'s `'select'` mode (scaffolded in 5C for this). Then 6A
-(the first real gems), then **the Phase 5 gate**, moved here from
-directly after 5C since it can't judge "decision or slider" while
-sockets are empty.
+**6A built the first real gems** (6 Amplifier, 14 Behaviour) and found two
+more real bugs the same way (see the 2026-08-09 session log entry above:
+`stats()` ignoring gem mods, `spawnForks()` discarding children into a
+mid-iteration array).
+
+**Next is Phase 6B** — real extensions for the seven incumbent weapons,
+plus Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` balance gap and its
+dead `maxLevel` field. Then **the Phase 5 gate**, which needs both
+socket-fillers (gems and extensions) to be real content before "decision
+or slider?" means anything.
 
 **Go linearly — this just closed out.** Phase 4 was the *questions* (armor,
 penetration, range-vs-callus, the full coagulant roster); Phase 5/6 are
@@ -1589,9 +1737,12 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **5A-0/5A** | ✅ The weapon pipeline (Decision 70) — all seven weapons refactored onto ready/acquire/deliver, zero behaviour change, Ward Pulse promoted to Immolation Ring. |
 | **5B** | ✅ Enhancement points, socket ladder, restructured card pool, core gems, gem inventory, render structural pass (Decision 71). Assist credit dropped — moved to BACKLOG *Ideas*. |
 | **5C** | ✅ Pause + inventory UI (Decision 72) — +/- spending, live stats, socket dots, core row, manage-loadout round trip. Found and fixed a real `withdrawPoints` bug from 5B. **Phase 5 complete.** |
-| **6-0** | Minimal pre-run weapon select → **next up** — moved forward from Phase 7 so Phase 6 batches are owner-playtestable. Reuses `ui/weaponRow.ts`'s `'select'` mode, scaffolded in 5C. |
-| **▶ THE GATE** | **Moved here from after 5C** on 2026-08-08 — with sockets empty it could only answer "slider," a false negative. Runs after 6A's first gems, judging socketing, specialise-vs-spread and dilution together. |
-| **6** | Arsenal content — 18 weapons, 65 gems. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3) — implementation in batches per §13, reordered (6E/6F swapped) after the visual-cost audit. |
+| **6-0** | ✅ Pre-run weapon select (Decision 73) — the deck fills every slot, fixed for the run; the card pool never offers a weapon. |
+| **6A-1** | ✅ Gem foundation (Decision 74) — `DeliveryKind` archetypes, `weaponMods`, six Amplifier gems, sockets/inventory, DPS readout, legacy passives deleted. |
+| **6A-2** | ✅ Behaviour class (Decision 75) — RESOLVE options, projectile flags, deferred emissions, emission multiplication, 14 Behaviour gems, bundle card. Immolation Ring's visual fixed in the same batch. **Phase 6A complete.** |
+| **6B** | Real extensions for the seven incumbent weapons; Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` gap and dead `maxLevel` field → **next up** |
+| **▶ THE GATE** | **Moved here from after 5C** on 2026-08-08, then to after 6B on 2026-08-09 — needs both socket-fillers (gems *and* extensions) real before "decision or slider?" means anything. |
+| **6C–6I** | Remaining arsenal content — 18 weapons, 65 gems total. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3); phasing per `docs/plans/phase-6-roadmap.md` §3. |
 | **7** | Meta — currency, unlocks, deck builder |
 | **8** | Terminal phase · real balance pass · leaderboard |
 | **9** | VFX and feel |

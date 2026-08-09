@@ -20,40 +20,78 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### ✅ Phase 6-0 — the pre-run weapon select. Shipped 2026-08-09, not yet committed.
+### ✅ Phase 6-0 and Phase 6A — shipped and committed, 2026-08-09.
 
-Full account: `docs/plans/phase-6-0-weapon-select.md` (its own status
-header, §7 tests, §8's order-of-work, and its "what changed during
-implementation" note). The Phase 6 re-plan that scheduled it and settled
-its design questions: `docs/plans/phase-6-roadmap.md`.
+Full account: `docs/plans/phase-6-0-weapon-select.md` (6-0),
+`docs/plans/phase-6a1-gem-foundation.md` (6A-1),
+`docs/plans/phase-6a2-behaviour-gems.md` (6A-2). Decisions 73–75. The
+Phase 6 re-plan that scheduled all three: `docs/plans/phase-6-roadmap.md`.
 
-**What shipped:** a `Choose Weapons` / `Change Loadout` overlay reachable
+**6-0 shipped:** a `Choose Weapons` / `Change Loadout` overlay reachable
 from the start and game-over screens, enforcing an exact-count deck
 (`state.weaponSlots`, currently 3) with a visible capacity refusal on
-unselected rows; a deck line of weapon icons on both screens so the
-current selection is legible without opening anything; `Try Again`
-keeping the deck (in-memory, not `localStorage` — the owner asked for
-session persistence, not cross-reload); and the `newWeapon` card kind
-deleted outright from `systems/cards.ts`, since the owner's 2026-08-09
-rule is that the pool never offers a weapon at all. 393/393 tests,
-typecheck clean, build clean, verified live (§8 of the plan).
+unselected rows; a deck line of weapon icons on both screens; `Try Again`
+keeping the deck (in-memory, not `localStorage`); the `newWeapon` card
+kind deleted outright since the pool never offers a weapon. **This also
+resolved the "four weapons unreachable" finding** — see *Done* below.
 
-**This also resolves the "four weapons unreachable" finding** below, by
-design rather than by patch — see that entry.
+**6A shipped in full, both halves, greenlit with full owner autonomy in
+one session:** `DeliveryKind` archetypes, `weaponMods`, six Amplifier
+gems, gem sockets/inventory, the overall-DPS HUD readout, legacy
+`damage`/`atkSpeed` passives deleted (6A-1); RESOLVE-stage `ClearOptions`
+fields, projectile behaviour flags, a weapon registry with deferred
+emissions, emission multiplication, all 14 Behaviour gems, and the bundle
+card (6A-2). **Immolation Ring's missing visual — open since the Phase 2
+port — was fixed in the same batch**, folded in on the owner's request: a
+persistent bright-green ring around the core at its actual radius. Two
+of Immolation's three long-standing balance gaps (Overclock, Amplifier)
+closed for free as a consequence of `weaponMods` applying uniformly; see
+the updated entry below for what's still open. 495/495 tests, typecheck
+clean, build clean, verified live (methodology note in Decision 75 —
+the Browser pane wasn't compositing frames this session, worked around
+with a temporary debug harness mirroring Decision 59's precedent).
 
-**Next up is 6A** (the first real support gems — Amplifier + Behaviour,
-17 free / 3 modifier / 0 new on the visual-cost table), then the new
-**6B** (real extensions for the seven incumbent weapons, Immolation
-Ring's visual and its three balance fixes), then **the Phase 5 gate**,
-which the 2026-08-09 re-plan moved from after 6A to after 6B — it can't
-judge "decision or slider" while one of the two things a socket can hold
-is still a placeholder. Full nine-batch phasing: `docs/plans/phase-6-roadmap.md` §3.
+**Next up is Phase 6B** (real extensions for the seven incumbent weapons,
+Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` gap, and its dead
+`maxLevel` field), then **the Phase 5 gate**, which the 2026-08-09 re-plan
+moved from after 6A to after 6B — it can't judge "decision or slider"
+while one of the two things a socket can hold is still a placeholder.
+Full nine-batch phasing: `docs/plans/phase-6-roadmap.md` §3.
 
 **The arsenal catalogue itself is unchanged** — 18 weapons, 65 support
 gems in six classes, the §9½ visual-cost classification. Nothing in the
 2026-08-09 re-plan reopens `docs/plans/phase-5-6-arsenal.md`; it only
 re-sequenced the batches and filled the extension-scheduling gap that
 plan's own §13 table had left open.
+
+### 🟢 Fork/Chaining/Bounce/Ricochet are real only on the `projectile` archetype
+*Found during Phase 6A-2 implementation, 2026-08-09 — disclosed scope
+limit, not a bug.* These four Behaviour gems reinterpret meaningfully on
+every archetype for their *primary* effect, but the deeper "hits another
+target" mechanic (a genuine second hit event, not just a modified first
+one) only exists where `updateProjectiles` already has per-target impact
+resolution to hook into.
+
+Extending them to orbital/pulse/cloud/ring weapons would need `clearAt`
+itself to report per-target kill/hit events back to its caller — a real
+architectural change (giving RESOLVE a return channel, not just options
+in), out of scope for "make the existing gems mean something" and not
+attempted in 6A-2. Revisit if a future weapon or gem needs that return
+channel for its own reasons; building it just for this would be
+premature.
+
+### 🟢 Homing and Multishot/Formation are not wired for Immolation Ring
+*Found during Phase 6A-2 implementation, 2026-08-09 — deliberate,
+disclosed exception, not an oversight.* Both mechanics assume a discrete
+per-shot origin; Immolation Ring's damage comes from a periodic purge on
+a fixed radius around the core, with a persistent visual
+(`render/immolationRing.ts`) drawn once at that radius. Wiring either
+would desync the visual from the actual hit logic — the ring would need
+to either follow a moving "shot" (contradicting what it visually is) or
+silently ignore the gem's stated effect while still socketing it
+(dishonest). Left unwired and documented in `weapons/immolation.ts`
+rather than silently accepting the socket. Revisit only if Immolation
+Ring's own identity changes in a later balance pass.
 
 ### Phase 5 (5A/5B/5C) — done, for reference
 
@@ -114,8 +152,9 @@ Full detail in the session record §17.
 | **5A** | ✅ The weapon pipeline (Decision 70) — seven weapons on ready/acquire/deliver, Ward Pulse promoted to Immolation Ring |
 | **5B** | ✅ Enhancement/socket/card-pool economy (Decision 71) — weapon-level cards gone, core gems, socket ladder |
 | **5C** | ✅ Pause + inventory UI (Decision 72) — +/- spending, socket dots, core row, manage-loadout round trip. **Phase 5 complete.** |
-| **6-0** | ✅ Pre-run weapon select — shipped 2026-08-09, not yet committed. Reused `ui/weaponRow.ts`'s 'select' mode. |
-| **6** | Arsenal content — re-planned into nine batches 2026-08-09 (`docs/plans/phase-6-roadmap.md`), **next: 6A**, gated by **the Phase 5 gate** after the new 6B |
+| **6-0** | ✅ Pre-run weapon select — shipped and committed 2026-08-09. Reused `ui/weaponRow.ts`'s 'select' mode. |
+| **6A** | ✅ Gem foundation + Behaviour class — shipped and committed 2026-08-09 (6A-1/6A-2, Decisions 74–75). Immolation Ring's visual fixed in the same batch. |
+| **6** | Remaining arsenal content — re-planned into nine batches 2026-08-09 (`docs/plans/phase-6-roadmap.md`), **next: 6B**, gated by **the Phase 5 gate** after 6B |
 | **7** | Meta — currency, unlocks, persistent deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |
 | **9** | VFX and feel |
@@ -151,7 +190,7 @@ the phase that absorbs each.
 | Bug | Absorbed by |
 |---|---|
 | **Card descriptions read as "this does nothing."** Not a pool-filter bug — `buildCardPool()` filters maxed upgrades correctly. `frost`/`poison`/`missile` have *static* descriptions (`desc: () => '...'`, no level argument), and `bladeCount(7) === bladeCount(8) === 4` because the `min(…, 5)` cap is never reached at `maxLevel: 8` (same for `chainCount`, capped at 6 but topping out at 5). So a card correctly grants a damage increase and tells the player nothing changed. | Phase 5 — **killed at the root** by Decision 40: weapon *level* cards stop existing, so the failure mode has nowhere to live |
-| **Ward Pulse has no visual whatsoever.** No `render/ward.ts` exists; `updateWardPulse` calls `clearAt` and nothing else. **Root cause found 2026-08-08:** it is a *weapon* misfiled as a passive, so Decision 11's "a weapon's signature visual is part of the weapon" never applied to it — the same classification gap that hid `frozen`. **Reclassification shipped 2026-08-08** (Decision 70) — it is now `weapons/immolation.ts`, a real weapon, with its missing `coagulantMult` fixed. The visual itself is still open, deliberately deferred to Phase 6B as real content rather than retrofitted during the architecture-only 5A pass. | Phase 6B |
+| ~~**Ward Pulse (now Immolation Ring) has no visual whatsoever.**~~ ✅ **Fixed 2026-08-09** (Decision 75, folded into Phase 6A on the owner's request). No `render/ward.ts` existed; `updateWardPulse` called `clearAt` and nothing else. **Root cause found 2026-08-08:** it was a *weapon* misfiled as a passive, so Decision 11's "a weapon's signature visual is part of the weapon" never applied — the same classification gap that hid `frozen`. **Reclassified 2026-08-08** (Decision 70) into `weapons/immolation.ts`, a real weapon; **visual shipped 2026-08-09** as a persistent `#39ff6a` ring (`render/immolationRing.ts`) at its actual radius around the core. | ✅ Done |
 | **Frost Nova's ring is nearly invisible.** 3px stroke, 0.4s life on a 3.6s cooldown (~11% uptime), fading alpha, low-contrast `#bfe9ff`. Also an expectation gap: it reads as an "aura" but is coded as an instantaneous pulse. | Phase 9 |
 | ~~**Frozen cells have no visual at all.**~~ ✅ **Fixed in Phase 4B** (Decision 66) — now a `#bfe9ff` rim, reusing Frost Nova's existing colour. Open since Phase 2; it was the precedent that forced 4A to ship a placeholder rather than shipping blind. | ✅ Done |
 | ~~**Density palette collapses.**~~ ✅ **Fixed in Phase 4B** (Decision 66). The cause turned out to be uneven *spacing*, not bad hues — density now rides evenly-stepped alpha, so recollapse is structurally impossible and mechanically tested. | ✅ Done |
@@ -164,42 +203,34 @@ it's classed as a *passive*, and freeze slipped through because it's a
 *field state*. **The rule should be scoped to any mechanic with a
 world-space effect, not just weapons.**
 
-### 🟡 Immolation Ring is missing three balance passes the other six weapons got
+### 🟡 Immolation Ring still needs the `WEAPON_DAMAGE_SCALE` pass, and its dead `maxLevel` field deleted
 *Discovered 2026-08-08 during the Ward Pulse → Immolation Ring promotion
-(Decision 70).* Preserved deliberately, not fixed — 5A's charter was
-architecture only, zero behaviour change. Immolation Ring currently:
+(Decision 70), narrowed 2026-08-09 once Phase 6A shipped (Decision 75).*
+Originally three gaps; **two are now closed for free.** `weaponMods()`
+(6A-1) applies its `rate` and `damage` multipliers uniformly to every
+weapon including Immolation Ring, so it now responds to **Overclock** and
+**Amplifier** exactly like its six siblings — no Immolation-specific code
+was needed once the mechanism existed.
 
-- Does not respond to **Overclock** (`atkSpeedMult`) — its cooldown is a
-  fixed 1.1s regardless of the passive.
-- Does not respond to **Amplifier** (`damageMult`) — its damage is a bare
-  `10 * lvl`.
-- Never received Phase 4C-1's **`WEAPON_DAMAGE_SCALE`** (+50%) pass, which
-  every other weapon's damage function carries.
+**Still open — one balance gap:**
+- Immolation Ring never received Phase 4C-1's **`WEAPON_DAMAGE_SCALE`**
+  (+50%) pass, which every other weapon's damage function carries. Its
+  base damage formula (`10 * lvl`, now also scaled by `weaponMods`) is
+  still missing that flat multiplier the other six have.
 
-All three exist because Ward Pulse wasn't classified as a weapon when
-each of those was wired up, so its inline formula in the old
-`systems/ward.ts` was never touched. `weapons/immolation.test.ts` pins the
-Overclock gap with a regression test so it isn't undone by accident.
+**This remains a balance call, not a bug** — whether Immolation Ring
+should get the same +50% is the owner's decision. Natural home is Phase
+6B, when the weapon gets its real extensions alongside the rest of the
+incumbent roster.
 
-**This is a balance call, not a bug** — whether Immolation Ring should
-join its six siblings on all three is the owner's decision. Natural home
-is Phase 6B, when the weapon gets its actual content pass (visual,
-extensions, attributes) alongside the rest of the new roster.
-
-**Raised again 2026-08-09 and still awaiting the owner's call.** The
-proposed Phase 6 re-phasing (`docs/plans/phase-6-roadmap.md`) gives it a
-concrete home: **6B**, the incumbent-weapon content batch, which is also
-where Immolation's missing visual and its three real extensions land. All
-four gaps on this weapon then close in one pass rather than being
-revisited four times.
-
-**A fifth gap belongs on this list, found 2026-08-09:** Immolation Ring
-also still carries `maxLevel: 6` while the other six carry `8`. Weapon
-`maxLevel` is now **dead data** — arsenal plan §6 retired it outright (no
-cap, no diminishing returns) and 5B removed the last code path that read
-it, but the field was never deleted from `WeaponDef`. Harmless today,
-misleading to anyone reading the defs. Delete the field in 6B alongside
-the rest of this entry rather than as its own errand.
+**A second, unrelated gap belongs on this list, found 2026-08-09:**
+Immolation Ring also still carries `maxLevel: 6` while the other six
+carry `8`. Weapon `maxLevel` is now **dead data** — arsenal plan §6
+retired it outright (no cap, no diminishing returns) and 5B removed the
+last code path that read it, but the field was never deleted from
+`WeaponDef`. Harmless today, misleading to anyone reading the defs.
+Delete the field in 6B alongside the rest of this entry rather than as
+its own errand.
 
 ### 🟡 Infection events fire too often at the start of a run
 *Found in the 2026-08-07 Phase 3D playtest.* The owner's read: the opening
