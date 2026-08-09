@@ -192,6 +192,14 @@ the time."* Triaged below; three are structural rather than balance
 noise, and **#2 and #5 both damage the loop 6A just built**, which is why
 they aren't simply parked for Phase 8 with the rest of the balance work.
 
+> **Owner's calls, 2026-08-09, and where they land.** #1, #2 and #5 are
+> scoped into **Phase 6A-3**, a corrective batch before 6B —
+> `docs/plans/phase-6a3-loop-fixes.md`. #4 is deferred with its semantics
+> settled (see its entry). #3 and #6 stay deferred to Phase 8.
+> **#2's answer changed the design rather than fixing the symptom**: the
+> card pool will stop caring about sockets entirely, which supersedes
+> arsenal plan §11's no-dead-card rule for gems.
+
 #### 🔴 1. The XP curve cannot keep up — still levelling every few seconds at level 50
 
 *Owner: "its ok at the start but im playing at lvl 50 and i level up
@@ -257,12 +265,23 @@ as written — every individual card correctly refuses to be a dead pick —
 but nobody specified what the pool should offer when *everything* is
 legitimately dead, so the emergency fallback became the steady state.
 
-**Note 6B does not fix this and slightly worsens it**: real extensions add
-three more things per weapon competing for the *same* 15 sockets. This
-needs its own answer. Options, none chosen: extend the socket ladder past
-24 points; let the pool offer duplicate/upgrade gems; add a
-convert-gems-to-something sink; make the fallback genuinely valuable
-(currency, a reroll, a heal that scales) rather than a placeholder.
+**✅ Answered by the owner, 2026-08-09 — and the answer removes the
+problem rather than solving it.** *"I think it shouldnt matter if i have
+open sockets or not i should still be offered the same pool. The pool
+should not care if i have something."* Gems become freely offered and
+bank in inventory regardless of sockets; leftovers convert to a small
+amount of currency on death, and the orbital trade ship (see *Ideas*)
+recycles them into currency mid-run. **This supersedes arsenal plan §11's
+no-dead-card rule for gems** — §11 wasn't wrong, its premise changed: it
+assumed an unsocketable gem is worthless, which stops being true once
+gems have a currency value.
+
+So none of the previously-floated options are needed — no gem-upgrade
+system, no extended socket ladder, no scaling fallback. Scoped into
+**6A-3** (`docs/plans/phase-6a3-loop-fixes.md` §3). One asymmetry is
+flagged as an open question there: **extensions have no inventory to bank
+into**, so an extension card with no free socket is genuinely
+unplaceable, and the plan keeps the free-socket gate on extensions only.
 
 #### 🟡 4. Core gems cannot be unsocketed
 
@@ -271,8 +290,13 @@ in `ui/inventory.ts` is pure display, with no click handler at all, while
 weapon gems have had click-to-unsocket since 6A-1. An inconsistency the
 player has no way to explain.
 
-**Two real design questions block a straight fix**, which is likely why
-it was never built:
+**✅ Both blocking questions answered by the owner, 2026-08-09; the build
+itself stays deferred.** A core gem **returns to a new core-gem
+inventory** (never destroyed — the *"no destructive respec, ever"* rule),
+and removing `maxHp` **reduces max HP by 20 and clamps current HP to it**,
+so a socket/unsocket loop can't be used as a free heal. Recorded in
+`docs/plans/phase-6a3-loop-fixes.md` §5 so whoever builds it doesn't
+re-litigate the design. The two questions, for context:
 
 1. **There is no core-gem inventory to return one to.** `applyCardChoice`
    writes `state.coreGems[idx] = key` and bumps `state.passives[key]`;
@@ -759,6 +783,18 @@ Needs its own design pass before it's a decision: what score points are and
 how they're earned, whether they compete with meta-currency (Decision 35's
 survival-time currency) or are a separate in-run resource, and whether the
 shop appears mid-run or between runs. Belongs with Phase 6/7.
+
+**It gained a second, concrete job on 2026-08-09** — the owner's answer to
+the dead-card-pool finding: *"don't forget that orbital trade ship will
+have an ability to recycle those into currency mid run."* Once 6A-3 lets
+the card pool offer gems regardless of free sockets, a player accumulates
+gems they can't place, and this is where that surplus goes — **recycling
+gems into currency mid-run**, with a small conversion on death as the
+passive floor. That makes the trade ship load-bearing rather than
+optional: it's the sink that makes "the pool doesn't care about sockets"
+work as an economy rather than just as clutter. Until Phase 7 builds it,
+surplus gems are simply surplus (recorded as a known gap in 6A-3's §10
+risks).
 
 ### 💭 Filter the card pool by equipped weapons
 The fallback if the gem half of the pool dilutes badly as the gem catalogue
