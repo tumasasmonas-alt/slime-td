@@ -1,8 +1,9 @@
 # Phase 6A-3 — the loop fixes, and the inventory that makes sockets legible
 
-**Status:** 📋 **Planned 2026-08-09, revised the same day after talking
-the scope through with the owner. Awaiting greenlight.** Nothing
-implemented.
+**Status:** ✅ **Shipped 2026-08-09, greenlit by the owner ("we will build
+all of it") after the scope conversation below. Committed and pushed.**
+See DECISIONS.md #76 and "What changed during implementation" at the
+bottom.
 
 > **Revision note.** A first draft of this plan was written before the
 > owner had seen it, and was too narrow — it treated the socketing
@@ -408,6 +409,56 @@ a natural seam at step 5 if it needs one.
 
 ---
 
-*Planned and revised 2026-08-09. §10's two questions are open; nothing
-here is in `docs/DECISIONS.md` yet — per the project's posture, these go
-in as decisions when the batch ships.*
+## What changed during implementation
+
+Built close to the letter — all nine order-of-work steps, the extension
+uniqueness invariant, the maxHp clamp in both directions, and the
+click-to-place panel all shipped as designed. A few things worth
+recording:
+
+**§10 Q1 (duplicate extensions) was already answered before the build
+started**, mid-conversation with the owner, and folded into §3a rather
+than staying open — see the owner's verbatim rule quoted there. What
+shipped is simpler than this plan's own §4 had first proposed (a
+placement-time merge): the *roll* levels the owned instance, wherever it
+lives, so there is never more than one instance to merge in the first
+place.
+
+**§10 Q2 (`XP_GROWTH = 1.08`) remains genuinely open** — shipped
+unmeasured, exactly as planned, and is the one number in this batch
+explicitly expected to move after a real playtest.
+
+**The old picker's empty-socket handler was renamed, not just extended.**
+`WeaponRowHandlers.onOpenGemPicker` became `onEmptySocketClick` — the
+plan's §5 described the *behaviour* change (an empty-dot click now means
+"place if something's selected, otherwise open the picker") but didn't
+call out that the old name stopped describing what the callback does.
+Renamed for clarity; every caller updated, no test or behaviour change
+beyond what §5 already specified.
+
+**Filled extension dots became clickable too**, beyond what §4/§5
+explicitly asked for. The plan built `unsocketExtension` as backend
+plumbing (needed for `withdrawPoints`'s eviction path) without
+committing to wiring a manual unsocket-by-click for extensions in the
+socket row itself. Once gems, core gems *and* extensions all bank
+symmetrically, leaving extension dots inert while gem dots were clickable
+would have been a visible, unexplained inconsistency — the exact shape of
+finding #5 recurring in miniature. Wired for consistency; no plan section
+needed revising, since §4/§5's own reasoning already implied it.
+
+**Verified live with the Browser pane compositing normally** — unlike
+the 6A-1/6A-2 session immediately before this one, no visibility
+workaround was needed to take screenshots. A small temporary debug
+bridge (`window.__debugGrantXp`/`__debugState`) was still added, purely
+to reach level 60+ without a real ten-minute playtest, and was removed
+before commit with the production bundle hash confirmed identical
+before and after.
+
+513/513 tests (up from 495 — 18 new), typecheck clean, build clean.
+**Committed and pushed** — see DECISIONS.md #76.
+
+---
+
+*Planned and revised 2026-08-09, shipped 2026-08-09. §10 Q1 was settled
+during the build; Q2 (`XP_GROWTH`'s value) stays open. DECISIONS.md #76
+records the shipped decision.*

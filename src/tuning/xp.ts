@@ -10,8 +10,25 @@ const XP_BASE = 12;
 const XP_LINEAR = 6.5;
 const XP_QUADRATIC = 0.45;
 
+// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S2): a per-level growth
+// factor on top of the quadratic base. Cost alone was quadratic in level
+// while income (destroyed mass) grows with DPS, and 6A's Amplifier gems
+// made DPS grow multiplicatively — so time-per-level, which is roughly
+// O(level^2)/O(DPS), eventually STARTS FALLING once DPS outgrows the
+// square. That's the owner's playtest finding: level 80 in under ten
+// minutes. No fixed polynomial can fix this, since any polynomial's own
+// consecutive-level ratio converges to 1 as level rises — only a
+// superpolynomial (geometric-on-top-of-quadratic) curve keeps that ratio
+// bounded away from 1 indefinitely. `^(level - 1)`, not `^level`, is
+// deliberate: it leaves xpToNext(1) exactly as it was, so Decision 61's
+// "the intended early rush survives" holds by construction, not by luck.
+// First-draft, unmeasured (the owner declined the measurement pass in
+// favour of shipping now) — expect a retune after a playtest.
+const XP_GROWTH = 1.08;
+
 export function xpToNext(level: number): number {
-  return Math.round(XP_BASE + XP_LINEAR * level + XP_QUADRATIC * level * level);
+  const base = XP_BASE + XP_LINEAR * level + XP_QUADRATIC * level * level;
+  return Math.round(base * XP_GROWTH ** (level - 1));
 }
 
 // Gems drop when a single hit clears enough density; value scales with how

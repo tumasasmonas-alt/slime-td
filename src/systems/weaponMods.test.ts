@@ -12,7 +12,7 @@ describe('weaponMods', () => {
   it('is identity for a weapon with sockets but no gems', () => {
     const state = freshState();
     state.weapons.bolt = 1;
-    state.weaponSockets.bolt = { extensions: [{ kind: 'placeholder', level: 1 }], gems: [] };
+    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 1 }], gems: [] };
     expect(weaponMods(state, 'bolt')).toEqual({ damage: 1, rate: 1, area: 1, duration: 1, velocity: 1 });
   });
 

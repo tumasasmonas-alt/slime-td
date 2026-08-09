@@ -35,6 +35,13 @@ function requireEl(id: string): HTMLElement {
 // 5C already built this path for, so a gem is never invisible between
 // the pick and the socket the way the 2026-08-05 "cards appear to do
 // nothing" playtest finding described.
+//
+// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4): 'extension' and
+// 'coreGem' now bank instead of applying immediately, so they route
+// through this exact same callback — the name stayed onGemPicked rather
+// than being generalized, since "just banked something, want to place it"
+// is the same moment regardless of which of the four bankable kinds it
+// was.
 let onGemPicked: () => void = () => {};
 
 export function initUpgradeCards(onManageLoadout: () => void, onGemPickedCb: () => void): CardRefs {
@@ -101,12 +108,14 @@ function selectCard(refs: CardRefs, state: GameState, choice: CardChoice): void 
   applyCardChoice(state, choice);
   state.pendingLevelUps = Math.max(0, state.pendingLevelUps - 1);
   refs.overlay.classList.add('hidden');
-  if (choice.kind === 'gem' || choice.kind === 'bundle') {
-    // S10 Q1 — drop straight into the socket picker rather than
-    // re-showing cards or silently unpausing; the inventory close
-    // handler (main.ts) already knows how to resume whichever pending
-    // level-ups are left once the player closes it. A bundle grants
-    // several gems at once, which makes this more useful here, not less.
+  if (choice.kind !== 'heal') {
+    // S10 Q1, extended by Phase 6A-3 S4 — every kind that just banked an
+    // instance (gem, bundle, and now extension/coreGem too) drops
+    // straight into the socket picker rather than re-showing cards or
+    // silently unpausing; the inventory close handler (main.ts) already
+    // knows how to resume whichever pending level-ups are left once the
+    // player closes it. 'heal' is the only kind left with nothing to
+    // place.
     onGemPicked();
   } else if (state.pendingLevelUps > 0) {
     showUpgradeCards(refs, state);

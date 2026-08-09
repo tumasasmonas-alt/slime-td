@@ -337,10 +337,87 @@
         color: var(--accent);
       }
       .panel-wide {
-        max-width: 520px;
+        max-width: 820px;
         text-align: left;
         max-height: 82vh;
         overflow-y: auto;
+      }
+      /* Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5): the loadout
+         screen's two-column body — weapons/core on the left, the
+         three-section gem/extension/core-gem inventory on the right, so
+         nothing owned is ever invisible without opening a per-row picker. */
+      .inventory-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 240px;
+        gap: 18px;
+        align-items: start;
+      }
+      .inventory-side {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        background: #0b060acc;
+      }
+      .inv-section + .inv-section {
+        margin-top: 14px;
+      }
+      .inv-section-title {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .inv-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .inv-empty {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .inv-entry {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        text-align: left;
+        background: #150c13;
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 11px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      .inv-entry:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .inv-entry-selected {
+        border-color: var(--accent);
+        color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .inv-entry-icon {
+        font-size: 14px;
+      }
+      .inv-entry-name {
+        flex: 1;
+      }
+      .inv-entry-count {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .inv-hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
+      .inv-hint-active {
+        color: var(--accent);
       }
       #inventory-points {
         font-size: 12px;
@@ -406,24 +483,51 @@
         display: flex;
         gap: 5px;
       }
+      /* Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5): the owner's
+         playtest finding — "the area you need to click to socket gems is
+         very unclear... the empty socket is too small and unintuitive" —
+         real ~28px controls with a visible border replace the old bare
+         glyph, on both empty and filled dots. */
       .socket-dot {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
         font-size: 13px;
         color: var(--muted);
+        border: 1px solid transparent;
       }
       .socket-dot.filled {
         color: var(--accent);
-      }
-      .socket-dot-gem {
+        border-color: var(--accent-dim);
         cursor: pointer;
       }
-      .socket-dot-gem:hover {
+      .socket-dot.filled:hover {
+        border-color: var(--accent);
         text-shadow: 0 0 6px var(--accent);
       }
-      .socket-dot:not(.filled) {
+      .socket-dot-empty {
+        border: 1px dashed var(--line);
         cursor: pointer;
       }
-      .socket-dot:not(.filled):hover {
+      .socket-dot-empty:hover {
+        border-color: var(--accent);
         color: var(--accent);
+      }
+      .socket-dot-ok {
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent-dim);
+      }
+      .socket-dot-no {
+        opacity: 0.25;
+        cursor: default;
+      }
+      .socket-dot-no:hover {
+        border-color: var(--line);
+        color: var(--muted);
       }
       .gem-picker {
         margin-top: 8px;
@@ -490,6 +594,32 @@
       }
       .core-slot.filled {
         color: var(--text);
+        cursor: pointer;
+      }
+      .core-slot.filled:hover {
+        border-color: var(--accent);
+      }
+      .core-slot-empty {
+        border-style: dashed;
+        cursor: pointer;
+      }
+      .core-slot-empty:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .core-slot-ok {
+        border-style: solid;
+        border-color: var(--accent);
+        color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent-dim);
+      }
+      .core-slot-no {
+        opacity: 0.25;
+        cursor: default;
+      }
+      .core-slot-no:hover {
+        border-color: var(--line);
+        color: var(--muted);
       }
       .core-slot-icon {
         display: block;
@@ -618,9 +748,28 @@
       <div class="panel panel-wide">
         <div id="upgrade-title">Loadout</div>
         <div id="inventory-points"></div>
-        <div id="inventory-weapons"></div>
-        <div id="inventory-core-label">Core</div>
-        <div id="inventory-core"></div>
+        <div id="inventory-hint" class="inv-hint"></div>
+        <div class="inventory-layout">
+          <div class="inventory-main">
+            <div id="inventory-weapons"></div>
+            <div id="inventory-core-label">Core</div>
+            <div id="inventory-core"></div>
+          </div>
+          <div class="inventory-side">
+            <div class="inv-section">
+              <div class="inv-section-title">Extensions</div>
+              <div id="inventory-ext-list" class="inv-list"></div>
+            </div>
+            <div class="inv-section">
+              <div class="inv-section-title">Core gems</div>
+              <div id="inventory-coregem-list" class="inv-list"></div>
+            </div>
+            <div class="inv-section">
+              <div class="inv-section-title">Support gems</div>
+              <div id="inventory-gem-list" class="inv-list"></div>
+            </div>
+          </div>
+        </div>
         <button class="primary" id="inventory-close-btn" type="button">Resume</button>
       </div>
     </div>

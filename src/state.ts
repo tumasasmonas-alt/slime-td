@@ -353,11 +353,22 @@ export interface GemInstance {
   kind: GemKey;
 }
 
-// One entry per extension *type* currently held on a weapon, tracking its
-// own level toward removal at 3 (docs/plans/phase-5b-framework.md S4 —
-// the owner's rule: maxed extensions leave the pool permanently, no
-// repeat offer). Only PLACEHOLDER_EXTENSION_KIND exists until Phase 6.
-export interface ExtensionSlot {
+// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4): an extension
+// instance, identical in shape whether it's sitting in
+// GameState.extensionInventory or inside a weapon's own
+// WeaponSockets.extensions — moving one between the two is a literal
+// array move, not a reshape. `weaponKey` is redundant while socketed
+// (implied by which weapon's sockets it's in) but is what makes it bound
+// to that weapon while banked (call 6, docs/plans/phase-6a3-loop-fixes.md
+// S1) — an extension never fits any weapon but the one it was rolled for.
+// `level` tracks progress toward removal at 3 (the owner's rule: maxed
+// extensions leave the card pool permanently, no repeat offer) — and,
+// per S3a, a re-roll of an already-owned extension levels THIS instance
+// in place, wherever it currently lives, rather than creating a second
+// one. Only PLACEHOLDER_EXTENSION_KIND exists until Phase 6B.
+export interface ExtensionInstance {
+  id: number;
+  weaponKey: WeaponKey;
   kind: string;
   level: 1 | 2 | 3;
 }
@@ -368,8 +379,20 @@ export interface ExtensionSlot {
 // systems/sockets.ts is what enforces the combined count against
 // socketCount(pointsInvested).
 export interface WeaponSockets {
-  extensions: ExtensionSlot[];
+  extensions: ExtensionInstance[];
   gems: GemInstance[];
+}
+
+// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4): a banked-but-
+// unsocketed core gem — the core-gem mirror of GemInstance. Unlike
+// weapon gems, a core gem is never legal to hold twice at once (only 3
+// fixed core sockets exist and the design has never allowed duplicates
+// there — see GameState.coreGems below), so `id` exists for UI
+// click-identification symmetry with GemInstance/ExtensionInstance
+// rather than because two instances of the same kind can coexist.
+export interface CoreGemInstance {
+  id: number;
+  kind: CoreGemKey;
 }
 
 export interface Coagulant {
@@ -445,13 +468,28 @@ export interface GameState {
   // Fixed-length CORE_SOCKET_COUNT array; null means empty. Duplicates
   // disallowed (an implementation-time call, S1/S4 of the 5B plan didn't
   // specify — "5 types competing for 3 slots" reads more sensibly than
-  // "which type to stack" for a first cut).
+  // "which type to stack" for a first cut). A core gem's *effect*
+  // (systems/passives.ts's applyCoreGemEffect/removeCoreGemEffect) is
+  // applied only while its kind sits in this array — see
+  // coreGemInventory below for where an unsocketed one lives instead.
   coreGems: (CoreGemKey | null)[];
   // Unsocketed gems the player owns — populated starting Phase 6A, when
   // any gem kind actually exists to pick up.
   gemInventory: GemInstance[];
+  // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4): the owner's
+  // three-section inventory made every socketable thing bankable, not
+  // just weapon gems — a picked extension or core gem now grants an
+  // instance here instead of applying/socketing itself immediately. A
+  // core gem's effect is applied only once it moves out of here and into
+  // `coreGems` (systems/gemSockets.ts's socketCoreGem/unsocketCoreGem).
+  extensionInventory: ExtensionInstance[];
+  coreGemInventory: CoreGemInstance[];
   weaponSockets: Partial<Record<WeaponKey, WeaponSockets>>;
-  // Monotonic counter for GemInstance.id.
+  // Monotonic counter shared across every instance kind this state ever
+  // creates — GemInstance, ExtensionInstance and CoreGemInstance alike.
+  // One counter rather than one per kind: ids only ever need to be
+  // unique within their own array, and a shared source is simpler than
+  // three separate ones for no behavioural gain.
   nextGemId: number;
 
   grid: Grid | null;
@@ -547,6 +585,8 @@ export function freshState(): GameState {
     weaponSlots: 3,
     coreGems: new Array(CORE_SOCKET_COUNT).fill(null),
     gemInventory: [],
+    extensionInventory: [],
+    coreGemInventory: [],
     weaponSockets: {},
     nextGemId: 1,
 

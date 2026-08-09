@@ -1,14 +1,9 @@
-import type { ExtensionSlot, GameState } from '../state';
+import type { ExtensionInstance, GameState } from '../state';
 import { BUNDLE_INTERVAL, GEM_BUNDLES, type GemBundle } from '../tuning/bundles';
 import { CORE_GEM_KEYS, type CoreGemKey } from '../tuning/coreGems';
-import {
-  PLACEHOLDER_EXTENSION_KIND,
-  PLACEHOLDER_EXTENSION_MAX_LEVEL,
-} from '../tuning/extensions';
+import { PLACEHOLDER_EXTENSION_KIND, PLACEHOLDER_EXTENSION_MAX_LEVEL } from '../tuning/extensions';
 import { ALL_GEM_KEYS } from '../tuning/gems';
 import type { GemKey, WeaponKey } from '../types';
-import { gemHasLegalHome } from './gemSockets';
-import { freeSlots } from './sockets';
 
 // Phase 5B (docs/plans/phase-5b-framework.md S4): weapon LEVEL cards are
 // gone entirely (Decision 40) — weapon power comes only from
@@ -29,6 +24,17 @@ import { freeSlots } from './sockets';
 // pacing beat the level-up loop had none of — every BUNDLE_INTERVAL
 // levels, the normal draw is replaced by three thematic packages instead
 // of four atoms, and picking one grants every gem it holds.
+//
+// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S3): the pool stopped
+// gating gems/core gems on socket availability or ownership at all, per
+// the owner's rule — "it shouldn't matter if I have open sockets or
+// not." This **supersedes** arsenal plan S11's no-dead-card rule: a
+// gem/core-gem you can't currently place is no longer a dead card, since
+// leftovers convert to currency (Phase 7) instead of being wasted.
+// Extensions are the deliberate exception (S3a) — the only thing in the
+// game with levels, so a re-roll of one you already own (socketed or
+// banked) levels that instance in place instead of creating a new one,
+// and still leaves the pool for good once maxed.
 export type CardChoice =
   | { kind: 'extension'; weaponKey: WeaponKey; extKind: string; nextLevel: 1 | 2 | 3 }
   | { kind: 'gem'; key: GemKey }
@@ -36,20 +42,27 @@ export type CardChoice =
   | { kind: 'bundle'; bundle: GemBundle }
   | { kind: 'heal' };
 
-function findExtension(state: GameState, weaponKey: WeaponKey, extKind: string): ExtensionSlot | undefined {
-  return state.weaponSockets[weaponKey]?.extensions.find((e) => e.kind === extKind);
+// The extension instance for (weaponKey, extKind), wherever it currently
+// lives — socketed on the weapon, or sitting unplaced in inventory. Never
+// more than one exists at once (S3a's uniqueness invariant: a re-roll
+// always levels this same instance rather than creating a second), so
+// "find it anywhere" is a safe, unambiguous lookup, and the object this
+// returns can be mutated in place regardless of which array holds it.
+function findOwnedExtension(state: GameState, weaponKey: WeaponKey, extKind: string): ExtensionInstance | undefined {
+  const socketed = state.weaponSockets[weaponKey]?.extensions.find((e) => e.kind === extKind);
+  if (socketed) return socketed;
+  return state.extensionInventory.find((e) => e.weaponKey === weaponKey && e.kind === extKind);
 }
 
-// Extension and gem candidates, both gated on free weapon sockets so a
-// dead card (nowhere to put the pick) is never offered — no weapon ever
-// appears here (S4 above), every key in state.weapons was fixed by the
-// pre-run select screen and stays fixed for the run's duration.
+// Extension and gem candidates — neither gated on free weapon sockets any
+// more (Phase 6A-3 S3/S3a): both bank rather than requiring somewhere to
+// go immediately, so every weapon in the fixed deck is always a candidate
+// for its own extension, and every gem key is always a candidate.
 export function buildWeaponSidePool(state: GameState): CardChoice[] {
   const pool: CardChoice[] = [];
 
   for (const key of Object.keys(state.weapons) as WeaponKey[]) {
-    if (freeSlots(state, key) <= 0) continue;
-    const existing = findExtension(state, key, PLACEHOLDER_EXTENSION_KIND);
+    const existing = findOwnedExtension(state, key, PLACEHOLDER_EXTENSION_KIND);
     const currentLevel = existing?.level ?? 0;
     if (currentLevel >= PLACEHOLDER_EXTENSION_MAX_LEVEL) continue; // owner's rule: maxed, gone for good
     pool.push({
@@ -61,25 +74,32 @@ export function buildWeaponSidePool(state: GameState): CardChoice[] {
   }
 
   for (const key of ALL_GEM_KEYS) {
-    if (gemHasLegalHome(state, key)) pool.push({ kind: 'gem', key });
+    pool.push({ kind: 'gem', key });
   }
 
   return pool;
 }
 
+// Excludes a kind already owned anywhere — socketed OR banked in
+// coreGemInventory. A core gem, unlike a weapon gem, is never archetype-
+// specific, so there's no reason to ever hold two of the same kind; this
+// mirrors the pre-6A-3 "no duplicates" rule, just checking both places a
+// kind can now live instead of only the fixed 3-slot array.
 export function buildCoreGemPool(state: GameState): CardChoice[] {
-  if (!state.coreGems.includes(null)) return []; // exhausted — every socket full, never offer a dead card
-  return CORE_GEM_KEYS.filter((key) => !state.coreGems.includes(key)).map((key) => ({ kind: 'coreGem', key }));
+  const owned = new Set<CoreGemKey>([
+    ...state.coreGems.filter((k): k is CoreGemKey => k !== null),
+    ...state.coreGemInventory.map((c) => c.kind),
+  ]);
+  return CORE_GEM_KEYS.filter((key) => !owned.has(key)).map((key) => ({ kind: 'coreGem', key }));
 }
 
-// A bundle is offerable only if every gem it holds has somewhere legal to
-// go — arsenal plan S11's no-dead-card rule applied at package
-// granularity, not just per-atom.
-export function buildBundlePool(state: GameState): CardChoice[] {
-  return GEM_BUNDLES.filter((bundle) => bundle.gems.every((g) => gemHasLegalHome(state, g))).map((bundle) => ({
-    kind: 'bundle',
-    bundle,
-  }));
+// Offered unconditionally (Phase 6A-3 S3) — it used to require every gem
+// a package holds to have a legal home; now a bundle's gems bank the same
+// way a standalone gem pick does, so there's nothing left to gate on.
+// `state` stays a parameter for symmetry with the other pool builders
+// even though this one no longer reads it.
+export function buildBundlePool(_state: GameState): CardChoice[] {
+  return GEM_BUNDLES.map((bundle) => ({ kind: 'bundle' as const, bundle }));
 }
 
 // Unbiased Fisher-Yates — sort(() => Math.random() - 0.5) is not a
@@ -111,6 +131,13 @@ export const BUNDLES_PER_DRAW = 3;
 // one. Falls through to the ordinary draw if no bundle is currently
 // legal (e.g. very early, before enough sockets exist for a whole
 // package), so a bundle level is never a guaranteed dead draw.
+//
+// Phase 6A-3: the `{ kind: 'heal' }` fallback below stays as a genuine
+// last resort, but is expected to become unreachable in practice now
+// that the pool no longer goes dead on socket exhaustion — it only fires
+// once literally everything (every extension maxed, every core gem
+// owned) is exhausted, which needs no weapons equipped at all today
+// since gems are always offered regardless.
 export function pickCards(state: GameState): CardChoice[] {
   if (state.tower.level % BUNDLE_INTERVAL === 0) {
     const bundles = shuffled(buildBundlePool(state)).slice(0, BUNDLES_PER_DRAW);
@@ -135,17 +162,26 @@ export function pickCards(state: GameState): CardChoice[] {
 // ui/upgradeCards.ts's DOM/overlay bookkeeping (closing the card panel,
 // re-showing it for a queued level-up) so it's testable directly.
 //
-// 'gem' grants an instance into inventory only — it does NOT auto-socket
-// (docs/plans/phase-6a1-gem-foundation.md S10 Q1: the *caller* opens the
-// socket picker immediately afterward, reading the just-created instance
-// off the end of state.gemInventory, so a pick is never invisible without
-// this function needing to know about UI at all).
+// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4, S6): 'extension' and
+// 'coreGem' no longer apply their effect immediately — they grant a
+// banked instance, exactly like 'gem' and 'bundle' already did. The
+// *caller* (ui/upgradeCards.ts) opens the inventory/socket picker
+// immediately afterward for every kind that just banked something, same
+// as it already did for gems — a pick is never invisible without this
+// function needing to know about UI at all.
 export function applyCardChoice(state: GameState, choice: CardChoice): void {
   if (choice.kind === 'extension') {
-    const sockets = (state.weaponSockets[choice.weaponKey] ??= { extensions: [], gems: [] });
-    const existing = sockets.extensions.find((e) => e.kind === choice.extKind);
-    if (existing) existing.level = choice.nextLevel;
-    else sockets.extensions.push({ kind: choice.extKind, level: choice.nextLevel });
+    const existing = findOwnedExtension(state, choice.weaponKey, choice.extKind);
+    if (existing) {
+      existing.level = choice.nextLevel; // owned already (socketed or banked) — levels this instance in place
+    } else {
+      state.extensionInventory.push({
+        id: state.nextGemId++,
+        weaponKey: choice.weaponKey,
+        kind: choice.extKind,
+        level: choice.nextLevel,
+      });
+    }
   } else if (choice.kind === 'gem') {
     state.gemInventory.push({ id: state.nextGemId++, kind: choice.key });
   } else if (choice.kind === 'bundle') {
@@ -153,15 +189,8 @@ export function applyCardChoice(state: GameState, choice: CardChoice): void {
       state.gemInventory.push({ id: state.nextGemId++, kind: key });
     }
   } else if (choice.kind === 'coreGem') {
-    const idx = state.coreGems.indexOf(null);
-    if (idx !== -1) {
-      state.coreGems[idx] = choice.key;
-      state.passives[choice.key] = (state.passives[choice.key] ?? 0) + 1;
-      if (choice.key === 'maxHp') {
-        state.tower.maxHp += 20;
-        state.tower.hp = Math.min(state.tower.maxHp, state.tower.hp + 20);
-      }
-    }
+    const owned = state.coreGems.includes(choice.key) || state.coreGemInventory.some((c) => c.kind === choice.key);
+    if (!owned) state.coreGemInventory.push({ id: state.nextGemId++, kind: choice.key }); // defensive — buildCoreGemPool already excludes owned kinds
   } else {
     state.tower.hp = state.tower.maxHp;
   }

@@ -2,16 +2,41 @@ import { describe, expect, it } from 'vitest';
 import { COAGULANT_XP_RISK_PREMIUM, gemValueFromRemoved, xpToNext } from './xp';
 
 describe('xpToNext', () => {
-  it.each([
-    [1, 19],
-    [2, 27],
-    [5, 56],
-    [10, 122],
-  ])('level %i needs %i xp to the next level', (level, expected) => {
-    expect(xpToNext(level)).toBe(expected);
+  // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S2): the old it.each
+  // pinning exact values at levels 2/5/10 is gone on purpose — those are
+  // now expected to move with XP_GROWTH, and pinning them would just
+  // break on the very retune the plan calls "expected." Level 1 stays
+  // pinned because the curve is built specifically to leave it untouched
+  // (the `^(level-1)` exponent) — Decision 61's "the early rush survives."
+  it('is unchanged at level 1 — the early rush survives by construction', () => {
+    expect(xpToNext(1)).toBe(19);
   });
 
-  it('is quadratic — the gap between consecutive levels widens as level rises', () => {
+  it('is strictly increasing', () => {
+    for (let level = 1; level < 100; level++) {
+      expect(xpToNext(level + 1)).toBeGreaterThan(xpToNext(level));
+    }
+  });
+
+  it('is superpolynomial — the per-level ratio stays bounded away from 1, unlike any fixed polynomial', () => {
+    // Any fixed polynomial's own consecutive-level ratio converges to 1 as
+    // level rises — visible here using the exact 12/6.5/0.45 coefficients
+    // Decision 61 fixed for the quadratic base alone (no growth factor):
+    // by level 80 that ratio has already settled under 1.03. xpToNext must
+    // NOT do that, or DPS (which 6A's gems grow faster than any
+    // polynomial) eventually outpaces cost again — the "level 80 in under
+    // ten minutes" finding this curve exists to fix.
+    const quadraticOnlyRatio = (level: number) => {
+      const base = (l: number) => 12 + 6.5 * l + 0.45 * l * l;
+      return base(level + 1) / base(level);
+    };
+    const ratio = (level: number) => xpToNext(level + 1) / xpToNext(level);
+
+    expect(quadraticOnlyRatio(80)).toBeLessThan(1.03); // the old curve, for contrast
+    expect(ratio(80)).toBeGreaterThan(1.03); // xpToNext must clear it
+  });
+
+  it('is quadratic-plus in shape — the gap between consecutive levels widens as level rises', () => {
     // The invariant that matters (Decision 61): xp *cost per level*
     // increases with level, not just xp granted. A mechanism test on the
     // exact coefficients would break the moment the curve is retuned; this

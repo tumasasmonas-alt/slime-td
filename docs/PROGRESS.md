@@ -48,9 +48,12 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-09 (Phase 6A ships in full — 6A-1 the gem
-foundation, 6A-2 the Behaviour class — plus the Immolation Ring visual
-fix, folded in per the owner's call. Committed and pushed.)
+**Last updated:** 2026-08-09 (Phase 6A shipped in full, the owner
+playtested it the same day, and a follow-up batch — Phase 6A-3 — fixed
+the three loop-breaking findings that playtest surfaced: the XP curve,
+the card pool going dead on socket exhaustion, and the socketing UI being
+unclear enough that the owner doubted it worked at all. Committed and
+pushed.)
 
 **Phases 3, 4, 5 and 6-0 are all built.** 3A–3D and 4A–4C are playtested
 and confirmed (see the 2026-08-07 entries below for verdicts). **Phase 5**
@@ -133,14 +136,44 @@ limits (Fork/Chain/Bounce/Ricochet are real only on the `projectile`
 archetype; Homing/Multishot/Formation aren't wired for Immolation Ring,
 to avoid desyncing its persistent ring visual) are in Decision 75.
 
+**The owner playtested Phase 6A the same day it shipped and found six
+things**, three of them structural rather than balance noise: the XP
+curve was the wrong *shape* (quadratic cost against DPS that 6A's gems
+now grow multiplicatively, so time-per-level was starting to *fall* by
+level 50 — "level 80 in under ten minutes"); the card pool went
+permanently dead once every socket filled, offering only Emergency
+Repair forever; and the socketing UI was unclear enough that the owner
+"second guessed if it worked or is there a bug." **Phase 6A-3 fixed all
+three, plus banked core gems and extensions the same way gems already
+banked, per the owner's request for a three-section inventory panel.**
+
+**6A-3, in short:** `xpToNext` gained a geometric factor
+(`XP_GROWTH^(level-1)`) on top of its quadratic base, so cost eventually
+outpaces any polynomial growth in DPS — unmeasured, expected to be
+retuned. The card pool stopped gating gems, core gems and bundles on
+socket availability or ownership at all (superseding arsenal plan §11's
+no-dead-card rule, since a gem with nowhere to go now just banks and
+later converts to currency); extensions are the deliberate exception —
+the only thing with levels, so re-rolling one you already own levels it
+in place instead. Extensions and core gems now bank into their own
+inventories exactly like gems always did, and a core gem's effect moved
+from card-pick time to socket time, closing a real exploit: unsocketing
+`maxHp` now clamps `hp` down rather than leaving it floating above the
+reduced max. The loadout screen gained the owner's three-section
+inventory panel (Extensions / Core gems / Support gems) beside the
+weapon list, with click-a-gem-then-click-a-socket placement — every
+legal socket lights up, illegal ones dim — replacing a bare, undersized
+`○` that was the actual root of the "does this even work" finding. See
+Decision 76 and `docs/plans/phase-6a3-loop-fixes.md`.
+
 | | |
 |---|---|
-| Tests | 495 passing (45 test files) — one known flake, see BACKLOG |
-| Source | 82 modules under `src/` |
+| Tests | 513 passing (45 test files) — one known flake, see BACKLOG |
+| Source | 82 modules under `src/` (6A-3 touched ten existing files, added none) |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main`, committed and pushed |
-| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A (6A-1/6A-2) all complete.** Phase 6B (incumbent-weapon extensions, Immolation's remaining balance gaps) is next. |
+| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A (6A-1/6A-2/6A-3) all complete.** Phase 6B (incumbent-weapon extensions, Immolation's remaining balance gap) is next. |
 | Blockers | **None.** Next is Phase 6B, per the re-planned nine-batch order — then the Phase 5 gate. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
@@ -156,15 +189,21 @@ points bank automatically and are spent via a `+`/`−` in a pause +
 inventory screen, opening sockets on a fixed ladder as points go in.
 Five of the old flat passives now socket into three fixed core slots
 instead of stacking without limit. The card pool offers a placeholder
-extension that levels 1→3 and then leaves the pool for good, a guaranteed
-core-gem slot every second level-up, and — as of Phase 6A — real gems: 6
-Amplifier gems (flat multipliers on damage/rate/area/duration/velocity)
-and 14 Behaviour gems (Pierce, Fork, Chaining, Bounce, Homing, Ricochet,
-Multishot, Formation, Echo, Barrage, Splash, Overflow, Kickback, Priming),
-every one of them legal and meaningfully different on every weapon
-archetype, plus a bundle card every 5 levels granting a themed 2–3 gem
-package in one pick. The pre-run weapon select (Phase 6-0) is the only
-way any weapon is ever equipped — the card pool never offers one.
+extension that levels 1→3 (wherever the owned instance currently lives —
+socketed or banked — then leaves the pool for good), a core gem every
+second level-up, and — as of Phase 6A — real gems: 6 Amplifier gems (flat
+multipliers on damage/rate/area/duration/velocity) and 14 Behaviour gems
+(Pierce, Fork, Chaining, Bounce, Homing, Ricochet, Multishot, Formation,
+Echo, Barrage, Splash, Overflow, Kickback, Priming), every one of them
+legal and meaningfully different on every weapon archetype, plus a bundle
+card every 5 levels granting a themed 2–3 gem package in one pick. As of
+**Phase 6A-3**, every one of those three card kinds is offered regardless
+of free sockets or what's already owned — extensions, core gems and
+support gems all bank into their own inventory, visible in a three-section
+panel on the loadout screen, and placement is click-a-gem-then-click-a-
+socket with live legal/illegal highlighting. The pre-run weapon select
+(Phase 6-0) is still the only way any weapon is ever equipped — the card
+pool never offers one.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -238,31 +277,41 @@ owner-playtested end to end the way Phase 4 was.
    new plan: the four-unreachable-weapons finding, the `DeliveryKind`
    archetype abstraction, the owner's *"don't just not give the player
    gems"* correction and what it changed, and the two bugs the **test
-   suite** caught for once. **Read this one before starting Phase 6B** —
-   it's the freshest context and covers the most ground.
-6. **`docs/DECISIONS.md` #23–#75** — the load-bearing calls in short form.
+   suite** caught for once.
+6. **`docs/sessions/2026-08-09-post-6a-playtest-and-6a3.md`** — the
+   owner's playtest of 6A the same day, the six findings, and Phase 6A-3
+   built to fix the three structural ones: the geometric XP curve, the
+   socket/ownership-blind card pool (superseding arsenal plan §11), and
+   the three-section banked inventory with click-to-place. **Read this
+   one before starting Phase 6B** — it's the freshest context, and 6B's
+   extensions will bank through the exact machinery this session built.
+7. **`docs/DECISIONS.md` #23–#76** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
    68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
    enhancement/socket/card-pool economy); 72 is Phase 5C (the pause +
    inventory screen — **Phase 5 closes here**); 73 is Phase 6-0 (the
    pre-run weapon select); 74–75 are Phase 6A (the gem foundation and the
-   Behaviour class). #47–75 are implementation-time findings, not from a
-   design session — see the notes at the top of each of those sections.
-7. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
+   Behaviour class); 76 is Phase 6A-3 (the post-playtest loop fixes).
+   #47–76 are implementation-time findings, not from a design session —
+   see the notes at the top of each of those sections.
+8. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
    **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
    design and the shipped 5B/5C economy and screen, including the
    assist-credit finding (dropped) and the withdrawPoints bug 5C found
    and fixed in 5B's plumbing.
-8. **`docs/plans/phase-6-roadmap.md`**,
+9. **`docs/plans/phase-6-roadmap.md`**,
    **`docs/plans/phase-6a1-gem-foundation.md`**,
-   **`docs/plans/phase-6a2-behaviour-gems.md`** — the nine-batch Phase 6
-   phasing, and the two shipped 6A halves with their as-built deltas.
-9. **`docs/BACKLOG.md`** *Now* section — Phase 6B (real extensions for the
-   seven incumbent weapons, plus Immolation Ring's remaining balance gap)
-   is the concrete next step. Phase 3/4's own follow-ups (event tuning,
-   the coagulant formation drain visual, more AoE weapons, spontaneous
-   coagulation, behemoth timing) are in *Ideas* and *Bugs*.
+   **`docs/plans/phase-6a2-behaviour-gems.md`**,
+   **`docs/plans/phase-6a3-loop-fixes.md`** — the nine-batch Phase 6
+   phasing, and all three shipped 6A batches with their as-built deltas.
+   6A-3's plan doc also carries its own revision note — the first draft
+   was too narrow and was rewritten before the build started.
+10. **`docs/BACKLOG.md`** *Now* section — Phase 6B (real extensions for the
+    seven incumbent weapons, plus Immolation Ring's remaining balance gap)
+    is the concrete next step. Phase 3/4's own follow-ups (event tuning,
+    the coagulant formation drain visual, more AoE weapons, spontaneous
+    coagulation, behemoth timing) are in *Ideas* and *Bugs*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -341,7 +390,97 @@ src/
 
 *Newest first.*
 
-### 2026-08-09 (latest) — Phase 6A ships in full: gem foundation + Behaviour class. Decisions 74–75. Immolation Ring's visual fixed.
+### 2026-08-09 (latest) — Post-6A playtest, then Phase 6A-3: the loop fixes. Decision 76.
+
+**Full account:** `docs/sessions/2026-08-09-post-6a-playtest-and-6a3.md`
+(the playtest findings, the scope conversation that turned a click-target
+fix into a banking pass, and the rejected-ideas table), plus
+`docs/plans/phase-6a3-loop-fixes.md` (the plan, revised mid-conversation
+before the build started, with its as-built delta at the top).
+
+**The owner played the just-shipped 6A the same day** — *"I have play
+tested the game, which I know is not the time"* — and found six things.
+Three were structural, not balance noise, and are what this batch fixed:
+
+1. **The XP curve was the wrong shape.** Cost was quadratic in level;
+   income is proportional to DPS; 6A's Amplifier gems make DPS grow
+   multiplicatively. Time-per-level is `O(level²)/O(DPS)`, so once DPS
+   outgrows the square, time-per-level *falls* — "lvl 80 within not even
+   10 mins." No coefficient retune fixes a curve that's the wrong class;
+   `xpToNext` gained a geometric factor, `XP_GROWTH^(level-1)` (the `-1`
+   keeps `xpToNext(1)` exactly as it was, so the early rush survives by
+   construction). `XP_GROWTH = 1.08` is a first-draft guess — the owner
+   declined an offered measurement pass in favour of shipping now.
+2. **The card pool went permanently dead once sockets filled** — every
+   individual gate was correct, but nobody had specified what to offer
+   once *everything* was legitimately full, so the fallback (Emergency
+   Repair) became the steady state the moment a deck's ~15 sockets
+   filled. The owner's fix reframed the rule rather than patching the
+   symptom: *"it shouldn't matter if I have open sockets or not... the
+   pool should not care if I have something."* Gems, core gems and
+   bundles all became fully socket- and ownership-blind — **superseding
+   arsenal plan §11's no-dead-card rule** — with leftovers destined to
+   become currency in Phase 7 (the "orbital trade ship" idea gained a
+   concrete job the same conversation: recycling surplus gems mid-run).
+3. **Socketing was unclear enough that the owner doubted it worked at
+   all** — *"the empty support socket is too small and unintuitive...
+   even I second guessed if it worked."* The real cause wasn't hit-area,
+   it was visibility: the only route to inventory was clicking a socket,
+   which then filtered to what fit *that one weapon*, so anything that
+   fit nothing currently equipped was invisible everywhere.
+
+**The build itself grew mid-conversation, deliberately.** A first plan
+draft treated finding 3 as a CSS fix and kept extensions gated on free
+sockets. The owner's actual ask was bigger: *"the inventory itself has to
+have 3 sections for extensions, core gems and support gems... visible
+when opening the loadout screen on the side as a separate panel."* That
+turned finding 2's fix into a full banking pass — extensions and core
+gems now live in their own inventories (`extensionInventory`,
+`coreGemInventory`), exactly like support gems always did, with one
+owner-specified asymmetry: *"when you roll an extension you already have
+it socketed or unsocketed it increases the level... regardless if its
+used or not"* — the only card kind that reads ownership rather than being
+fully blind to it, recorded explicitly as deliberate rather than an
+inconsistency to "clean up" later.
+
+**Shipped:** the geometric XP curve (`tuning/xp.ts`); the socket/
+ownership-blind card pool (`systems/cards.ts`, with the extension
+exception in its own §3a); `extensionLegalFor`/`socketExtension`/
+`unsocketExtension`/`socketCoreGem`/`unsocketCoreGem` (`systems/
+gemSockets.ts`); a core gem's effect moved from card-pick time to socket
+time (`systems/passives.ts`'s `applyCoreGemEffect`/`removeCoreGemEffect`,
+with the `maxHp` unsocket clamp that closes the free-heal exploit);
+`withdrawPoints` evicting extensions to inventory instead of clamping the
+withdrawal, which also let `minPointsForSockets` and its UI disabled-state
+be deleted outright; and the loadout screen's new two-column layout —
+weapons/core on the left, the three-section panel on the right — with
+click-a-gem-then-click-a-socket placement, legal sockets lit, illegal
+ones dimmed, and the pre-6A-3 per-row picker kept as a working second
+route. 513/513 tests (up from 495, 18 new), typecheck clean, build clean.
+
+**Verified live**, and this time the Browser pane was compositing
+normally (unlike the 6A-1/6A-2 session) — no debug-harness workaround was
+needed for visibility, though a temporary `window.__debugGrantXp`/
+`__debugState` bridge was still added (Decision 59's precedent) purely to
+reach level 60+ without a real ten-minute playtest. Confirmed by hand: a
+gem placed live-updates a weapon's stat line immediately (Amplifier:
+30→44 pwr); an extension only lights up its own weapon's sockets, never
+a different one; a core gem lights up only the core row; click-again and
+Escape both cancel placement cleanly; the legacy per-row picker still
+opens and sockets correctly when nothing is selected; and the maxHp
+exploit is closed in both directions — unsocketing while damaged heals
+nothing, and unsocketing at full HP clamps down rather than leaving HP
+floating above the reduced max. Zero console errors throughout. The debug
+bridge was removed and the production bundle hash matched exactly before
+and after, confirming a clean removal.
+
+**Committed and pushed.**
+
+**Planned** — **Phase 6B** next (real extensions for the seven incumbent
+weapons, Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` gap and its
+dead `maxLevel` field), then the Phase 5 gate. No blockers.
+
+### 2026-08-09 — Phase 6A ships in full: gem foundation + Behaviour class. Decisions 74–75. Immolation Ring's visual fixed.
 
 **Full account:** `docs/sessions/2026-08-09-phase-6-replan-and-6a.md`
 (the whole day, including the owner's scope correction and the
@@ -1700,13 +1839,13 @@ so it's worth the extra care.
 
 ## Active plan
 
-**Phases 3, 4, 5, 6-0, and now 6A are all complete, no outstanding
-items.** 3A/3B/3C shipped 2026-08-06 (plus a playtest-and-fix round),
-3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A/5B/5C all on 2026-08-08, 6-0 and
-6A (both halves) on 2026-08-09 — see the *Session log* above. Read the
-session records before assuming a new formula's first draft is right;
-every phase so far has found at least one real bug only by running the
-game.
+**Phases 3, 4, 5, 6-0, and now all of 6A (including the 6A-3 fix batch)
+are complete, no outstanding items.** 3A/3B/3C shipped 2026-08-06 (plus a
+playtest-and-fix round), 3D/4A/4B/4C-1/4C-2 all on 2026-08-07, 5A/5B/5C
+all on 2026-08-08, 6-0, 6A-1, 6A-2 and 6A-3 all on 2026-08-09 — see the
+*Session log* above. Read the session records before assuming a new
+formula's first draft is right; every phase so far has found at least one
+real bug only by running the game.
 
 **Assist credit (5B-5) was dropped, confirmed by the owner** — XP is a
 global pool with no per-weapon tracking, so any kill already pays full
@@ -1722,6 +1861,18 @@ wiring it.
 more real bugs the same way (see the 2026-08-09 session log entry above:
 `stats()` ignoring gem mods, `spawnForks()` discarding children into a
 mid-iteration array).
+
+**The owner playtested 6A the same day and found the loop had three real
+breaks** — the XP curve stopped scaling against DPS, the card pool went
+dead once sockets filled, and the socketing UI was unclear enough to look
+broken. **6A-3 fixed all three** and, per the owner's request for a
+three-section inventory, turned it into a banking pass: extensions and
+core gems now bank like gems always did, with click-to-place UI replacing
+the old undersized socket dots. A real exploit was caught and closed in
+the same batch — unsocketing a `maxHp` core gem now clamps `hp` down
+instead of leaving it able to float above the reduced max. See Decision
+76, `docs/plans/phase-6a3-loop-fixes.md`, and
+`docs/sessions/2026-08-09-post-6a-playtest-and-6a3.md`.
 
 **Next is Phase 6B** — real extensions for the seven incumbent weapons,
 plus Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` balance gap and its
@@ -1755,7 +1906,8 @@ record §17; the concrete next step is in `docs/BACKLOG.md`'s *Now* section.
 | **5C** | ✅ Pause + inventory UI (Decision 72) — +/- spending, live stats, socket dots, core row, manage-loadout round trip. Found and fixed a real `withdrawPoints` bug from 5B. **Phase 5 complete.** |
 | **6-0** | ✅ Pre-run weapon select (Decision 73) — the deck fills every slot, fixed for the run; the card pool never offers a weapon. |
 | **6A-1** | ✅ Gem foundation (Decision 74) — `DeliveryKind` archetypes, `weaponMods`, six Amplifier gems, sockets/inventory, DPS readout, legacy passives deleted. |
-| **6A-2** | ✅ Behaviour class (Decision 75) — RESOLVE options, projectile flags, deferred emissions, emission multiplication, 14 Behaviour gems, bundle card. Immolation Ring's visual fixed in the same batch. **Phase 6A complete.** |
+| **6A-2** | ✅ Behaviour class (Decision 75) — RESOLVE options, projectile flags, deferred emissions, emission multiplication, 14 Behaviour gems, bundle card. Immolation Ring's visual fixed in the same batch. |
+| **6A-3** | ✅ Loop fixes from the post-6A playtest (Decision 76) — geometric XP curve, socket/ownership-blind card pool, extension + core-gem banking, three-section click-to-place inventory panel, the maxHp unsocket exploit closed. **Phase 6A complete.** |
 | **6B** | Real extensions for the seven incumbent weapons; Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` gap and dead `maxLevel` field → **next up** |
 | **▶ THE GATE** | **Moved here from after 5C** on 2026-08-08, then to after 6B on 2026-08-09 — needs both socket-fillers (gems *and* extensions) real before "decision or slider?" means anything. |
 | **6C–6I** | Remaining arsenal content — 18 weapons, 65 gems total. **Design session done** (`docs/plans/phase-5-6-arsenal.md`, revision 3); phasing per `docs/plans/phase-6-roadmap.md` §3. |

@@ -15,19 +15,6 @@ export function freeSlots(state: GameState, key: WeaponKey): number {
   return socketCount(points) - occupiedSlots(state.weaponSockets[key]);
 }
 
-// The floor withdrawPoints() will not cross — points can never drop
-// below whatever socketCount() needs to hold the extensions already
-// committed to a weapon (extensions have nowhere to return to, unlike
-// gems). Exported so the inventory UI (Phase 5C) can disable the "-"
-// button exactly when it would have no effect, rather than showing it
-// live and silently clamping.
-export function minPointsForSockets(sockets: WeaponSockets | undefined): number {
-  const extensionCount = sockets?.extensions.length ?? 0;
-  let minPoints = 0;
-  while (socketCount(minPoints) < extensionCount) minPoints++;
-  return minPoints;
-}
-
 // Phase 5C (docs/plans/phase-5b-framework.md S3 / phase-5c-inventory-ui.md):
 // investPoints is withdrawPoints' mirror on the spend side. Investment
 // never needs eviction logic — more points can only ever open more
@@ -43,31 +30,40 @@ export function investPoints(state: GameState, key: WeaponKey, amount: number): 
 }
 
 // Phase 5B (docs/plans/phase-5b-framework.md S5): "no destructive
-// respec, ever" (arsenal plan S5). Gems in a socket that closes return to
-// gemInventory, most-recently-socketed first. Extensions have nowhere to
-// return to (no extension inventory exists in the design), so the
-// withdrawal is clamped rather than ever destroying one — see
-// minPointsForSockets() above.
+// respec, ever" (arsenal plan S5) — nothing withdrawal touches is ever
+// destroyed, only moved to inventory. Gems in a socket that closes
+// return to gemInventory, most-recently-socketed first; as of Phase 6A-3
+// (docs/plans/phase-6a3-loop-fixes.md S4), extensions do the exact same
+// thing, returning to extensionInventory instead of clamping the
+// withdrawal — the clamp existed only because extensions used to have
+// nowhere to go. Gems evict before extensions purely to keep the
+// existing gem-eviction tests' behaviour unchanged; the plan doesn't
+// specify an ordering preference between the two.
 //
-// Returns the amount actually withdrawn, which may be less than
-// requested if the clamp engaged. Withdrawn points return to
-// state.enhancementPool — this is a transfer, not a deletion, mirroring
-// investPoints() exactly.
+// Withdrawal is therefore never partial any more — the full requested
+// amount always succeeds, up to what the weapon actually has invested.
+// Withdrawn points return to state.enhancementPool — a transfer, not a
+// deletion, mirroring investPoints() exactly.
 export function withdrawPoints(state: GameState, key: WeaponKey, amount: number): number {
   const current = state.weapons[key] ?? 0;
-  const sockets = state.weaponSockets[key];
-  const minPoints = minPointsForSockets(sockets);
-
-  const actualAmount = Math.min(amount, Math.max(0, current - minPoints));
+  const actualAmount = Math.min(amount, current);
   const newPoints = current - actualAmount;
   state.weapons[key] = newPoints;
   state.enhancementPool += actualAmount;
 
+  const sockets = state.weaponSockets[key];
   if (sockets) {
     const newSocketCount = socketCount(newPoints);
-    while (occupiedSlots(sockets) > newSocketCount && sockets.gems.length > 0) {
-      const gem = sockets.gems.pop()!;
-      state.gemInventory.push(gem);
+    while (occupiedSlots(sockets) > newSocketCount) {
+      if (sockets.gems.length > 0) {
+        const gem = sockets.gems.pop()!;
+        state.gemInventory.push(gem);
+      } else if (sockets.extensions.length > 0) {
+        const ext = sockets.extensions.pop()!;
+        state.extensionInventory.push(ext);
+      } else {
+        break; // occupiedSlots() and the two arrays disagreed — shouldn't happen
+      }
     }
   }
 

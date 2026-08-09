@@ -214,9 +214,10 @@ are new or moved** relative to `phase-5-6-arsenal.md` §13.
 | Batch | Content | Why here |
 |---|---|---|
 | **6-0** | ✅ **Shipped 2026-08-09.** Pre-run weapon select — list, checkboxes, exact-count enforcement, default deck, deck lines on both screens. No currency, no unlocks. | Unchanged in position, **upgraded in importance** by finding 1: it was not a convenience, it is the only route to most of the roster. Full account: `docs/plans/phase-6-0-weapon-select.md`. |
-| **6A-1** | **Split from 6A on 2026-08-09.** The gem foundation: delivery archetypes, the per-weapon modifier lookup, gem cards/inventory, **the socketing UI 5C left unbuilt**, the 6 Amplifier gems, **legacy `damage`/`atkSpeed` passives deleted** (finding 5). Plan: `docs/plans/phase-6a1-gem-foundation.md`. | The half that genuinely is O(1) in weapons, and therefore the honest test of 5A's central bet. Also the half that makes sockets *usable* — without it the Phase 5 gate cannot ask its question at all. |
-| **6A-2** | Behaviour gems (14) on four new mechanisms: the **RESOLVE stage** 5A deferred (as `ClearOptions`), **projectile behaviour flags**, **deferred emissions + a weapon registry**, and emission multiplication. Plus the bundle card. Plan: `docs/plans/phase-6a2-behaviour-gems.md`. | ⚠️ **The estimate that made 6A look cheap was measured on the wrong axis** — §9½'s 17-free/3-modifier/0-new is a *rendering* table. By implementation, only 2 of the 14 are the "one function on stage 3" §4 assumes; 4 need RESOLVE and 6 are projectile-flight properties outside the four-stage model entirely. The weapon registry built here is also what **Trigger** (6I) needs, so the catalogue's most build-generating gem gets most of its cost paid early. |
-| **6B** | **New batch.** The seven incumbents' content: **21 real extensions** replacing *Prototype Mount*; **Immolation Ring's visual**; its three balance gaps (BACKLOG); `maxLevel` deleted. | Finding 2 — the incumbents appear in no batch at all, and their extensions are the other half of what a socket holds. Also clears every standing item on Immolation in one pass instead of four. |
+| **6A-1** | ✅ **Shipped 2026-08-09** (Decision 74). **Split from 6A on 2026-08-09.** The gem foundation: delivery archetypes, the per-weapon modifier lookup, gem cards/inventory, **the socketing UI 5C left unbuilt**, the 6 Amplifier gems, **legacy `damage`/`atkSpeed` passives deleted** (finding 5). Plan: `docs/plans/phase-6a1-gem-foundation.md`. | The half that genuinely is O(1) in weapons, and therefore the honest test of 5A's central bet. Also the half that makes sockets *usable* — without it the Phase 5 gate cannot ask its question at all. |
+| **6A-2** | ✅ **Shipped 2026-08-09** (Decision 75). Behaviour gems (14) on four new mechanisms: the **RESOLVE stage** 5A deferred (as `ClearOptions`), **projectile behaviour flags**, **deferred emissions + a weapon registry**, and emission multiplication. Plus the bundle card. **Immolation Ring's visual moved here from 6B** (below), folded in on the owner's request the same day it shipped. Plan: `docs/plans/phase-6a2-behaviour-gems.md`. | ⚠️ **The estimate that made 6A look cheap was measured on the wrong axis** — §9½'s 17-free/3-modifier/0-new is a *rendering* table. By implementation, only 2 of the 14 are the "one function on stage 3" §4 assumes; 4 need RESOLVE and 6 are projectile-flight properties outside the four-stage model entirely. The weapon registry built here is also what **Trigger** (6I) needs, so the catalogue's most build-generating gem gets most of its cost paid early. |
+| **6A-3** | ✅ **Shipped 2026-08-09** (Decision 76). **Not in the original nine-batch plan — inserted the same day**, after the owner playtested 6A-1/6A-2 immediately after they shipped and found three structural breaks: the XP curve, the card pool going dead once every socket filled, and socketing UX unclear enough to look broken. Geometric XP curve; the card pool made socket/ownership-blind for gems, core gems and bundles (**superseding arsenal plan §11's no-dead-card rule**); extensions and core gems banked exactly like weapon gems; a three-section click-to-place inventory panel. Plan: `docs/plans/phase-6a3-loop-fixes.md`. | 6B's extensions arrive through the exact card pool and socketing UI this batch fixed — building 6B on top of the pre-6A-3 versions would have meant building on a dead pool and UX the owner had already flagged as broken-looking. |
+| **6B** | **New batch.** The seven incumbents' content: **21 real extensions** replacing *Prototype Mount*; Immolation Ring's remaining balance gap (`WEAPON_DAMAGE_SCALE`, the other two closed for free once `weaponMods` shipped in 6A-1) and its dead `maxLevel` field (BACKLOG). | Finding 2 — the incumbents appear in no batch at all, and their extensions are the other half of what a socket holds. Also clears the one standing item left on Immolation. |
 | **▶ THE GATE** | *Moved from after 6A (finding 3).* Judge the socketing loop, the gem count, and *is enhancement a decision or a slider?* | The first point at which **both** things a socket can hold are real content. |
 | **6C** | Weapons: Lance, Shockwave, Fission Charge — **with their nine extensions**. | Unchanged content, unchanged reasoning: the three that need nothing beyond the pipeline, and the two that most directly fix the owner's named single-target and AoE gaps. Establishes **beam rendering** (Lance) for Cauterizer to reuse. |
 | **6D** | Gems: Conditional (11) + Targeting (8). | Unchanged. Threat Priority finally lands against the Carrier/Bulwark pair shipped in 4C specifically to make it interesting. 14 free, 5 modifier, 0 new. |
@@ -226,10 +227,15 @@ are new or moved** relative to `phase-5-6-arsenal.md` §13.
 | **6H** | Gems: Transformative, **the eight cheap ones** — Trigger, Orbital Conversion, Reclamation, Fission Cascade, Sympathetic Link, Culture, Metronome, Overload. | Splits the old 6F by visual cost, which is the axis that actually predicts effort (§9½). Trigger is here, and it is the single most build-generating mechanic in the document — it deserves a gate where it is not competing for attention with six new renderers. |
 | **6I** | Gems: Transformative, **the six expensive ones** — Detonation, Sustained, Inversion, Siphon, Conversion, Emplacement. | Every gem needing genuinely new rendering, last, on a visual vocabulary fully established by 6C/6E/6F/6G. Preserves §9½'s ordering constraint exactly: Repulsor (6F) before Inversion, Antibody Swarm and Mycelium (6G) before Conversion and Culture. |
 
-**Ten batches plus a gate, against the original six plus a gate.** No
-content was added or removed — the deltas are one new batch for content
-that had no batch (6B), four splits (6A on 2026-08-09, plus 6D/6E/6F),
-one gate move, and Marker Beacon changing batches.
+**Eleven batches plus a gate, against the original six plus a gate.** No
+catalogue content was added or removed — the deltas are one new batch for
+content that had no batch (6B), five splits (6A into three on 2026-08-09
+— 6A-1/6A-2 planned same-day, 6A-3 inserted the same day again after the
+owner's playtest of 6A-1/6A-2 — plus 6D/6E/6F), one gate move, and Marker
+Beacon changing batches. 6A-3 alone is genuinely new *process*, not
+catalogue content: it exists because playtesting 6A-1/6A-2 the same day
+they shipped surfaced problems no amount of design-time review would
+have caught.
 
 ---
 
@@ -250,9 +256,14 @@ absence:
   — weapons still establish every new visual vocabulary before the gems
   that generalise it, now with more room between them.
 - **Mycelium still ships last** and is still the first cut.
-- **The declined dilution fixes stay declined** (deck-relevance filter,
-  trade ship, gems levelling out). The gate is still the go/no-go, and
-  moving it by one batch does not change which shelf the fix comes from.
+- **The declined dilution fixes stay declined, with one exception.**
+  Deck-relevance filtering and gems levelling out are both still
+  deferred, unchanged. **The trade ship is not** — 6A-3 gave it a
+  concrete job (recycling surplus gems into currency mid-run, once the
+  card pool went ownership-blind and started producing surplus by
+  design) though it remains unbuilt, still Phase 7. The gate is still the
+  go/no-go, and moving it by one batch does not change which shelf the
+  fix comes from.
 - **The modal level-up pause stays modal**, judged at the gate, per call
   25.
 
@@ -270,20 +281,27 @@ looks bad during 6A's own build, that gets raised immediately rather than
 waiting for the gate.
 
 **Q2 — Is 6B (the incumbent content batch) accepted?** ✅ **Yes.** The
-seven existing weapons get their 21 real extensions, Immolation gets its
-visual, and the dead `maxLevel` field goes. The alternative — seven
-starting weapons permanently carrying a placeholder while eleven newer
-ones carry real content — was not a shape worth shipping.
+seven existing weapons get their 21 real extensions and the dead
+`maxLevel` field goes. *(Immolation's visual, originally slated for this
+batch, moved up into 6A-2 and shipped 2026-08-09 — see that row above.)*
+The alternative — seven starting weapons permanently carrying a
+placeholder while eleven newer ones carry real content — was not a shape
+worth shipping.
 
 **Q3 — The three Immolation Ring balance gaps: fix or keep?** ✅ **Fix
-all three in 6B.** It responds to Overclock and Amplifier and receives
-Phase 4C-1's +50% `WEAPON_DAMAGE_SCALE` pass, closing a call open since
-5A. The reasoning that decided it: these gaps exist because Ward Pulse
-was misfiled as a passive when each of those passes shipped, so the
+all three**, though only one is left to fix in 6B now. It should respond
+to Overclock and Amplifier and receive Phase 4C-1's +50%
+`WEAPON_DAMAGE_SCALE` pass, closing a call open since 5A. **Two of the
+three closed for free once 6A-1 shipped** — `weaponMods()` applies
+uniformly to every weapon including Immolation Ring, so no
+Immolation-specific code was needed for the Overclock/Amplifier response.
+Only the `WEAPON_DAMAGE_SCALE` pass remains, now 6B's job alone. The
+reasoning that decided it stands unchanged: these gaps exist because Ward
+Pulse was misfiled as a passive when each of those passes shipped, so the
 current behaviour is a **classification accident, not a design
 position** — and inheriting a balance stance from an accident is how a
 project ends up defending something nobody chose. The regression test
-currently pinning the Overclock gap gets rewritten in the same pass.
+that pinned the Overclock gap was rewritten as part of 6A-1.
 
 **Q4 — Must a deck fill every slot?** ✅ **Yes — always full, and the
 card pool never offers a weapon.** The owner's answer, which settled more
@@ -318,7 +336,7 @@ yet, which is exactly what 6-0 builds.
 
 ## 6. Risks
 
-**1. Nine batches is a lot of gates, and gate fatigue is real.** The
+**1. Eleven batches is a lot of gates, and gate fatigue is real.** The
 counter-evidence is the project's own record: every phase since 4A found
 real bugs *only* by running the game, and the two phases that were split
 before coding (4C, and 5 into A/B/C) are the two that went most

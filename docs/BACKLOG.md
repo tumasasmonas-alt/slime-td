@@ -20,15 +20,17 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### ✅ Phase 6-0 and Phase 6A — shipped and committed, 2026-08-09.
+### ✅ Phase 6-0 and all of Phase 6A (6A-1/6A-2/6A-3) — shipped and committed, 2026-08-09.
 
 Full account: `docs/plans/phase-6-0-weapon-select.md` (6-0),
 `docs/plans/phase-6a1-gem-foundation.md` (6A-1),
-`docs/plans/phase-6a2-behaviour-gems.md` (6A-2). Decisions 73–75. The
-Phase 6 re-plan that scheduled all three: `docs/plans/phase-6-roadmap.md`.
-Session record for the whole day, including the owner's scope correction
-and the two bugs the test suite caught:
-`docs/sessions/2026-08-09-phase-6-replan-and-6a.md`.
+`docs/plans/phase-6a2-behaviour-gems.md` (6A-2),
+`docs/plans/phase-6a3-loop-fixes.md` (6A-3). Decisions 73–76. The
+Phase 6 re-plan that scheduled all of it: `docs/plans/phase-6-roadmap.md`.
+Session records: `docs/sessions/2026-08-09-phase-6-replan-and-6a.md` (the
+re-plan, 6-0, and 6A-1/6A-2) and
+`docs/sessions/2026-08-09-post-6a-playtest-and-6a3.md` (the owner's
+same-day playtest and the 6A-3 fix batch it produced).
 
 **6-0 shipped:** a `Choose Weapons` / `Change Loadout` overlay reachable
 from the start and game-over screens, enforcing an exact-count deck
@@ -53,6 +55,15 @@ the updated entry below for what's still open. 495/495 tests, typecheck
 clean, build clean, verified live (methodology note in Decision 75 —
 the Browser pane wasn't compositing frames this session, worked around
 with a temporary debug harness mirroring Decision 59's precedent).
+
+**The owner playtested 6A the same day and 6A-3 followed immediately**,
+fixing the three structural findings that surfaced — see the *Done* entry
+below and Decision 76. Extensions and core gems now bank like weapon
+gems always did, the card pool is fully socket/ownership-blind (gems and
+core gems; extensions stay ownership-aware on purpose), and the loadout
+screen has a real three-section inventory panel with click-to-place.
+513/513 tests, typecheck clean, build clean, verified live — the Browser
+pane composited normally this session, no visibility workaround needed.
 
 **Next up is Phase 6B** (real extensions for the seven incumbent weapons,
 Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` gap, and its dead
@@ -180,178 +191,20 @@ Still true and still unvalidated when the pass happens: `CONTACT_SCALE`,
 (Decision 10) so runs are **not directly comparable**. A fixed-seed debug
 option is the fix if that bites — don't reuse the field.
 
+**Two items added 2026-08-09, from the post-6A playtest** (full findings
+in *Done* below, Decision 76): **slime/enemy balance** — the owner's own
+words, *"balancing of the slime is very needed, but later"* — and
+**point/gem abundance**, which the owner suspected shares a root cause
+with the pre-6A-3 XP curve (*"maybe that can be fixed with XP required
+curve drastically increased"*). The curve is fixed now (`XP_GROWTH` in
+`tuning/xp.ts`, an unmeasured first draft); **re-measure abundance after
+a playtest on the new curve before tuning grant rates independently** —
+enhancement points and gem cards both arrive at 1/level-up, so a slower
+level rate may already resolve most of this on its own.
+
 ---
 
 ## Bugs and known limitations
-
-### Found in the 2026-08-09 post-6A playtest — the owner's first run on real gems
-
-*Six findings, raised 2026-08-09 immediately after Phase 6A shipped. The
-owner's own framing: "I have play tested the game, which I know is not
-the time."* Triaged below; three are structural rather than balance
-noise, and **#2 and #5 both damage the loop 6A just built**, which is why
-they aren't simply parked for Phase 8 with the rest of the balance work.
-
-> **Owner's calls, 2026-08-09, and where they land.** #1, #2 and #5 are
-> scoped into **Phase 6A-3**, a corrective batch before 6B —
-> `docs/plans/phase-6a3-loop-fixes.md`. #4 is deferred with its semantics
-> settled (see its entry). #3 and #6 stay deferred to Phase 8.
-> **#2's answer changed the design rather than fixing the symptom**: the
-> card pool will stop caring about sockets entirely, which supersedes
-> arsenal plan §11's no-dead-card rule for gems.
-
-#### 🔴 1. The XP curve cannot keep up — still levelling every few seconds at level 50
-
-*Owner: "its ok at the start but im playing at lvl 50 and i level up
-every few seconds still, that is not the intended behavior."*
-
-**This is not a coefficient problem, it's a curve-class problem** — worth
-stating precisely, because raising the constants will not fix it:
-
-- **Cost** is quadratic: `xpToNext(L) = 0.45L² + 6.5L + 12`
-  (`tuning/xp.ts`). At L=10 it's 122; at L=50, 1462 — only ~12× over 40
-  levels.
-- **Income** is proportional to destroyed mass (`gemValueFromRemoved`,
-  `removed * 1.3`, uncapped by deliberate design — Decision 31), so XP
-  per second is proportional to **DPS**.
-- DPS now grows *multiplicatively* in level: enhancement points scale each
-  weapon, and 6A's Amplifier gems multiply damage × area × rate on top,
-  compounding.
-
-Time per level is `O(L²) / O(DPS)`. Once DPS grows faster than
-quadratically — which gem multipliers make near-certain — **time per level
-stops rising and starts falling**, which is exactly the reported symptom.
-No value of `XP_QUADRATIC` fixes a curve that is the wrong *shape*; the
-cost curve needs to grow at least as fast as the power curve
-(geometric/exponential, e.g. a per-level growth factor), or income needs a
-counter-scaling term.
-
-**Decision 61 explicitly sanctions this lever** — *"the pacing lever for
-levelling is what a level costs, never what a kill grants"* — and its own
-note says the curve is *"not finalized."* So retuning is in-bounds. But
-changing the curve's **class** (quadratic → geometric) goes beyond
-retuning its constants, so it wants an explicit owner call rather than
-being done silently. **Do not fix this by nerfing granted XP** — that
-breaks Decision 31's anti-farming guarantee, which depends on granted XP
-staying honest to destroyed mass.
-
-Related: **#6 below is the same root cause.** Enhancement points and gems
-arrive at 1 per level, so a level rate that never slows is *also* the
-reason points and gems feel over-abundant. Fixing the curve likely fixes
-both; that's the thing to try before tuning point/gem grant rates
-separately.
-
-#### 🔴 2. The card pool goes permanently dead once sockets fill — only "Emergency Repair" is offered
-
-*Owner: "When i have no open sockets in the weapons, im only offered
-'emergency repair' and nothing else."*
-
-**Confirmed structural, and it is guaranteed to happen in every long
-run** — not an edge case:
-
-- The socket ladder tops out at **5 sockets per weapon** (24 points,
-  `SOCKET_THRESHOLDS = [0, 3, 8, 15, 24]` in `tuning/sockets.ts`). A
-  3-weapon deck therefore has a hard ceiling of **15 sockets**.
-- `buildWeaponSidePool` skips a weapon's extension when
-  `freeSlots(state, key) <= 0`, and every gem is gated on
-  `gemHasLegalHome`, which itself requires `freeSlots > 0`.
-- `buildCoreGemPool` returns `[]` once all 3 core sockets are filled.
-- So `pickCards` falls through to its `[{ kind: 'heal' }]` fallback —
-  **forever**, from the moment the last socket fills.
-
-Levels are unbounded; sockets are hard-capped. The two were never
-reconciled. The no-dead-card rule (arsenal plan §11) is working exactly
-as written — every individual card correctly refuses to be a dead pick —
-but nobody specified what the pool should offer when *everything* is
-legitimately dead, so the emergency fallback became the steady state.
-
-**✅ Answered by the owner, 2026-08-09 — and the answer removes the
-problem rather than solving it.** *"I think it shouldnt matter if i have
-open sockets or not i should still be offered the same pool. The pool
-should not care if i have something."* Gems become freely offered and
-bank in inventory regardless of sockets; leftovers convert to a small
-amount of currency on death, and the orbital trade ship (see *Ideas*)
-recycles them into currency mid-run. **This supersedes arsenal plan §11's
-no-dead-card rule for gems** — §11 wasn't wrong, its premise changed: it
-assumed an unsocketable gem is worthless, which stops being true once
-gems have a currency value.
-
-So none of the previously-floated options are needed — no gem-upgrade
-system, no extended socket ladder, no scaling fallback. Scoped into
-**6A-3** (`docs/plans/phase-6a3-loop-fixes.md` §3). One asymmetry is
-flagged as an open question there: **extensions have no inventory to bank
-into**, so an extension card with no free socket is genuinely
-unplaceable, and the plan keeps the free-socket gate on extensions only.
-
-#### 🟡 4. Core gems cannot be unsocketed
-
-*Owner: "I cannot unsocket the core gems."* Confirmed — `renderCoreRow`
-in `ui/inventory.ts` is pure display, with no click handler at all, while
-weapon gems have had click-to-unsocket since 6A-1. An inconsistency the
-player has no way to explain.
-
-**✅ Both blocking questions answered by the owner, 2026-08-09; the build
-itself stays deferred.** A core gem **returns to a new core-gem
-inventory** (never destroyed — the *"no destructive respec, ever"* rule),
-and removing `maxHp` **reduces max HP by 20 and clamps current HP to it**,
-so a socket/unsocket loop can't be used as a free heal. Recorded in
-`docs/plans/phase-6a3-loop-fixes.md` §5 so whoever builds it doesn't
-re-litigate the design. The two questions, for context:
-
-1. **There is no core-gem inventory to return one to.** `applyCardChoice`
-   writes `state.coreGems[idx] = key` and bumps `state.passives[key]`;
-   `state.gemInventory` holds weapon gems only. Unsocketing needs
-   somewhere for it to go, or it destroys the gem — which would violate
-   the *"no destructive respec, ever"* rule (arsenal plan §5, call 13)
-   that `withdrawPoints()` and `unsocketGem()` both already honour.
-2. **`maxHp` has an irreversible side effect.** Socketing it does
-   `state.tower.maxHp += 20` *and* heals 20. Unsocketing must decide what
-   happens if current HP now exceeds the reduced max — and a
-   socket/unsocket loop must not become a heal exploit.
-
-#### 🟡 5. Socketing is unclear enough that the owner doubted it worked at all
-
-*Owner: "the area that you need to click to socket the gems is very
-unclear, the empty support socket is too small and unintuitive... we need
-to make it way more UI/UX friendly... Even I second guessed if it worked
-or is there a bug that you cant socket anything."*
-
-**This is the project's own worst-known failure mode recurring.** The
-2026-08-05 playtest finding — *"cards appear to do nothing"* — is cited
-across the design docs as the thing to design against, and 6A-1 built the
-open-the-picker-on-pick flow (§10 Q1) specifically to avoid rebuilding
-it. It got rebuilt one layer down: the *pick* is now visible, but the
-*socket* is not.
-
-Concretely, in `ui/weaponRow.ts`:
-- An empty socket is a bare `○` text glyph with no padding, no minimum
-  hit area, and no label — a click target a few pixels across.
-- Its only affordance is a `title` tooltip, which requires already
-  suspecting it's clickable.
-- **There is no persistent view of owned gems.** The only way to see
-  inventory is to click an empty socket to open that weapon's picker,
-  which filters to gems legal *for that weapon* — so an unsocketed gem
-  that fits nothing currently equipped is invisible everywhere.
-
-The owner's requested shape: **a persistent inventory panel beside the
-loadout screen showing all owned gems**, plus a genuinely legible
-socketing interaction. Worth treating as real UI work, not a CSS tweak —
-5C's screen only ever rendered and incremented, and this is the first
-interaction in it that a player must *discover*.
-
-#### 🟢 3 and 6. Slime balance, and point/gem abundance
-
-**#3 (slime balance)** — the owner explicitly deferred it: *"Balancing of
-the slime is very needed, but later."* Belongs with the **Phase 8**
-balance pass alongside `CONTACT_SCALE`/`CREEP_RAMP`; see the *Balance
-pass* entry under *Now*. No action.
-
-**#6 (too many points and gems)** — *"maybe that can be fixed with XP
-required curve drastically increased."* Almost certainly right, and it is
-the same root cause as **#1**: both grant rates are keyed to level-ups (1
-enhancement point per level; gem cards every level-up; a bundle every 5).
-Fix the curve first, then re-measure — tuning the grant rates
-independently before that would be tuning against a moving target.
 
 ### Found in the 2026-08-05 playtest — all absorbed by the rework
 
@@ -826,6 +679,48 @@ relentless than discrete jumps. Purely speculative.
 
 Kept short — for resolutions whose *reasoning* is worth remembering.
 Anything that's just "built the thing" lives in git and PROGRESS.md.
+
+- **Six findings from the owner's first playtest on real gems, three of
+  them structural.** *(Found 2026-08-09 right after Phase 6A shipped;
+  fixed the same day, Phase 6A-3, Decision 76.)* Full findings and the
+  fix account: `docs/sessions/2026-08-09-post-6a-playtest-and-6a3.md`.
+  - **The XP curve was the wrong shape** — quadratic cost against DPS
+    that 6A's Amplifier gems grow multiplicatively, so time-per-level
+    started *falling* past roughly level 50 ("lvl 80 within not even 10
+    mins"). Fixed with a geometric factor on top of the quadratic base
+    (`XP_GROWTH ** (level - 1)` in `tuning/xp.ts`), the `-1` chosen so
+    level 1's cost is untouched. Unmeasured first draft, expect a retune.
+  - **The card pool went permanently dead once every socket filled**,
+    offering nothing but Emergency Repair forever — every individual
+    no-dead-card gate was correct, but nobody had specified the
+    everything-is-full case. The owner's fix changed the rule rather than
+    patching the symptom: the pool became fully socket- and
+    ownership-blind for gems, core gems and bundles, **superseding
+    arsenal plan §11**, since an unplaceable card now just banks instead
+    of being worthless.
+  - **Core gems could not be unsocketed at all** — confirmed a real gap,
+    not by design. Fixed by giving core gems their own inventory
+    (mirroring weapon gems) and moving a core gem's effect from card-pick
+    time to socket time, closing a real exploit along the way: unsocketing
+    `maxHp` now clamps `hp` down instead of leaving it able to float above
+    the reduced maximum.
+  - **Socketing was unclear enough the owner doubted it worked at all** —
+    root cause was visibility, not hit-area: the only route to inventory
+    was clicking a socket, which filtered to what fit *that one weapon*,
+    so anything that fit nothing equipped was invisible everywhere. Fixed
+    with a persistent three-section panel (Extensions / Core gems /
+    Support gems) and click-a-gem-then-click-a-socket placement, legal
+    sockets lit and illegal ones dimmed.
+  - Extensions got one deliberate exception to the ownership-blind rule:
+    re-rolling one you already own (socketed or banked) levels that exact
+    instance in place instead of creating a duplicate — the only card
+    kind with levels, and the only one for which "already have it" means
+    something.
+  - Slime/enemy balance and point/gem abundance were confirmed real but
+    stay deferred to Phase 8 — see the *Balance pass* entry under *Now*.
+  513/513 tests, typecheck clean, build clean, verified live end to end
+  (placement, unsocket, both directions of the maxHp clamp, Escape/
+  click-again cancel, the legacy per-row picker still working).
 
 - **Four built weapons (Blades, Frost, Missile, Immolation Ring) were
   unreachable in any run.** *(Found and fixed 2026-08-09, Phase 6-0.)*

@@ -4,7 +4,6 @@ import { gemDesc, gemIcon, gemName } from '../tuning/gems';
 import { socketCount } from '../tuning/sockets';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import { gemLegalFor } from '../systems/gemSockets';
-import { minPointsForSockets } from '../systems/sockets';
 import { weaponMods } from '../systems/weaponMods';
 
 // Shared between Phase 5C's inventory screen and Phase 6-0's pre-run
@@ -17,15 +16,26 @@ export interface WeaponRowHandlers {
   onWithdraw?: (key: WeaponKey) => void;
   onToggle?: (key: WeaponKey) => void; // 'select' mode only
   // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S6c): 'loadout'
-  // mode only — the socketing UI 5C shipped as read-only. Clicking an
-  // empty dot opens this row's picker; clicking a filled gem dot
-  // unsockets immediately (no confirmation, matching the +/- buttons'
-  // single-click-single-action feel — a gem is never destroyed, only
-  // returned to inventory, so there's nothing to protect against);
-  // picking a gem from the open picker sockets it.
-  onOpenGemPicker?: (key: WeaponKey) => void;
+  // mode only — the socketing UI 5C shipped as read-only. Clicking a
+  // filled gem dot unsockets immediately (no confirmation, matching the
+  // +/- buttons' single-click-single-action feel — a gem is never
+  // destroyed, only returned to inventory, so there's nothing to protect
+  // against); picking a gem from the open picker sockets it.
+  //
+  // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5): onEmptySocketClick
+  // fires for every empty-dot click — ui/inventory.ts (the module that
+  // owns placing-mode state) decides what that click means: place the
+  // currently-selected inventory item if one is legal here, otherwise
+  // fall back to opening this row's own picker (the pre-6A-3 route,
+  // which stays as a second way in). Renamed from onOpenGemPicker since
+  // it no longer always means "open the picker."
+  onEmptySocketClick?: (key: WeaponKey) => void;
   onUnsocketGem?: (key: WeaponKey, gemId: number) => void;
   onSocketGem?: (key: WeaponKey, gemId: number) => void;
+  // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4): extensions bank
+  // and unsocket the same way gems do now, so a filled extension dot
+  // becomes clickable too — mirrors onUnsocketGem exactly.
+  onUnsocketExtension?: (key: WeaponKey, extId: number) => void;
 }
 
 // 'select' mode's checkbox state. Lives outside GameState — the pre-run
@@ -47,6 +57,13 @@ export function renderWeaponRow(
   handlers: WeaponRowHandlers,
   selectState?: WeaponRowSelectState,
   gemPickerOpen = false,
+  // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5): 'ok' lights up
+  // every empty socket on this row, 'no' dims them — set by
+  // ui/inventory.ts while an inventory entry is selected for placement,
+  // computed once per row (legality doesn't vary socket-to-socket within
+  // one weapon, only weapon-to-weapon). Undefined outside placing mode,
+  // which renders exactly as before.
+  placingHighlight?: 'ok' | 'no',
 ): HTMLElement {
   const def = WEAPON_DEFS[key];
 
@@ -60,7 +77,7 @@ export function renderWeaponRow(
 
   if (mode === 'loadout') {
     if (!state) throw new Error('loadout mode requires state');
-    renderLoadoutControls(row, header, key, lvl, def, state, handlers, gemPickerOpen);
+    renderLoadoutControls(row, header, key, lvl, def, state, handlers, gemPickerOpen, placingHighlight);
   } else {
     renderSelectControls(row, header, key, def, handlers, selectState);
   }
@@ -102,6 +119,7 @@ function renderLoadoutControls(
   state: GameState,
   handlers: WeaponRowHandlers,
   gemPickerOpen: boolean,
+  placingHighlight: 'ok' | 'no' | undefined,
 ): void {
   const pts = document.createElement('span');
   pts.className = 'weapon-row-points';
@@ -114,7 +132,12 @@ function renderLoadoutControls(
   const minus = document.createElement('button');
   minus.className = 'weapon-row-btn';
   minus.textContent = '−';
-  minus.disabled = lvl <= minPointsForSockets(state.weaponSockets[key]);
+  // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4): withdrawal no
+  // longer has a floor — sockets that close evict their contents to
+  // inventory instead of blocking the withdrawal (systems/sockets.ts's
+  // withdrawPoints), so the only reason to disable this button now is
+  // having nothing left to withdraw.
+  minus.disabled = lvl <= 0;
   minus.addEventListener('click', () => handlers.onWithdraw?.(key));
   controls.appendChild(minus);
 
@@ -139,30 +162,40 @@ function renderLoadoutControls(
   sockets.className = 'weapon-row-sockets';
   const total = socketCount(lvl);
   const weaponSockets = state.weaponSockets[key];
-  const extCount = weaponSockets?.extensions.length ?? 0;
+  const extensions = weaponSockets?.extensions ?? [];
   const gemInstances = weaponSockets?.gems ?? [];
-  const filled = extCount + gemInstances.length;
+  const filled = extensions.length + gemInstances.length;
 
   for (let i = 0; i < total; i++) {
     const dot = document.createElement('span');
-    if (i < extCount) {
-      // Extensions aren't clickable here — 6B builds real ones; the
-      // shared PLACEHOLDER_EXTENSION_KIND leaves the same way it always
-      // has, via the +/- withdrawing points until its socket closes.
+    if (i < extensions.length) {
+      // Phase 6A-3: extensions bank and unsocket the same way gems do
+      // now, so this dot is clickable too — real per-weapon extension
+      // *content* is still 6B; only the banking mechanics are new here.
+      const ext = extensions[i]!;
       dot.className = 'socket-dot filled socket-dot-extension';
       dot.textContent = '◆';
-      dot.title = 'Extension';
+      dot.title = `Extension Lv${ext.level} — click to unsocket`;
+      dot.addEventListener('click', () => handlers.onUnsocketExtension?.(key, ext.id));
     } else if (i < filled) {
-      const gem = gemInstances[i - extCount]!;
+      const gem = gemInstances[i - extensions.length]!;
       dot.className = 'socket-dot filled socket-dot-gem';
       dot.textContent = gemIcon(gem.kind);
       dot.title = `${gemName(gem.kind)} — click to unsocket`;
       dot.addEventListener('click', () => handlers.onUnsocketGem?.(key, gem.id));
     } else {
-      dot.className = 'socket-dot';
-      dot.textContent = '○';
-      dot.title = 'Empty socket — click to place a gem';
-      dot.addEventListener('click', () => handlers.onOpenGemPicker?.(key));
+      dot.className = 'socket-dot socket-dot-empty';
+      dot.textContent = '+';
+      if (placingHighlight === 'ok') {
+        dot.classList.add('socket-dot-ok');
+        dot.title = 'Click to place it here';
+      } else if (placingHighlight === 'no') {
+        dot.classList.add('socket-dot-no');
+        dot.title = "Doesn't fit here";
+      } else {
+        dot.title = 'Empty socket — click to place a gem';
+      }
+      dot.addEventListener('click', () => handlers.onEmptySocketClick?.(key));
     }
     sockets.appendChild(dot);
   }
