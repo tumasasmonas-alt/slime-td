@@ -56,6 +56,7 @@ finished plumbing rather than being half-plumbing itself.
 | 4 | **The inventory has three sections** — extensions, core gems, support gems — **as a side panel on the loadout screen.** | §4, §5. This is what turns the batch from a CSS fix into a banking change. |
 | 5 | **Unsocketing a core gem removes what it gave.** *"If it give max hp - take it away when unsocketed."* | §6. |
 | 6 | **Extensions stay bound to their weapon** when banked — a Bolt extension only ever fits Bolt. | §4. Preserves the arsenal design's split: extensions are weapon identity, gems are the universal half. |
+| 7 | **Rolling an extension you already own levels it up**, socketed or not, and the card leaves the pool at max level. *"Extensions are a different thing and the only one with levels."* | §3a. Deliberately **not** the same pool rule as gems — an owner-sanctioned asymmetry, not an inconsistency to tidy away. |
 
 **A sequencing note, resolved.** The owner's first answer was *"just #2
 and #5 now, defer #1 and #4."* The same round then chose *"go geometric
@@ -126,15 +127,50 @@ merely *deferred*.
 - `buildWeaponSidePool` stops filtering gems through `gemHasLegalHome`.
 - It also stops gating **extensions** on `freeSlots` — the first draft of
   this plan kept that gate, because an extension had nowhere to bank.
-  §4 removes that reason, so the pool becomes *uniformly* socket-blind
-  rather than carrying an asymmetry that would need explaining forever.
+  §4 removes that reason, so the pool becomes *socket*-blind for
+  everything, with no exceptions.
 - `buildBundlePool` stops requiring every gem in a package to have a home.
 - `buildCoreGemPool` stops returning `[]` when all three core slots are
   full — core gems bank too.
-- Duplicates are fine. The pool does not consult what the player owns.
+- For **gems and core gems**, duplicates are fine and the pool does not
+  consult what the player owns at all.
 - `gemHasLegalHome()` loses its only caller and is **deleted** with its
   tests. `gemLegalFor()` stays — the placement UI needs it, and
   `socketGem()` still refuses illegal placements.
+
+### 3a. Extensions are the exception, deliberately
+
+**Socket-blind is not the same as ownership-blind, and extensions are
+ownership-aware on purpose** (call 7). The owner's rule, verbatim:
+
+> *"When you roll an extension and you already have it socketed or
+> unsocketed it increases the level of the extension — regardless if its
+> used or not, and after you have max level extension, that card is
+> removed from the pool. Support gems and core gems act differently in
+> the pool and its ok, extensions are a different thing and the only one
+> with levels."*
+
+So the extension card:
+
+- **Levels up an extension you already own**, wherever it lives — on the
+  weapon or sitting in inventory. Ownership, not placement, is what the
+  pool reads.
+- **Creates it at level 1 in inventory** if you don't own it at all.
+- **Leaves the pool permanently at max level** (3) — which is the
+  behaviour `buildWeaponSidePool` already has today and simply keeps.
+
+**This is an owner-sanctioned asymmetry, not an inconsistency.**
+Extensions are the only thing in the game with levels, so they are the
+only thing for which "you already have one" means something other than
+"you have two." Written down here explicitly because a later reader will
+otherwise see gems ignoring ownership, extensions consulting it, and try
+to unify them.
+
+**It also simplifies §4.** Because levelling happens at *roll* time
+rather than *placement* time, **there is never more than one instance of
+a given `(weaponKey, kind)` extension anywhere** — not two in inventory,
+not one in inventory and one socketed. That is a clean invariant, and
+§8 tests it directly rather than trusting it.
 
 **This deletes finding #2 at the root.** No gem-upgrade system, no longer
 socket ladder, no scaling fallback. The `{ kind: 'heal' }` fallback stays
@@ -278,8 +314,18 @@ the reason to extend it), and every weapon module.
   ownable — the regression test for the reported symptom.
 
 **Banking and placement:**
-- An extension card grants an inventory instance and does **not** touch
-  the weapon.
+- An extension card the player does **not** own grants a level-1 instance
+  into inventory, touching no weapon.
+- An extension card the player owns **in inventory** levels that instance
+  and still creates nothing new.
+- An extension card the player owns **socketed on the weapon** levels it
+  **in place, on the weapon** — the case my first draft got wrong by
+  asserting a card never touches the weapon.
+- **The uniqueness invariant**: after any sequence of extension rolls,
+  at most one instance of a given `(weaponKey, kind)` exists across
+  inventory and every weapon's sockets combined.
+- An extension stays offered until max level, then leaves the pool for
+  good — including when it is sitting unplaced in inventory.
 - An extension is legal only in its own weapon's sockets.
 - `withdrawPoints` now evicts an extension to inventory rather than
   clamping; round-trip conservation holds.
@@ -316,17 +362,14 @@ passing test suite cannot verify.
 
 ## 10. Open questions
 
-**1. What does a banked extension instance mean when the weapon already
-has that extension?** Extensions level 1→3 today, via a card that reads
-the current level and grants the next. Once they bank, the cleanest model
-is: placing an instance into a free socket installs it at Lv1; placing a
-*duplicate* onto a weapon that already carries it **upgrades it in place
-and consumes no additional socket**. That preserves both the 1→3 ladder
-and the "one socket per extension" cost. **Proposed, not assumed** — and
-since 6B is what makes extensions real content, 6B may want to revisit it.
+**1. ~~What does a banked extension instance mean when the weapon already
+has that extension?~~** ✅ **Settled by the owner, 2026-08-09** — see §3a.
+The *roll* levels it, wherever it lives, and the card leaves the pool at
+max. Simpler than the placement-time merge this plan originally proposed,
+and it removes duplicate handling entirely.
 
 **2. `XP_GROWTH = 1.08` is an unmeasured first draft.** Expect one retune
-after a playtest.
+after a playtest. The only genuinely open item left.
 
 ---
 
