@@ -48,27 +48,51 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-10 (Phase 6B shipped in full — 6B-1 and 6B-2
-together, greenlit with full owner autonomy in one session: two
-independent socket lines replacing the shared extension/gem pool
-[reversing arsenal plan §5, restoring Decision 32], and all 28 real
-extensions across the seven incumbent weapons. Committed and pushed.)
+**Last updated:** 2026-08-10 (Phase 6C shipped in full — 6C-1 and 6C-2,
+both planned and then greenlit with full owner autonomy in the same
+session Phase 6B shipped in: three new weapons [Lance, Shockwave,
+Fission Charge], twelve real extensions, `clearAt` generalized to
+non-disc damage shapes, and `'beam'` as a sixth `DeliveryKind`.
+Committed and pushed.)
 
-**Phase 6B, in short:** the owner asked for a plan, corrected two things
-in it during review (the socket model, the extension count), then
-greenlit both halves together. **6B-1** rebuilt the loadout screen's
-sockets into two independent lines per weapon — extensions on their own
-0/1/2-slot ladder (opening at 5/10 points invested), support gems
-unchanged (1→5 at 0/3/8/15/24) — and the real `EXTENSION_DEFS` catalogue,
-folded into `weaponMods()` so an extension's numeric effect shows up
-everywhere a gem's already did, with zero new call sites. **6B-2** is all
-28 extensions (four per weapon, not three — arsenal plan §12's "3 ship"
-call is superseded) plus four new mechanisms: coagulant chilling
-(Shatter Core), a coagulant armour debuff respecting
-`COAGULANT_ARMOR_FLOOR` (Corrosive/Bunker Buster), regrowth suppression
-(Rime/Ash), and the ring's second radius (Second Ring/Flare — and,
-caught while writing this batch, three "second ring" extensions had to
-go strictly *outward*, since every tower-centred radius floors at
+**Phase 6C, in short:** continued straight from the same-day 6B session.
+**6C-1** shipped Shockwave (a travelling ring — a genuine persistent sim
+entity, not the flash-decoration `NovaFx` reuse the arsenal plan
+originally claimed) and Fission Charge (Missile's Cluster Warhead
+mechanic promoted to a whole weapon's identity), plus the batch's real
+architectural cost: `ClearOptions.shape`, generalizing `clearAt` from a
+disc to an annulus, with the disc path proven byte-identical before the
+new shape was even added. **6C-2** shipped Lance — a charged, piercing
+beam that targets the largest coagulant in range rather than the
+nearest — which needed a sixth `DeliveryKind` (`'beam'`) and a capsule
+shape reusing 6C-1's system. Both weapons carry four extensions each,
+matching 6B's four-per-weapon rule, now the standing one (twelve total
+this batch). The owner's own review corrected the plan twice: Shockwave
+stays a travelling ring rather than becoming a cone (raised by the
+owner, checked against the catalogue, and the cone was already Solvent
+Sprayer's shape two batches out); and the gate — settled the day before
+as "after 6B" — moved a third time to run after 6C instead, since ten
+weapons against three deck slots is a stronger place to judge
+*"is enhancement a decision or a slider."* Decisions 81–85; full account
+`docs/plans/phase-6c-lance-shockwave-fission.md`,
+`docs/plans/phase-6c1-shockwave-fission.md`,
+`docs/plans/phase-6c2-lance.md`.
+
+**Phase 6B shipped the same session, just before 6C.** The owner asked
+for a plan, corrected two things in it during review (the socket model,
+the extension count), then greenlit both halves together. **6B-1**
+rebuilt the loadout screen's sockets into two independent lines per
+weapon — extensions on their own 0/1/2-slot ladder (opening at 5/10
+points invested), support gems unchanged (1→5 at 0/3/8/15/24) — and the
+real `EXTENSION_DEFS` catalogue, folded into `weaponMods()` so an
+extension's numeric effect shows up everywhere a gem's already did, with
+zero new call sites. **6B-2** is all 28 extensions (four per weapon, not
+three — arsenal plan §12's "3 ship" call is superseded) plus four new
+mechanisms: coagulant chilling (Shatter Core), a coagulant armour debuff
+respecting `COAGULANT_ARMOR_FLOOR` (Corrosive/Bunker Buster), regrowth
+suppression (Rime/Ash), and the ring's second radius (Second Ring/Flare
+— and, caught while writing this batch, three "second ring" extensions
+had to go strictly *outward*, since every tower-centred radius floors at
 `perimeter` and an inward second ring sweeps space nothing has ever
 occupied). Two real implementation bugs were caught by the batch's own
 outcome tests before reaching the browser, not by a playtest — see
@@ -102,14 +126,19 @@ every weapon archetype, including the four non-projectile weapons, per
 the owner's explicit "be creative, don't just refuse" directive — see
 Decision 74/75 for the per-archetype reinterpretations.
 
-**The Phase 5 gate was moved to after Phase 6A**, settled during 5C's
-planning: its central question — *"is enhancement a decision or a
-slider?"* — can't be answered while every socket is empty, since opening
-one buys nothing until real gems exist to put in it. Build order is
-unchanged (5C → 6-0 → 6A); only the point where the full gate runs moved.
-5C still passed its own small immediate check live (opens/closes
-correctly from both entry points, `+`/`−` read legibly, the extension
-clamp visibly disables rather than silently no-op'ing).
+**The Phase 5 gate has moved three times, and is now the actual next
+step.** First to after Phase 6A (settled during 5C's planning — its
+central question, *"is enhancement a decision or a slider?"*, can't be
+answered while every socket is empty). Then to after Phase 6B (the first
+point both things a socket can hold — extensions and gems — were real
+content on every incumbent weapon). Then, on 2026-08-10, to after Phase
+6C instead (Decision 81) — ten weapons against three deck slots is a
+stronger place to ask the question than the three-weapon deck 6B alone
+would have left behind. Build order was never affected by any of the
+three moves; only the point where the full gate runs did. 5C still
+passed its own small immediate check live (opens/closes correctly from
+both entry points, `+`/`−` read legibly, the extension clamp visibly
+disables rather than silently no-op'ing).
 
 **Every phase since 4A has found real bugs only by running the game**, not
 by the test suite — worth internalizing before trusting a formula's first
@@ -190,39 +219,45 @@ Decision 76 and `docs/plans/phase-6a3-loop-fixes.md`.
 
 | | |
 |---|---|
-| Tests | 589 passing (47 test files) — one known flake, see BACKLOG |
-| Source | 83 modules under `src/` (6B added `systems/extensions.ts`; touched every weapon module and `tuning/extensions.ts`'s real catalogue) |
+| Tests | 637 passing (52 test files) — one known flake (`grid/veinField.test.ts`, unseeded RNG, unrelated to 6C), see BACKLOG |
+| Source | 90 modules under `src/` (6C added `systems/shockwave.ts`, `systems/beam.ts`, `weapons/shockwave.ts`, `weapons/fission.ts`, `weapons/lance.ts`, `render/shockwave.ts`, `render/beam.ts`; touched `grid/clear.ts`, `types.ts`, `state.ts`, `tuning/weapons.ts`, `tuning/extensions.ts`, `tuning/gems.ts`, `systems/targeting.ts`, `systems/projectiles.ts`, `weapons/registry.ts`, `main.ts`) |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main`, committed and pushed |
-| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B all complete.** The Phase 5 gate is next. |
-| Blockers | **None.** Next is the Phase 5 gate — it needs both things a socket can hold to be real content, which 6B is what finishes. |
+| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B + Phase 6C all complete.** The Phase 5 gate is next. |
+| Blockers | **None.** Next is the Phase 5 gate, moved to run here for the third time (Decision 81) — ten weapons now compete for three deck slots. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
 still playtested — infection as a density field across a fixed perimeter,
 hardening into a scar ring (Decisions 63–65), rendered on two visual axes
 (66–67), Infection Events sparking a seven-kind coagulant roster reading
 all four of §10's identity signals (68–69) — **plus the full Phase 5
-arsenal framework on top of it.** Every weapon (Bolt, Blades, Chain,
-Frost, Poison, Missile, and Immolation Ring — promoted from a
-misclassified passive in 5A) now runs on a shared four-stage pipeline.
-Levelling up no longer hands out weapon-level cards at all: enhancement
-points bank automatically and are spent via a `+`/`−` in a pause +
-inventory screen, opening sockets on a fixed ladder as points go in.
-Five of the old flat passives now socket into three fixed core slots
-instead of stacking without limit. The card pool offers a core gem every
-second level-up, real gems (6 Amplifier — flat multipliers on
-damage/rate/area/duration/velocity — and 14 Behaviour: Pierce, Fork,
-Chaining, Bounce, Homing, Ricochet, Multishot, Formation, Echo, Barrage,
-Splash, Overflow, Kickback, Priming, every one legal and meaningfully
-different on every weapon archetype), a bundle card every 5 levels
-granting a themed 2–3 gem package in one pick, and — as of **Phase
-6B** — **28 real per-weapon extensions**, four per weapon across all
-seven incumbents, each levelling 1→3 then leaving the pool for good.
-Every one of those four card kinds is offered regardless of free sockets
-or what's already owned — extensions, core gems and support gems all
-bank into their own inventory, visible in a three-section panel on the
-loadout screen.
+arsenal framework on top of it.** Ten weapons now run on the shared
+four-stage pipeline: Bolt, Blades, Chain, Frost, Poison, Missile, and
+Immolation Ring (promoted from a misclassified passive in 5A), plus —
+as of **Phase 6C** — **Shockwave** (a travelling ring, damaging the band
+it sweeps rather than a disc), **Fission Charge** (a lobbed charge that
+bursts into scattered submunitions), and **Lance** (a charged, piercing
+beam that targets the largest coagulant in range instead of the nearest
+— the game's first burst weapon and its first non-projectile/orbital/
+pulse/cloud/ring archetype, `'beam'`). Levelling up no longer hands out
+weapon-level cards at all: enhancement points bank automatically and are
+spent via a `+`/`−` in a pause + inventory screen, opening sockets on a
+fixed ladder as points go in. Five of the old flat passives now socket
+into three fixed core slots instead of stacking without limit. The card
+pool offers a core gem every second level-up, real gems (6 Amplifier —
+flat multipliers on damage/rate/area/duration/velocity — and 14
+Behaviour: Pierce, Fork, Chaining, Bounce, Homing, Ricochet, Multishot,
+Formation, Echo, Barrage, Splash, Overflow, Kickback, Priming, every one
+legal and meaningfully different on every weapon archetype), a bundle
+card every 5 levels granting a themed 2–3 gem package in one pick, and —
+now **40 real per-weapon extensions** (28 from Phase 6B's seven
+incumbents, 12 from Phase 6C's three new weapons), four per weapon
+across all ten shipped so far, each levelling 1→3 then leaving the pool
+for good. Every one of those four card kinds is offered regardless of
+free sockets or what's already owned — extensions, core gems and
+support gems all bank into their own inventory, visible in a
+three-section panel on the loadout screen.
 
 **As of Phase 6B, a weapon's sockets are two independent lines, not
 one shared pool** — an extension and a gem never compete for the same
@@ -232,6 +267,11 @@ Placement is click-a-gem-or-extension-then-click-a-socket, with live
 legal/illegal highlighting scoped to whichever line the selected item
 can actually enter. The pre-run weapon select (Phase 6-0) is still the
 only way any weapon is ever equipped — the card pool never offers one.
+**Confirmed live in 6C: this required zero new UI code for three new
+weapons** — Shockwave, Fission Charge and Lance all picked up both
+socket lines, the card pool, and legal/illegal gem highlighting for
+free, including the new `'beam'` archetype's own legality (Extension
+lights Lance's gem line; Velocity correctly does not).
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -319,11 +359,21 @@ owner-playtested end to end the way Phase 4 was.
    §5, restoring two independent socket lines; corrected the extension
    count from 3 to 4 per weapon; and two real bugs (Shatter Core's damage
    bonus, Chill Field's duration) were caught by the batch's own tests
-   before reaching the browser. **Read this one before touching sockets
-   or extensions again** — it's the freshest context, and the vocabulary
-   fix it made ("card pool" vs. "sockets," never "socket pool") is easy
-   to drift back out of without the reasoning behind it.
-8. **`docs/DECISIONS.md` #23–#80** — the load-bearing calls in short form.
+   before reaching the browser.
+8. **`docs/sessions/2026-08-10-phase-6c-lance-shockwave-fission.md`** —
+   Phase 6C, same day as 6B: the gate moved a third time (to after 6C,
+   not after 6B); a design question from the owner (*"why would a
+   shockwave do donut-shaped damage?"*) confirmed the travelling ring
+   over a cone rather than changing it; the `ClearOptions.shape`
+   generalization and its own withdrawn cost argument (the performance
+   half was checked and found wrong — a full ring sweep is ~1,400 cell
+   visits a tick, not the hundreds first claimed); the `'beam'` archetype
+   costing about six touch points instead of a full rewrite. **Read this
+   one before touching `clearAt`, `DeliveryKind`, or Lance/Shockwave/
+   Fission again** — it's the freshest context, and it's also where the
+   annulus/capsule shape system and its two documented approximations
+   (coagulant overlap for both new shapes) live.
+9. **`docs/DECISIONS.md` #23–#85** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
    68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
@@ -333,26 +383,32 @@ owner-playtested end to end the way Phase 4 was.
    Behaviour class); 76 is Phase 6A-3 (the post-playtest loop fixes);
    77–80 are Phase 6B (two socket lines restoring Decision 32, four
    extensions per weapon, the Immolation cleanups, the two bugs the
-   batch's own tests caught). #47–80 are implementation-time findings,
-   not from a design session — see the notes at the top of each section.
-9. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
-   **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
-   design and the shipped 5B/5C economy and screen, including the
-   assist-credit finding (dropped) and the withdrawPoints bug 5C found
-   and fixed in 5B's plumbing. **§5 and §12's call 20 now carry
-   2026-08-10 correction notes** — read them in place rather than
-   trusting the original text; both are superseded (Decisions 77–78).
-10. **`docs/plans/phase-6-roadmap.md`**,
-    **`docs/plans/phase-6a1-gem-foundation.md`**,
+   batch's own tests caught); 81–85 are Phase 6C (the third gate move,
+   the standing four-extensions-per-weapon rule, `ClearOptions.shape`,
+   the `'beam'` archetype and its gem legality, the Shockwave-vs-cone
+   design check). #47–85 are implementation-time findings, not from a
+   design session — see the notes at the top of each section.
+10. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
+    **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
+    design and the shipped 5B/5C economy and screen, including the
+    assist-credit finding (dropped) and the withdrawPoints bug 5C found
+    and fixed in 5B's plumbing. **§5 and §12's call 20 now carry
+    2026-08-10 correction notes** — read them in place rather than
+    trusting the original text; both are superseded (Decisions 77–78).
+11. **`docs/plans/phase-6-roadmap.md`** (§3's gate row now moved below
+    6C, per Decision 81), **`docs/plans/phase-6a1-gem-foundation.md`**,
     **`docs/plans/phase-6a2-behaviour-gems.md`**,
     **`docs/plans/phase-6a3-loop-fixes.md`**,
     **`docs/plans/phase-6b-incumbent-extensions.md`**,
-    **`docs/plans/phase-6b2-extension-content.md`** — the nine-batch Phase
-    6 phasing, and every shipped 6A/6B batch with its as-built delta.
-    6A-3's and 6B's own plan docs both carry a revision note — in each
-    case the first draft was too narrow and was rewritten mid-conversation
-    before the build started.
-11. **`docs/BACKLOG.md`** *Now* section — the Phase 5 gate is the concrete
+    **`docs/plans/phase-6b2-extension-content.md`**,
+    **`docs/plans/phase-6c-lance-shockwave-fission.md`**,
+    **`docs/plans/phase-6c1-shockwave-fission.md`**,
+    **`docs/plans/phase-6c2-lance.md`** — the nine-batch Phase 6 phasing,
+    and every shipped 6A/6B/6C batch with its as-built delta. 6A-3's,
+    6B's, and 6C's own plan docs all carry revision notes recording where
+    the owner corrected the first draft mid-conversation, before or
+    during the build.
+12. **`docs/BACKLOG.md`** *Now* section — the Phase 5 gate is the concrete
     next step. Phase 3/4's own follow-ups (event tuning, the coagulant
     formation drain visual, more AoE weapons, spontaneous coagulation,
     behemoth timing) are in *Ideas* and *Bugs*.
@@ -434,7 +490,80 @@ src/
 
 *Newest first.*
 
-### 2026-08-10 (latest) — Phase 6B: two socket lines and 28 real extensions. Decisions 77–80.
+### 2026-08-10 (latest) — Phase 6C: Lance, Shockwave, Fission Charge; the `ClearOptions.shape` system; the `'beam'` archetype. Decisions 81–85.
+
+**Full account:** `docs/sessions/2026-08-10-phase-6c-lance-shockwave-fission.md`,
+plus `docs/plans/phase-6c-lance-shockwave-fission.md` (the umbrella),
+`docs/plans/phase-6c1-shockwave-fission.md` (6C-1), `docs/plans/phase-6c2-lance.md`
+(6C-2) — each carrying its as-built delta at the top.
+
+**Continued straight from the same-day Phase 6B session** (below). The
+owner asked for both 6C-1 and 6C-2 planned, answered four settled-call
+questions in one pass (three went the recommended way; one — the gate —
+did not), then greenlit both for implementation with full autonomy.
+
+**The gate moved a third time.** Roadmap §5 Q1 had it running after 6B;
+raised again per `CLAUDE.md`'s ground-truth protocol since that was
+already a decision, and the owner moved it again — 6C ships first, gate
+after. The reasoning: ten weapons against three deck slots is a
+stronger place to judge *"is enhancement a decision or a slider?"* than
+the three-weapon deck 6B alone would have left behind (Decision 81).
+
+**A design question from the owner mid-review corrected the plan.**
+Asked *"why would a shockwave do donut-shaped damage? ...can we make it
+a cone?"* — the band turned out to be pure delivery mechanism (the net
+effect over the ring's life is exactly the full disc the owner
+pictured), and the travelling ring survived on its own merits: an
+instant disc would have been redundant with **Frost**, not Immolation,
+and a cone was already Solvent Sprayer's shape two batches out. Kept as
+a travelling ring (Decision 85).
+
+**The plan's own cost argument for the `ClearOptions.shape` system was
+wrong on one leg, caught during the same review.** Asked directly
+whether the weapons could just do damage in a different shape rather
+than teaching `clearAt` new geometry, checking the objection honestly
+found the *performance* half was never real — a full ring sweep is
+~1,400 cell visits a tick, negligible — and only the XP-rounding
+argument holds (splitting one hit across many small `clearAt` calls
+rounds each toward zero via `Math.round(removed * 1.3)`, so a sampled
+beam would pay almost no XP, silently). The owner still chose the full
+shape system over the cheaper partial fix, weighing that Cauterizer's
+beam (6E) is a third consumer already in the catalogue (Decision 83).
+
+**Shipped:** `ClearOptions.shape` — `clearAt` generalized from a disc to
+an annulus (Shockwave's travelling ring) and a capsule (Lance's beam),
+disc path required and proven byte-identical before either new shape was
+added; `'beam'` as a sixth `DeliveryKind`, costing about six touch
+points in the gem tables rather than a full rewrite — direct evidence
+the Phase 5A pipeline bet is paying off (Decision 84); Shockwave,
+Fission Charge and Lance, each with four extensions (twelve total,
+Decision 82 — now the standing per-weapon rule); Fission Charge's
+Chain Fission recursion bounded by a generation counter that can never
+trigger a third split, the same termination-by-construction discipline
+Salvo's `armAt` fix used in 6B-2; Lance's three-layer charge tell (a
+core aura that still works with no coagulant on the field, particles
+that orbit rather than drift inward so they can't be misread as the
+game's own XP-pickup idiom, and a target line re-acquired every tick so
+it never lies about a bigger threat forming mid-charge).
+
+**Verified live, with the Browser pane actually compositing this
+session** — no visibility workaround needed for the first time since
+Decision 75. A temporary debug bridge was still used, not for
+visibility but to force specific weapon/coagulant scenarios rather than
+wait on natural spawns; removed before commit, bundle hash confirmed
+identical. Live-tested and confirmed working: the Extension gem's socket
+highlighting lit Shockwave and Lance but stayed dark on Fission in the
+real loadout screen (Velocity showed the exact opposite pattern); all
+three new weapons confirmed damaging a coagulant directly (mass
+5000 → 4942 over an observed window). Zero console errors.
+
+637/637 tests (up from 589 — 48 new), typecheck clean, build clean.
+**Committed and pushed.**
+
+**Planned** — **the Phase 5 gate**, now the actual next item. No
+blockers.
+
+### 2026-08-10 — Phase 6B: two socket lines and 28 real extensions. Decisions 77–80.
 
 **Full account:** `docs/sessions/2026-08-10-phase-6b-sockets-and-extensions.md`
 (the socket-model miscommunication and its diagnosis, the extension-count

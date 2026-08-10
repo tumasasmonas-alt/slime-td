@@ -20,6 +20,43 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
+### ✅ Phase 6C (6C-1 + 6C-2) — shipped and committed, 2026-08-10.
+
+Full account: `docs/plans/phase-6c-lance-shockwave-fission.md` (the
+umbrella), `docs/plans/phase-6c1-shockwave-fission.md` (6C-1: Shockwave,
+Fission Charge, the `ClearOptions.shape` generalization), `docs/plans/
+phase-6c2-lance.md` (6C-2: Lance, the `'beam'` archetype). Decisions
+81–85.
+
+**Three new weapons, twelve extensions, one architectural addition.**
+Shockwave and Fission Charge (6C-1) both reuse existing machinery almost
+entirely — the one real cost was generalizing `clearAt` from a disc to
+an annulus and a capsule shape, forced by Shockwave's travelling ring
+and reused by Lance's beam (6C-2). The disc path is required to stay
+byte-identical, proven by the full suite before the second shape was
+even added. Lance also adds `'beam'` as a sixth `DeliveryKind` — costing
+about six touch points in the gem tables rather than a full N×M rewrite,
+concrete evidence the Phase 5A pipeline bet is paying off.
+
+**The gate moved a third time** — settled at "after 6B" as of the
+previous entry below, the owner moved it again to run after 6C instead:
+ten weapons against three deck slots is a stronger place to judge
+*"is enhancement a decision or a slider?"* than a three-weapon deck. See
+Decision 81 for the reasoning and the named risk (the gate is also the
+gem-count go/no-go, and 6D is gems).
+
+637/637 tests (up from 589 — 48 new), typecheck clean, build clean,
+verified live with the Browser pane actually compositing this session
+(no visibility workaround needed) — a temporary debug bridge was used
+only to force specific weapon/coagulant scenarios rather than wait on
+natural spawns, removed before commit with the bundle hash confirmed
+identical. All three weapons confirmed damaging coagulants directly
+through the running game, not just the test suite.
+
+**Next: the Phase 5 gate** — now the actual next item, for real this
+time. `docs/plans/phase-6-roadmap.md` §3's gate row moves below 6C's
+rows.
+
 ### ✅ Phase 6B (6B-1 + 6B-2) — shipped and committed, 2026-08-10.
 
 Full account: `docs/plans/phase-6b-incumbent-extensions.md` (the
@@ -62,9 +99,11 @@ with all seven weapons, each carrying two real extensions and two gems,
 ran 900+ ticks with zero console errors; the loadout screen's DOM
 confirmed both socket lines render correctly at their expected counts.
 
-**Next: the Phase 5 gate** — *"is enhancement a decision or a slider?"*
-— the first point at which both things a socket can hold (extensions,
-gems) are real content on every incumbent weapon. Full nine-batch
+**Next at the time: the Phase 5 gate** — *"is enhancement a decision or a
+slider?"* — the first point at which both things a socket can hold
+(extensions, gems) are real content on every incumbent weapon.
+**Superseded the same day** — the owner moved the gate again to run
+after 6C instead (Decision 81); see the entry above. Full nine-batch
 phasing: `docs/plans/phase-6-roadmap.md` §3.
 
 ### ✅ Phase 6-0 and all of Phase 6A (6A-1/6A-2/6A-3) — shipped and committed, 2026-08-09.

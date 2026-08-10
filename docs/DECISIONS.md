@@ -2372,6 +2372,177 @@ removed and the production bundle hash matched exactly before and after.
 
 **Committed and pushed.**
 
+## Phase 6C — Lance, Shockwave, Fission Charge; the shape system; the beam archetype
+
+> Decisions 81–85 came out of the 2026-08-10 session, continuing directly
+> from Phase 6B. The owner greenlit both 6C-1 and 6C-2 as separate plans
+> in one pass, then answered a round of build-time questions during
+> implementation. Full account: `docs/plans/phase-6c-lance-shockwave-
+> fission.md` (the umbrella), `docs/plans/phase-6c1-shockwave-fission.md`
+> (6C-1), `docs/plans/phase-6c2-lance.md` (6C-2).
+
+**81. The Phase 5 gate moves a third time — 6C ships before it runs.** 📋
+*2026-08-10.* Roadmap §5 Q1 (2026-08-09) had already settled the gate at
+"after 6B." Raised again rather than assumed, per `CLAUDE.md`'s
+ground-truth override protocol, because it was already a decision — and
+the owner moved it again: 6C ships first, gate after. The reasoning that
+tipped it: 6C takes the roster to ten weapons against three deck slots,
+which is a stronger place to ask *"is enhancement a decision or a
+slider?"* than a three-weapon deck where every weapon is always
+equipped — the same argument that moved the gate the first two times.
+Named risk, not dismissed: the gate is also the go/no-go on the 65-gem
+count, and 6D is a gem batch. Mitigated by extensions living on their own
+socket line since Decision 77 — 6C's twelve don't depend on that count.
+`docs/plans/phase-6-roadmap.md` §3's gate row moves below 6C's rows to
+match.
+
+**82. Four extensions per weapon is now the standing rule for every
+future weapon batch, not a per-batch call.** 📋
+*2026-08-10.* Decision 78 set this for 6B's seven incumbents; 6C
+confirms it applies going forward rather than being re-litigated each
+time — twelve extensions ship across Shockwave, Fission Charge and
+Lance. A mixed roster (some weapons at three, some at four) was
+rejected as a difference a player can see with no reason behind it.
+
+**83. `ClearOptions.shape` — `clearAt` generalizes from a disc to an
+annulus and a capsule, with the disc path required to stay
+byte-identical.** 📋
+*2026-08-10.* Shockwave's travelling ring and Lance's piercing beam both
+need to damage something that isn't a circle. The arsenal plan's own
+claim that Shockwave "reuses the pulse renderer" (§9½) was wrong for the
+*damage* half — `NovaFx` is a fixed-radius flash; a travelling ring must
+damage only the band it swept since its last tick, or it re-hits the
+near field every tick as it grows past it.
+
+**The alternative — sampling either shape with many small disc `clearAt`
+calls — was considered and rejected**, on a corrected understanding of
+why. The original argument cited both XP rounding collapse and raw
+performance cost; the performance half was checked during review and
+withdrawn (a full ring sweep is ~1,400 cell visits per tick — negligible).
+The XP argument stands alone and is sufficient on its own:
+`gemValueFromRemoved()` is `Math.round(removed * 1.3)` with a
+`GEM_DROP_THRESHOLD` of 0.08 *per call* — splitting one hit across many
+small calls rounds each toward zero, so a sampled beam would be the
+hardest-hitting weapon in the game and pay almost no XP, silently. A
+cheaper partial fix existed (a flag on `clearAt` to skip its own XP
+block and let the caller sum and credit once) but was not taken — the
+owner's call, weighing that Cauterizer's arc beam (6E) is a third
+consumer already in the catalogue, so the shape system's cost is
+amortized across three weapons, not two.
+
+**Implementation:** the disc branch is untouched code (not a
+re-derivation) inside an `if (!opts.shape)` guard; per-cell damage
+(falloff, resistance, maturity, scarring, the dirty set) is factored into
+one `applyCellDamage()` shared by all three shapes. The annulus's
+coagulant overlap reuses the existing disc-overlap function twice
+(`area(annulus ∩ c) = area(discOuter ∩ c) − area(discInner ∩ c)`, exact
+for circular parts) rather than new lens-area geometry. The capsule's
+coagulant overlap is a documented first-pass approximation — each part
+treated as a disc centred at the closest point on the beam's segment,
+exact away from the beam's own end caps. Density-based radius widening
+(the disc's own `clamp(1.25 − density, 0.4, 1.25)` term) applies to the
+disc only; annulus/capsule use their given width literally, which
+sidesteps rather than fixes the density-sample-point trap the plan
+flagged (a capsule sampled at its near-zero-density tower origin would
+otherwise silently widen the whole beam). Rolled out inside 6C-1 with the
+589-test suite proving the disc path unaffected before the annulus
+shape was added, rather than as a separately playtested commit — the
+suite had already earned that trust catching both of Decision 80's bugs.
+
+**84. `'beam'` joins `DeliveryKind`; Velocity is refused, Extension is
+allowed with a duration reading of its own.** 📋
+*2026-08-10.* Lance is the sixth archetype. The actual cost, read off
+`tuning/gems.ts` rather than assumed, was about six touch points: 14 of
+20 shipped gems already have `supports: ALWAYS` (Decision 75's
+no-refusals rule) or archetype-blind `desc` text, so most of the
+Behaviour class needed no change at all — direct evidence the Phase 5A
+pipeline bet paid off, worth carrying into the gate.
+
+Velocity excludes beam for free (`supports` already only returns true for
+`projectile`/`orbital`) — a beam is instantaneous, nothing to raise the
+speed of. **Extension's call went the other way from what was
+proposed:** refusing it (the first recommendation, reasoning that a gem
+dead without a specific extension socketed repeats 6B-2's "cards appear
+to do nothing" failure shape) was declined by the owner in favour of
+giving beam its own duration term — the beam line stays hot briefly and
+resolves a second time, independent of Lance's Afterglow extension.
+Removes the only hole in the Amplifier table and stops Afterglow (itself
+a lingering-line extension) from sitting next to a gem the game insists
+beams can't have; Afterglow becomes "more of what the beam already
+does" instead of the sole thing making a gem live — a strictly better
+card for one field and one branch of cost.
+
+Homing, Multishot and Formation's beam readings were also written
+explicitly rather than left to fall through a `pulse`/`ring` default
+that mentions "the pulse's centre" or "the tower" by name — Homing is an
+honest no-op (Lance's ACQUIRE already always targets the largest threat,
+the same shape Missile's own Homing no-op already established);
+Multishot/Formation read as diverging beam angles.
+
+**85. Shockwave stays a travelling ring, not a cone — raised by the
+owner, checked against the catalogue, declined.** 📋
+*2026-08-10.* Asked directly during review: *"why would a shockwave do
+donut-shaped damage? ...can we make it into a cone maybe?"* The band is
+delivery, not effect — the ring travels, so at any instant it can only
+damage what it's currently crossing; over its whole life the swept bands
+are contiguous and the net effect is exactly the full disc the owner
+described, once. An instant disc was also considered and is genuinely
+redundant, but with **Frost**, not Immolation — Immolation is a
+persistent thin ring at a fixed radius; Frost is the instant-disc pulse,
+so an instant Shockwave would be Frost with more damage and no freeze.
+The travelling ring is the entire differentiator: damage visibly arrives
+outward over time, and Knockback (a genuine reuse of the shipped
+`kickback` `ClearOptions` field, not new displacement code) becomes a
+shove that travels.
+
+**A cone was specifically declined** — it is already Solvent Sprayer's
+shape (arsenal §7.13, 6E) and Cauterizer's sweep is a related arc beam
+(§7.12); a cone Shockwave would consume that vocabulary a batch early and
+add an aiming stage §7.9 deliberately did without. Also declined: making
+density-scaling core to Shockwave rather than the Resonant Ring
+extension — that would collide with **Resonance Coil** (§7.14), whose
+whole catalogue identity is damage scaling with density.
+
+**Shipped:** Shockwave (`weapons/shockwave.ts`, `systems/shockwave.ts`,
+`render/shockwave.ts`) — a persistent `ShockwaveRing` entity, damage
+applied once per sim tick to the band it swept, render radius computed
+continuously from `state.time` so the visual stays smooth despite the
+tick-quantized damage; Fission Charge (`weapons/fission.ts`) — Cluster
+Warhead's own `spawnClusterSubmunitions()` parameterized
+(`scatterDist`/`childPowerShare`, defaulting to Missile's original
+constants so Cluster Warhead is unaffected) rather than duplicated;
+twelve extensions (Shockwave: Second Wave, Knockback, Resonant Ring,
+Implosion; Fission: Wider Scatter, Chain Fission, Sticky, Focused
+Pattern; Lance: Piercing Core, Twin Lance, Afterglow, Long Charge —
+`lanceOvercharge`, a forced rename off Bolt's already-shipped
+`'overcharge'` key). Chain Fission's recursion is bounded by a
+generation counter (`fissionGen`) checked against the *parent's* own
+generation, terminating by construction the same way Decision 75's Salvo
+`armAt` fix does — a grandchild can never itself grant a further split,
+not merely "shouldn't in practice." Lance's charge tell is three layers
+(a core aura that works with no target on the field, orbiting — never
+inward-drifting — particles so they can't be misread as the game's own
+XP-pickup idiom, and a target line that re-acquires every tick while
+charging so it never lies about a bigger coagulant forming mid-charge).
+637/637 tests (up from 589 — 48 new), typecheck clean, build clean.
+
+**Verified live**, Browser pane compositing normally this session (no
+debug-harness workaround needed for visibility, though a temporary
+`window.__debugState` bridge was still used to force specific weapon/
+coagulant scenarios rather than waiting on natural spawns — removed
+before commit, bundle hash `index-Dpl-3qc_.js` identical before and
+after): all three weapons confirmed damaging a coagulant directly
+(mass 5000 → 4942 over an observed window, attributable to Lance's beam
+and Fission's cluster bursts — Lance's `beamFx` spawned exactly at the
+coagulant's position with `lanceCharge.target` matching); the Extension
+gem's socket highlighting lit Shockwave and Lance but correctly stayed
+dark on Fission live in the loadout screen, and Velocity's highlighting
+showed the exact opposite pattern — both gem-legality directions
+confirmed through the real UI, not only the test suite. Zero console
+errors throughout.
+
+**Committed and pushed.**
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

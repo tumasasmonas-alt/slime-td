@@ -702,4 +702,225 @@ describe('clearAt', () => {
       });
     });
   });
+
+  // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S3, S8): the
+  // annulus shape Shockwave's travelling ring uses. Bigger grid than the
+  // rest of this file's fixtures (world fixtures elsewhere top out around
+  // 200px) — a band with a meaningful inner/outer gap needs real distance
+  // to work with.
+  describe('clearAt — annulus shape (6C-1)', () => {
+    function makeBigGrid(): Grid {
+      const cols = 60;
+      const rows = 60;
+      const size = cols * rows;
+      return {
+        cols,
+        rows,
+        size,
+        cellSize: 10,
+        vein: new Float32Array(size),
+        threshold: new Float32Array(size).fill(0.1),
+        growth: new Float32Array(size).fill(0.5),
+        frozen: new Float32Array(size),
+        bucket: new Int8Array(size),
+        maturity: new Float32Array(size),
+        matBucket: new Int8Array(size),
+        regrowMult: new Float32Array(size),
+        regrowTimer: new Float32Array(size),
+        maxRange: 500,
+        perimeter: 20,
+      };
+    }
+
+    const CENTER_X = 300;
+    const CENTER_Y = 300;
+
+    it('does not damage a cell inside the band\'s inner radius', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      const grid = state.grid;
+      // 20px in from the tower, well inside inner=80.
+      const gx = Math.floor(CENTER_X / grid.cellSize);
+      const gy = Math.floor((CENTER_Y - 20) / grid.cellSize);
+      const idx = gy * grid.cols + gx;
+      const before = grid.growth[idx]!;
+
+      clearAt(state, CENTER_X, CENTER_Y, 80, { shape: { kind: 'annulus', inner: 80, outer: 120 } });
+
+      expect(grid.growth[idx]).toBe(before);
+    });
+
+    it('damages a cell at the far edge of the band (Trap A — the bounding box must reach it)', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      const grid = state.grid;
+      // Just inside the outer edge of an inner=80/outer=120 band, straight
+      // out from the tower.
+      const gx = Math.floor(CENTER_X / grid.cellSize);
+      const gy = Math.floor((CENTER_Y - 118) / grid.cellSize);
+      const idx = gy * grid.cols + gx;
+      const before = grid.growth[idx]!;
+
+      clearAt(state, CENTER_X, CENTER_Y, 80, { shape: { kind: 'annulus', inner: 80, outer: 120 } });
+
+      expect(grid.growth[idx]).toBeLessThan(before);
+    });
+
+    it('damages a cell well outside the band not at all', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      const grid = state.grid;
+      const gx = Math.floor(CENTER_X / grid.cellSize);
+      const gy = Math.floor((CENTER_Y - 400) / grid.cellSize); // off the grid entirely, but guard anyway
+      if (gy < 0) return; // out of bounds — the "never touched" case is trivially true
+      const idx = gy * grid.cols + gx;
+      const before = grid.growth[idx]!;
+
+      clearAt(state, CENTER_X, CENTER_Y, 80, { shape: { kind: 'annulus', inner: 80, outer: 120 } });
+
+      expect(grid.growth[idx]).toBe(before);
+    });
+
+    // The S3.2 rounding-collapse guard: one clearAt call must credit XP
+    // once against the SUMMED mass removed, never per-cell — the failure
+    // this shape system exists to prevent (a beam or ring split into many
+    // small disc calls would round each toward zero). Verified here by
+    // comparing a single annulus call's total XP against
+    // gemValueFromRemoved of its own summed removal.
+    it('credits XP once for the whole call, proportional to total mass removed', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+
+      const removed = clearAt(state, CENTER_X, CENTER_Y, 200, { shape: { kind: 'annulus', inner: 60, outer: 140 } });
+      const totalGemXp = state.gems.reduce((sum, g) => sum + g.xp, 0);
+
+      expect(removed).toBeGreaterThan(0);
+      expect(totalGemXp).toBe(gemValueFromRemoved(removed));
+    });
+
+    it('a coagulant sitting inside the band is damaged; one sitting well outside it is not', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      const inBand = makeCoagulant({ x: CENTER_X, y: CENTER_Y - 100, mass: 200 }); // radial dist 100, inside [80,120]
+      const outsideBand = makeCoagulant({ x: CENTER_X, y: CENTER_Y - 400, mass: 200 }); // radial dist 400
+      state.coagulants = [inBand, outsideBand];
+
+      clearAt(state, CENTER_X, CENTER_Y, 100, { shape: { kind: 'annulus', inner: 80, outer: 120 } });
+
+      expect(inBand.mass).toBeLessThan(200);
+      expect(outsideBand.mass).toBe(200);
+    });
+
+    it('a coagulant sitting near the tower (well inside the inner radius) is not rejected as "close" — the cheap-reject must use radial distance, not centre distance', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      // Center-distance from the tower is small (30px), which is smaller
+      // than the band's own half-width (20px)+radius, so a naive
+      // disc-style reject (`dist > halfWidth + c.radius`) would wrongly
+      // treat this as "close enough to hit" — the correct answer is the
+      // opposite: it's near the tower, nowhere near the [80,120] band.
+      const nearTower = makeCoagulant({ x: CENTER_X, y: CENTER_Y - 30, mass: 200, radius: 15 });
+      state.coagulants = [nearTower];
+
+      clearAt(state, CENTER_X, CENTER_Y, 100, { shape: { kind: 'annulus', inner: 80, outer: 120 } });
+
+      expect(nearTower.mass).toBe(200);
+    });
+  });
+
+  // Phase 6C-2 (docs/plans/phase-6c2-lance.md S4, S9): the capsule shape
+  // Lance's beam uses. Same generalization, same big-grid fixture as the
+  // annulus tests above.
+  describe('clearAt — capsule shape (6C-2)', () => {
+    function makeBigGrid(): Grid {
+      const cols = 60;
+      const rows = 60;
+      const size = cols * rows;
+      return {
+        cols,
+        rows,
+        size,
+        cellSize: 10,
+        vein: new Float32Array(size),
+        threshold: new Float32Array(size).fill(0.1),
+        growth: new Float32Array(size).fill(0.5),
+        frozen: new Float32Array(size),
+        bucket: new Int8Array(size),
+        maturity: new Float32Array(size),
+        matBucket: new Int8Array(size),
+        regrowMult: new Float32Array(size),
+        regrowTimer: new Float32Array(size),
+        maxRange: 500,
+        perimeter: 20,
+      };
+    }
+
+    const ORIGIN_X = 50;
+    const ORIGIN_Y = 300;
+    const TARGET_X = 250; // the "target" the beam is aimed through
+    const TARGET_Y = 300;
+    const FAR_X = 450; // beyond the target, along the same line — "pierces"
+
+    // The property that distinguishes a beam from a large Bolt: it damages
+    // what's PAST its target, not just at it.
+    it('damages a cell behind its target, along the same line (pierces the line)', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      const grid = state.grid;
+      const gx = Math.floor(FAR_X / grid.cellSize);
+      const gy = Math.floor(TARGET_Y / grid.cellSize);
+      const idx = gy * grid.cols + gx;
+      const before = grid.growth[idx]!;
+
+      clearAt(state, ORIGIN_X, ORIGIN_Y, 200, { shape: { kind: 'capsule', toX: FAR_X, toY: TARGET_Y }, radiusPx: 16 });
+
+      expect(grid.growth[idx]).toBeLessThan(before);
+    });
+
+    it('does not damage a cell far off the beam\'s line', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      const grid = state.grid;
+      const gx = Math.floor(TARGET_X / grid.cellSize);
+      const gy = Math.floor((TARGET_Y + 200) / grid.cellSize); // 200px off the line
+      const idx = gy * grid.cols + gx;
+      const before = grid.growth[idx]!;
+
+      clearAt(state, ORIGIN_X, ORIGIN_Y, 200, { shape: { kind: 'capsule', toX: FAR_X, toY: TARGET_Y }, radiusPx: 16 });
+
+      expect(grid.growth[idx]).toBe(before);
+    });
+
+    // The S3.2/S4 rounding-collapse guard, repeated here because Lance is
+    // the weapon where getting this wrong would actually bite: one sweep,
+    // one XP credit, proportional to the SUMMED mass removed — never one
+    // credit per sampled point along the line.
+    it('credits XP once for the whole sweep, proportional to total mass removed', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+
+      const removed = clearAt(state, ORIGIN_X, ORIGIN_Y, 300, { shape: { kind: 'capsule', toX: FAR_X, toY: TARGET_Y }, radiusPx: 18 });
+      const totalGemXp = state.gems.reduce((sum, g) => sum + g.xp, 0);
+
+      expect(removed).toBeGreaterThan(0);
+      // toBeCloseTo, not toBe — dropGemShower splits the value across
+      // several gems via float division, which can differ from a single
+      // fresh gemValueFromRemoved() call by less than a rounding unit
+      // (the project's known Float32Array-summation precision pitfall).
+      expect(totalGemXp).toBeCloseTo(gemValueFromRemoved(removed), 0);
+    });
+
+    it('a coagulant sitting on the line is damaged; one well off the line is not', () => {
+      const state = freshState();
+      state.grid = makeBigGrid();
+      const onLine = makeCoagulant({ x: TARGET_X, y: TARGET_Y, mass: 200 });
+      const offLine = makeCoagulant({ x: TARGET_X, y: TARGET_Y + 200, mass: 200 });
+      state.coagulants = [onLine, offLine];
+
+      clearAt(state, ORIGIN_X, ORIGIN_Y, 200, { shape: { kind: 'capsule', toX: FAR_X, toY: TARGET_Y }, radiusPx: 16 });
+
+      expect(onLine.mass).toBeLessThan(200);
+      expect(offLine.mass).toBe(200);
+    });
+  });
 });

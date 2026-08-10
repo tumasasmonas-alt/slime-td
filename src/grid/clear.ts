@@ -1,5 +1,5 @@
-import type { Coagulant, GameState } from '../state';
-import { clamp, dist, rand } from '../util/math';
+import type { Coagulant, GameState, Grid } from '../state';
+import { circleOverlapArea, clamp, closestPointOnSegment, dist, distToSegment, rand } from '../util/math';
 import {
   COAGULANT_ARMOR_FLOOR,
   COAGULANT_DAMAGE_SCALE,
@@ -76,11 +76,47 @@ export interface ClearOptions {
   // same effective-armour value Corrosive writes, in the other direction.
   armorShred?: number;
   armorScaled?: number;
+  // Piercing Core (Lance, Phase 6C-2 docs/plans/phase-6c2-lance.md S6):
+  // reduces effective armour by up to this many points, floored at 0 —
+  // distinct from armorShred (a temporary debuff written back onto the
+  // coagulant) and armorScaled (scales damage up WITH armour); this one
+  // reduces the armour THIS hit sees, once, with no lasting effect.
+  armorIgnoreCap?: number;
   // Rime (Frost) / Ash (Immolation): suppress ambient regrowth in the hit
   // radius — systems/growth.ts reads Grid.regrowMult/regrowTimer, written
   // here as a radius effect exactly like freezeDuration above.
   suppressRegrowth?: { mult: number; seconds: number };
+  // Resonant Ring (Shockwave, Phase 6C-1 S5): damage scales UP with local
+  // density instead of the resistance term scaling it down — arsenal plan
+  // S3's "nothing scales up against density" gap, answered per-cell. On a
+  // coagulant (whose "density" is fixed at 1, Decision 46) this is just a
+  // flat `1 + densityScaled` bonus, applied in the coagulant loop below.
+  densityScaled?: number;
+
+  // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S3): the shape
+  // this call damages, generalizing "distance from (x,y), capped at
+  // radiusPx" so Shockwave's travelling ring and (6C-2) Lance's beam can
+  // reuse every downstream concern below — falloff, resistance, maturity,
+  // scarring, the coagulant loop, XP, DPS — completely unchanged, reading
+  // a shape-aware distance instead of a point distance. **Absent means
+  // the original disc, byte-for-byte** (S3.4/S3.5's non-negotiable
+  // constraint) — the disc branch below is untouched, not re-derived.
+  //
+  // Density-based radius widening (the disc's own
+  // `clamp(1.25 - density, 0.4, 1.25)` term, sampled at the hit centre)
+  // applies to the disc shape only. Annulus/capsule use their given
+  // width literally — not an oversight: it sidesteps the density-sample-
+  // point trap the plan flagged (a capsule sampled at its near-zero-
+  // density tower origin would silently widen the whole beam) by
+  // removing the coupling entirely, rather than fixing a sample point for
+  // it. Nothing in either weapon's design calls for a ring's band width
+  // or a beam's cross-section to vary with ambient density.
+  shape?:
+    | { readonly kind: 'annulus'; readonly inner: number; readonly outer: number }
+    | { readonly kind: 'capsule'; readonly toX: number; readonly toY: number };
 }
+
+export type ClearShape = NonNullable<ClearOptions['shape']>;
 
 const ARMOR_SHRED_WINDOW = 2.0;
 
@@ -97,6 +133,146 @@ const GEM_DROP_THRESHOLD = 0.08;
 // applied to an entity instead of a cell."
 const DAMAGE_COEFF = 0.022;
 
+// Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S3.1): the
+// per-cell damage/freeze/scar formula, factored out so the disc branch
+// and the annulus/capsule branch below share it exactly — every concern
+// this comment block used to sit above inline (falloff, resistance,
+// maturity, scarring, the dirty set) now lives in exactly one place
+// regardless of which shape called it. `d`/`halfWidth` play the role the
+// disc's own `d`/`radiusPx` always did: `1 - d/halfWidth` is the falloff
+// term, unchanged.
+function applyCellDamage(
+  grid: Grid,
+  state: GameState,
+  i: number,
+  d: number,
+  halfWidth: number,
+  power: number,
+  opts: ClearOptions,
+  ageFloor: number,
+): number {
+  const freezeDuration = opts.freezeDuration ?? 0;
+  if (freezeDuration > 0) {
+    // Phase 4B: frozen renders as a rim (grid/slimeLayer.ts), gated on the
+    // dirty set like every other rendered state — mark dirty only on the
+    // newly-frozen transition, not every hit while already frozen, or an
+    // AoE freeze weapon would spam the dirty set for no visible change.
+    const wasFrozen = grid.frozen[i]! > 0;
+    grid.frozen[i] = Math.max(grid.frozen[i]!, freezeDuration);
+    if (!wasFrozen) state.dirty.add(i);
+  }
+  if (opts.suppressRegrowth) {
+    grid.regrowMult[i] = opts.suppressRegrowth.mult;
+    grid.regrowTimer[i] = Math.max(grid.regrowTimer[i]!, opts.suppressRegrowth.seconds);
+  }
+  const dens = grid.growth[i]!;
+  if (dens <= 0.001) return 0;
+  const rawFalloff = 1 - d / halfWidth;
+  const falloff = opts.flattenFalloff ? Math.max(rawFalloff, 0.85) : rawFalloff;
+  const resistance = opts.ignoreResistance ? 1.3 : clamp(1.3 - dens, 0.12, 1.3);
+  // Phase 4A: maturity further reduces yield, floored so nothing is ever
+  // unclearable (Decision 44's guarantee restated for terrain).
+  const matYield = maturityYieldMult(grid.maturity[i]!);
+  // Resonant Ring: this cell's OWN density scales the hit up, independent
+  // of (and stacking with) `resistance`'s usual scaling-down — the two
+  // aren't the same lever, since resistance already applies regardless.
+  const densityMult = opts.densityScaled ? 1 + opts.densityScaled * dens : 1;
+  const removeAmt = clamp(power * DAMAGE_COEFF * falloff * resistance * matYield * densityMult, 0, dens);
+  if (removeAmt <= 0) return 0;
+  const newDens = Math.max(0, dens - removeAmt);
+  const removedHere = dens - newDens;
+  grid.growth[i] = newDens;
+  const nb = cellBucket(grid, i);
+  if (nb !== grid.bucket[i]) {
+    grid.bucket[i] = nb;
+    state.dirty.add(i);
+  }
+
+  // "You scar what you clear" (Decision 25/63) — the only place maturity
+  // is ever gained. Capped, never consumed by anything else.
+  const newMaturity = Math.min(MATURITY_MAX, grid.maturity[i]! + removedHere * SCAR_PER_DENSITY);
+  if (newMaturity !== grid.maturity[i]) {
+    grid.maturity[i] = newMaturity;
+    const nmb = maturityBucket(newMaturity, ageFloor);
+    if (nmb !== grid.matBucket[i]) {
+      grid.matBucket[i] = nmb;
+      state.dirty.add(i);
+    }
+  }
+  return removedHere;
+}
+
+// Phase 6C-1 (S3.3, Trap A): bounding box in grid cells for the annulus
+// and capsule shapes — the disc branch keeps its own centered
+// cx+/-radiusCells box untouched (S3.4/S3.5), so this is only ever called
+// for the two new shapes.
+function shapeBoundingBox(grid: Grid, x: number, y: number, shape: ClearShape, halfWidth: number): { minGx: number; maxGx: number; minGy: number; maxGy: number } {
+  const { cx: cx0, cy: cy0 } = worldToCell(grid, x, y);
+  if (shape.kind === 'annulus') {
+    const outerCells = Math.ceil(shape.outer / grid.cellSize) + 1;
+    return { minGx: cx0 - outerCells, maxGx: cx0 + outerCells, minGy: cy0 - outerCells, maxGy: cy0 + outerCells };
+  }
+  const { cx: cx1, cy: cy1 } = worldToCell(grid, shape.toX, shape.toY);
+  const pad = Math.ceil(halfWidth / grid.cellSize) + 1;
+  return {
+    minGx: Math.min(cx0, cx1) - pad,
+    maxGx: Math.max(cx0, cx1) + pad,
+    minGy: Math.min(cy0, cy1) - pad,
+    maxGy: Math.max(cy0, cy1) + pad,
+  };
+}
+
+// Phase 6C-1 (S3.2): the cheap bounding-circle reject ahead of the real
+// overlap computation, generalized the same way as the overlap itself
+// below. For the annulus this is genuinely different math from the disc
+// case, not just a passthrough — a coagulant sitting near the tower can
+// be much closer than `hitRadius` (the band's half-width) and still be
+// nowhere near the band, so the reject has to compare the coagulant's own
+// radial distance against [inner, outer], not against hitRadius directly.
+function shapeCheapReject(shape: ClearShape | undefined, x: number, y: number, hitRadius: number, c: Coagulant): boolean {
+  if (!shape) return dist(x, y, c.x, c.y) > hitRadius + c.radius;
+  if (shape.kind === 'annulus') {
+    const r = dist(x, y, c.x, c.y);
+    return r + c.radius < shape.inner || r - c.radius > shape.outer;
+  }
+  return distToSegment(c.x, c.y, x, y, shape.toX, shape.toY) > hitRadius + c.radius;
+}
+
+// Phase 6C-1 (S3.2): the shape-aware coagulant overlap, generalizing
+// `coagulantOverlapArea` (a disc-vs-parts lens-area sum) to the other two
+// shapes. `!shape` is a pure passthrough to the original call — the
+// disc-path guarantee (S3.4/S3.5) extends to the coagulant loop too, just
+// via an early return rather than a separate code block, since this side
+// was already one function call rather than an inlined loop.
+function shapeCoagulantOverlap(shape: ClearShape | undefined, x: number, y: number, halfWidth: number, c: Coagulant): number {
+  if (!shape) return coagulantOverlapArea(c, x, y, halfWidth);
+  if (shape.kind === 'annulus') {
+    // area(annulus ∩ c) = area(discOuter ∩ c) - area(discInner ∩ c) —
+    // exact for circular parts, since discInner ⊂ discOuter always holds.
+    // Reuses the existing disc overlap function twice rather than adding
+    // new lens-area geometry for a third shape.
+    return coagulantOverlapArea(c, x, y, shape.outer) - coagulantOverlapArea(c, x, y, shape.inner);
+  }
+  // Capsule: approximated per-part by treating the capsule locally as a
+  // disc centred at the closest point on the beam's segment to that
+  // part — exact where the part sits well inside the beam's length, a
+  // slight underestimate right at the beam's own end caps. Accepted as a
+  // first-pass simplification in the same spirit as coagulantOverlapArea's
+  // own documented one for overlapping Bulwark parts.
+  if (c.parts.length === 0) {
+    const p = closestPointOnSegment(c.x, c.y, x, y, shape.toX, shape.toY);
+    return circleOverlapArea(p.x, p.y, halfWidth, c.x, c.y, c.radius);
+  }
+  let total = 0;
+  for (const part of c.parts) {
+    const partX = c.x + part.dx;
+    const partY = c.y + part.dy;
+    const p = closestPointOnSegment(partX, partY, x, y, shape.toX, shape.toY);
+    total += circleOverlapArea(p.x, p.y, halfWidth, partX, partY, part.r);
+  }
+  return total;
+}
+
 // The core damage-the-field function: density directly resists both the
 // radius and magnitude of a hit — sparse tissue clears in one satisfying
 // chunk, mature tissue only chips down a little per hit. Direct port of
@@ -104,13 +280,7 @@ const DAMAGE_COEFF = 0.022;
 export function clearAt(state: GameState, x: number, y: number, power: number, opts: ClearOptions = {}): number {
   const grid = state.grid;
   if (!grid) return 0;
-  const { cx, cy } = worldToCell(grid, x, y);
-  const i0 = gIdx(grid, cx, cy);
-  const baseDensity = grid.growth[i0] ?? 0;
-  const radiusPx = (opts.radiusPx ?? 30) * clamp(1.25 - baseDensity, 0.4, 1.25);
-  const radiusCells = Math.max(1, Math.round(radiusPx / grid.cellSize));
-  const freezeDuration = opts.freezeDuration ?? 0;
-  // Bucketing (not the yield formula above) needs the current age floor —
+  // Bucketing (not the yield formula below) needs the current age floor —
   // see tuning/maturity.ts's maturityBucket for why a fixed 0..1 split
   // can't stay legible as the floor itself rises over a run.
   const ageFloor = ageFloorAt(state.time);
@@ -119,62 +289,57 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   // XP (Decision 31/61) — totalRemoved itself stays the honest physical
   // mass-removed figure the return value and the gem-drop threshold use.
   let coagulantRemoved = 0;
+  // Set by whichever branch below runs — the disc's own density-scaled
+  // radius, or the new shape's literal half-width — and read afterward by
+  // the (shared, shape-agnostic) coagulant loop's cheap reject.
+  let hitRadius: number;
 
-  for (let oy = -radiusCells; oy <= radiusCells; oy++) {
-    const gy = cy + oy;
-    if (gy < 0 || gy >= grid.rows) continue;
-    for (let ox = -radiusCells; ox <= radiusCells; ox++) {
-      const gx = cx + ox;
-      if (gx < 0 || gx >= grid.cols) continue;
-      const ddx = ox * grid.cellSize;
-      const ddy = oy * grid.cellSize;
-      const d = Math.sqrt(ddx * ddx + ddy * ddy);
-      if (d > radiusPx) continue;
-      const i = gy * grid.cols + gx;
-      if (freezeDuration > 0) {
-        // Phase 4B: frozen renders as a rim (grid/slimeLayer.ts), gated on
-        // the dirty set like every other rendered state — mark dirty only
-        // on the newly-frozen transition, not every hit while already
-        // frozen, or an AoE freeze weapon would spam the dirty set for no
-        // visible change.
-        const wasFrozen = grid.frozen[i]! > 0;
-        grid.frozen[i] = Math.max(grid.frozen[i]!, freezeDuration);
-        if (!wasFrozen) state.dirty.add(i);
-      }
-      if (opts.suppressRegrowth) {
-        grid.regrowMult[i] = opts.suppressRegrowth.mult;
-        grid.regrowTimer[i] = Math.max(grid.regrowTimer[i]!, opts.suppressRegrowth.seconds);
-      }
-      const dens = grid.growth[i]!;
-      if (dens <= 0.001) continue;
-      const rawFalloff = 1 - d / radiusPx;
-      const falloff = opts.flattenFalloff ? Math.max(rawFalloff, 0.85) : rawFalloff;
-      const resistance = opts.ignoreResistance ? 1.3 : clamp(1.3 - dens, 0.12, 1.3);
-      // Phase 4A: maturity further reduces yield, floored so nothing is
-      // ever unclearable (Decision 44's guarantee restated for terrain).
-      const matYield = maturityYieldMult(grid.maturity[i]!);
-      const removeAmt = clamp(power * DAMAGE_COEFF * falloff * resistance * matYield, 0, dens);
-      if (removeAmt <= 0) continue;
-      const newDens = Math.max(0, dens - removeAmt);
-      const removedHere = dens - newDens;
-      totalRemoved += removedHere;
-      grid.growth[i] = newDens;
-      const nb = cellBucket(grid, i);
-      if (nb !== grid.bucket[i]) {
-        grid.bucket[i] = nb;
-        state.dirty.add(i);
-      }
+  const shape = opts.shape;
+  if (!shape) {
+    // ORIGINAL DISC PATH — byte-for-byte unchanged (S3.4/S3.5). Every
+    // shipped weapon and ~589 tests depend on this being a re-arrangement,
+    // never a re-derivation.
+    const { cx, cy } = worldToCell(grid, x, y);
+    const i0 = gIdx(grid, cx, cy);
+    const baseDensity = grid.growth[i0] ?? 0;
+    const radiusPx = (opts.radiusPx ?? 30) * clamp(1.25 - baseDensity, 0.4, 1.25);
+    const radiusCells = Math.max(1, Math.round(radiusPx / grid.cellSize));
+    hitRadius = radiusPx;
 
-      // "You scar what you clear" (Decision 25/63) — the only place
-      // maturity is ever gained. Capped, never consumed by anything else.
-      const newMaturity = Math.min(MATURITY_MAX, grid.maturity[i]! + removedHere * SCAR_PER_DENSITY);
-      if (newMaturity !== grid.maturity[i]) {
-        grid.maturity[i] = newMaturity;
-        const nmb = maturityBucket(newMaturity, ageFloor);
-        if (nmb !== grid.matBucket[i]) {
-          grid.matBucket[i] = nmb;
-          state.dirty.add(i);
-        }
+    for (let oy = -radiusCells; oy <= radiusCells; oy++) {
+      const gy = cy + oy;
+      if (gy < 0 || gy >= grid.rows) continue;
+      for (let ox = -radiusCells; ox <= radiusCells; ox++) {
+        const gx = cx + ox;
+        if (gx < 0 || gx >= grid.cols) continue;
+        const ddx = ox * grid.cellSize;
+        const ddy = oy * grid.cellSize;
+        const d = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (d > radiusPx) continue;
+        const i = gy * grid.cols + gx;
+        totalRemoved += applyCellDamage(grid, state, i, d, radiusPx, power, opts, ageFloor);
+      }
+    }
+  } else {
+    // Annulus (Shockwave) or capsule (6C-2's Lance) — a clean generalization
+    // rather than a replica of the disc's cell-quantized distance math; see
+    // S3.3 for the two traps (the bounding box, and the density sample
+    // point this branch sidesteps entirely rather than fixing — S3's
+    // header comment above `shape` explains why).
+    const halfWidth = shape.kind === 'annulus' ? (shape.outer - shape.inner) / 2 : (opts.radiusPx ?? 20);
+    hitRadius = halfWidth;
+    const { minGx, maxGx, minGy, maxGy } = shapeBoundingBox(grid, x, y, shape, halfWidth);
+
+    for (let gy = minGy; gy <= maxGy; gy++) {
+      if (gy < 0 || gy >= grid.rows) continue;
+      for (let gx = minGx; gx <= maxGx; gx++) {
+        if (gx < 0 || gx >= grid.cols) continue;
+        const wx = gx * grid.cellSize + grid.cellSize / 2;
+        const wy = gy * grid.cellSize + grid.cellSize / 2;
+        const d = shape.kind === 'annulus' ? Math.abs(dist(wx, wy, x, y) - (shape.inner + shape.outer) / 2) : distToSegment(wx, wy, x, y, shape.toX, shape.toY);
+        if (d > halfWidth) continue;
+        const i = gy * grid.cols + gx;
+        totalRemoved += applyCellDamage(grid, state, i, d, halfWidth, power, opts, ageFloor);
       }
     }
   }
@@ -200,8 +365,8 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   let overflowExcess = 0;
   for (const c of state.coagulants) {
     if (c.mass <= 0) continue;
-    if (dist(x, y, c.x, c.y) > radiusPx + c.radius) continue; // cheap reject before the trig
-    const overlap = coagulantOverlapArea(c, x, y, radiusPx);
+    if (shapeCheapReject(shape, x, y, hitRadius, c)) continue; // cheap reject before the trig
+    const overlap = shapeCoagulantOverlap(shape, x, y, hitRadius, c);
     if (overlap <= 0) continue;
     const cellsEquivalent = overlap / (grid.cellSize * grid.cellSize);
     // Corrosive: armour is read net of any active debuff before this
@@ -209,7 +374,15 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     // still applies on top, so armour becomes answerable, never irrelevant
     // (arsenal plan S12.3, the same rule that bounds Penetration).
     const debuffActive = c.armorDebuffUntil > state.time;
-    const effectiveArmor = debuffActive ? c.armor * (1 - c.armorDebuff) : c.armor;
+    let effectiveArmor = debuffActive ? c.armor * (1 - c.armorDebuff) : c.armor;
+    // Piercing Core (Lance, Phase 6C-2 S6): ignores armour entirely, up to
+    // a cap — reads the SAME effective-armour value as Corrosive/Bunker
+    // Buster above, applied after Corrosive's own reduction, so all three
+    // stack in the order they're written rather than three independent
+    // passes over the raw value. Capped, not unlimited, so armour stays
+    // answerable rather than irrelevant against an absurd target (arsenal
+    // plan S12.3's rule, the same one that bounds Penetration).
+    if (opts.armorIgnoreCap) effectiveArmor = Math.max(0, effectiveArmor - opts.armorIgnoreCap);
     // Bunker Buster: reads the same effective-armour value in the other
     // direction — more armour (even net of Corrosive's own reduction)
     // means more bonus damage. Corrosive reduces what Bunker Buster scales
@@ -229,6 +402,11 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     // Core a damage REDUCTION instead of a bonus.
     const wasChilled = c.chilledUntil > state.time;
     const shatterMult = wasChilled && opts.shatter ? 1 + opts.shatter : 1;
+    // Resonant Ring, coagulant reading: a coagulant's own "density" is
+    // fixed at 1 (Decision 46 — it IS the densest slime in the game), so
+    // this collapses to a flat `1 + densityScaled` bonus rather than a
+    // per-cell sample.
+    const densityMult = opts.densityScaled ? 1 + opts.densityScaled : 1;
     const raw =
       effectivePower *
       DAMAGE_COEFF *
@@ -237,7 +415,8 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       weaponMult *
       COAGULANT_DAMAGE_SCALE *
       primingMult *
-      shatterMult;
+      shatterMult *
+      densityMult;
     const removeAmt = clamp(raw, 0, c.mass);
     if (opts.chill) c.chilledUntil = Math.max(c.chilledUntil, state.time + opts.chill);
     if (opts.armorShred) {

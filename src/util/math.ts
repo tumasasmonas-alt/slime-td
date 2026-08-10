@@ -37,6 +37,24 @@ export function fmtTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
+// Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S3): the closest
+// point on segment (ax,ay)-(bx,by) to (px,py), and the distance to it —
+// grid/clear.ts's capsule shape needs both (the point for the coagulant
+// overlap approximation, the distance for the grid loop's falloff term).
+export function closestPointOnSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): { x: number; y: number } {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const lenSq = abx * abx + aby * aby;
+  if (lenSq <= 1e-9) return { x: ax, y: ay };
+  const t = clamp(((px - ax) * abx + (py - ay) * aby) / lenSq, 0, 1);
+  return { x: ax + abx * t, y: ay + aby * t };
+}
+
+export function distToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const { x, y } = closestPointOnSegment(px, py, ax, ay, bx, by);
+  return dist(px, py, x, y);
+}
+
 // Area of the lens where two circles overlap — used to scale weapon
 // damage against coagulants by how much of the hit disc actually
 // intersects the blob, rather than a flat per-weapon constant (see

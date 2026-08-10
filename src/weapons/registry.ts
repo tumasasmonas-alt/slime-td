@@ -3,11 +3,14 @@ import type { WeaponKey } from '../types';
 import { bladesPipeline } from './blades';
 import { boltPipeline } from './bolt';
 import { chainPipeline } from './chain';
+import { fissionPipeline } from './fission';
 import { frostPipeline } from './frost';
 import { immolationPipeline } from './immolation';
+import { lancePipeline } from './lance';
 import { missilePipeline } from './missile';
 import { runWeaponPipeline, type WeaponPipeline } from './pipeline';
 import { poisonPipeline } from './poison';
+import { shockwavePipeline } from './shockwave';
 
 // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S4): a weapon
 // invocable by key rather than by a hand-written call in main.ts. Forced
@@ -28,6 +31,9 @@ export const WEAPON_PIPELINES: Readonly<Record<WeaponKey, WeaponPipeline>> = {
   poison: poisonPipeline,
   missile: missilePipeline,
   immolation: immolationPipeline,
+  shockwave: shockwavePipeline,
+  fission: fissionPipeline,
+  lance: lancePipeline,
 };
 
 // main.ts's single call replacing seven hand-written updateXWeapon()

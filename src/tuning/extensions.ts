@@ -49,7 +49,29 @@ export type ExtensionKey =
   | 'backdraft'
   | 'secondRing'
   | 'flare'
-  | 'ash';
+  | 'ash'
+  // Shockwave (Phase 6C-1, docs/plans/phase-6c1-shockwave-fission.md S5).
+  // 'secondWave' is deliberately distinct from Immolation's shipped
+  // 'secondRing' key; 'knockback' does not collide with the Kickback GEM
+  // (a separate union, GemKey, spelled 'kickback') — both checked against
+  // the full shipped-key list per the plan's Finding 4 discipline.
+  | 'secondWave'
+  | 'knockback'
+  | 'resonantRing'
+  | 'implosion'
+  // Fission Charge (Phase 6C-1 S5)
+  | 'widerScatter'
+  | 'chainFission'
+  | 'sticky'
+  | 'focusedPattern'
+  // Lance (Phase 6C-2, docs/plans/phase-6c2-lance.md S6). 'lanceOvercharge'
+  // is a forced rename off Bolt's already-shipped 'overcharge' — genuinely
+  // different mechanics (Bolt: every 5th shot triples; Lance: longer
+  // charge, superlinear power), displayed as "Long Charge."
+  | 'piercingCore'
+  | 'twinLance'
+  | 'afterglow'
+  | 'lanceOvercharge';
 
 export const EXTENSION_MAX_LEVEL = 3;
 
@@ -252,6 +274,86 @@ export const EXTENSION_DEFS: Readonly<Record<ExtensionKey, ExtensionDef>> = {
     name: 'Ash',
     icon: '🌫️',
     desc: (lvl) => `Cells the ring burns regrow at ${[60, 45, 30][lvl - 1]}% rate for 2s.`,
+  },
+
+  // ---- Shockwave 🌊 (Phase 6C-1) ----
+  secondWave: {
+    weaponKey: 'shockwave',
+    name: 'Second Wave',
+    icon: '〰️',
+    desc: (lvl) => `A second ring follows ${[0.35, 0.3, 0.25][lvl - 1]}s behind, at ${[55, 70, 85][lvl - 1]}% power.`,
+  },
+  knockback: {
+    weaponKey: 'shockwave',
+    name: 'Knockback',
+    icon: '💨',
+    desc: (lvl) => `The ring shoves coagulants ${[20, 32, 46][lvl - 1]}px outward as it passes.`,
+  },
+  resonantRing: {
+    weaponKey: 'shockwave',
+    name: 'Resonant Ring',
+    icon: '📶',
+    desc: (lvl) => `Damage scales with the density the ring crosses, up to ×${(1 + [0.4, 0.65, 0.9][lvl - 1]!).toFixed(2)}.`,
+  },
+  implosion: {
+    weaponKey: 'shockwave',
+    name: 'Implosion',
+    icon: '🌀',
+    desc: (lvl) => `The ring instead travels inward from max reach, at ${[110, 125, 140][lvl - 1]}% power.`,
+  },
+
+  // ---- Fission Charge 🎇 (Phase 6C-1) ----
+  widerScatter: {
+    weaponKey: 'fission',
+    name: 'Wider Scatter',
+    icon: '📐',
+    desc: (lvl) => `+${[30, 45, 60][lvl - 1]}% scatter radius.`,
+    mods: (lvl) => ({ area: [0.3, 0.45, 0.6][lvl - 1] }),
+  },
+  chainFission: {
+    weaponKey: 'fission',
+    name: 'Chain Fission',
+    icon: '💠',
+    desc: (lvl) => `Submunitions split once more on impact, ${[1, 2, 2][lvl - 1]} child(ren) each at 50% power.`,
+  },
+  sticky: {
+    weaponKey: 'fission',
+    name: 'Sticky',
+    icon: '🔥',
+    desc: (lvl) => `Submunitions leave a burning patch, ${[6, 9, 12][lvl - 1]} pwr/s for 2s.`,
+  },
+  focusedPattern: {
+    weaponKey: 'fission',
+    name: 'Focused Pattern',
+    icon: '🎯',
+    desc: (lvl) => `−${[45, 60, 75][lvl - 1]}% scatter radius — a tight cluster instead of a spread.`,
+    mods: (lvl) => ({ area: [-0.45, -0.6, -0.75][lvl - 1] }),
+  },
+
+  // ---- Lance 🔆 (Phase 6C-2) ----
+  piercingCore: {
+    weaponKey: 'lance',
+    name: 'Piercing Core',
+    icon: '🩻',
+    desc: (lvl) => `Ignores armour entirely, up to ${[40, 60, 80][lvl - 1]} points.`,
+  },
+  twinLance: {
+    weaponKey: 'lance',
+    name: 'Twin Lance',
+    icon: '➰',
+    desc: (lvl) => `A second beam fires at a slight angle, at ${[55, 70, 85][lvl - 1]}% power.`,
+  },
+  afterglow: {
+    weaponKey: 'lance',
+    name: 'Afterglow',
+    icon: '🌅',
+    desc: (lvl) => `The line stays hot ${[0.6, 1.1, 1.7][lvl - 1]}s longer and suppresses regrowth along it.`,
+  },
+  lanceOvercharge: {
+    weaponKey: 'lance',
+    name: 'Long Charge',
+    icon: '🔋',
+    desc: (lvl) => `+${[45, 70, 100][lvl - 1]}% charge time, for ×${[1.7, 2.1, 2.6][lvl - 1]} power.`,
   },
 };
 

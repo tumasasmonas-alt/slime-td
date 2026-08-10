@@ -9,6 +9,7 @@ import { findCoagulantHit } from './coagulants';
 import { nearestFrontierPoint } from './frontier';
 import { spawnParticles } from './particles';
 import { findNearbyRevealedPoint } from './targeting';
+import { spawnBubbleSeeds } from '../weapons/poison';
 
 const OFFSCREEN_MARGIN = 60;
 const BOLT_IMPACT_RADIUS = 30;
@@ -18,7 +19,6 @@ const CHAIN_HOP_SPEED = 760;
 const CHAIN_DAMAGE_DECAY = 0.82;
 const MISSILE_STEER = 0.15;
 const MISSILE_REACH_DIST = 14;
-const MISSILE_IMPACT_COLOR = '#ff9d6b';
 // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S3): the generic
 // behaviour-flag versions reuse Chain's own hop speed/decay/search radius
 // rather than inventing separate constants — chains/bounces on a Bolt or
@@ -41,12 +41,16 @@ export function updateProjectiles(state: GameState, dt: number): void {
     p.life -= dt;
     if (p.life <= 0) continue;
 
-    if (p.type === 'missile') {
+    if (p.type === 'missile' || p.type === 'fission') {
       // Phase 6B-2: Cluster Warhead — checked BEFORE calling updateMissile
       // since a `false` return means it just detonated and cleared its
       // own fields; the submunitions still need p.clusterCount and the
       // final x/y updateMissile leaves it at, so they're built from the
       // pre-call snapshot's clusterCount but read x/y after the call.
+      //
+      // Phase 6C-1 (S4.1): 'fission' rides this exact branch — Fission
+      // Charge always carries a clusterCount, so every shot bursts, not
+      // just ones with an extension socketed.
       const hadCluster = p.clusterCount;
       if (updateMissile(state, grid, p, dt)) {
         remaining.push(p);
@@ -365,19 +369,43 @@ function findNextBounceHop(state: GameState, _grid: Grid, x: number, y: number, 
 const CLUSTER_POWER_SHARE = 0.25;
 const CLUSTER_SPREAD_DIST = 70;
 
+// Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S5): Fission's
+// Chain Fission — how many children a split grants, and at what power
+// share, keyed by the extension's own level (matching its desc string:
+// "1/2/2 child(ren) ... at 50% power").
+const CHAIN_FISSION_CHILD_COUNT: readonly [number, number, number] = [1, 2, 2];
+const CHAIN_FISSION_POWER_SHARE = 0.5;
+
+// Phase 6C-1 (S4.1): `scatterDist`/`childPowerShare` default to Missile's
+// original constants, so Cluster Warhead's own behaviour is byte-for-byte
+// unchanged — its tests are the guard. Fission Charge sets both
+// explicitly (weapons/fission.ts).
 function spawnClusterSubmunitions(p: MissileProjectile): MissileProjectile[] {
   const count = p.clusterCount!;
+  const scatterDist = p.scatterDist ?? CLUSTER_SPREAD_DIST;
+  const powerShare = p.childPowerShare ?? CLUSTER_POWER_SHARE;
+  const childGen = (p.fissionGen ?? 0) + 1;
+  // Chain Fission (S9 risk 2 — terminates by construction, not by
+  // observation): a child is only granted its own clusterCount when its
+  // PARENT was itself a generation-0 (never-split) projectile. Since
+  // childGen strictly increases every call and this check reads the
+  // PARENT's generation, a generation-1 child's own children (generation
+  // 2) always fail this check — there is no value of fissionGen that lets
+  // a third split happen.
+  const grantsAnotherSplit = p.chainFissionLvl !== undefined && (p.fissionGen ?? 0) === 0;
   const children: MissileProjectile[] = [];
   for (let k = 0; k < count; k++) {
     const a = (k / count) * Math.PI * 2;
     children.push({
       ...p,
-      dmg: p.dmg * CLUSTER_POWER_SHARE,
+      dmg: p.dmg * powerShare,
       splashRadius: p.splashRadius * 0.6,
-      targetPoint: { x: p.x + Math.cos(a) * CLUSTER_SPREAD_DIST, y: p.y + Math.sin(a) * CLUSTER_SPREAD_DIST },
+      targetPoint: { x: p.x + Math.cos(a) * scatterDist, y: p.y + Math.sin(a) * scatterDist },
       vx: Math.cos(a) * p.speed,
       vy: Math.sin(a) * p.speed,
-      clusterCount: undefined,
+      clusterCount: grantsAnotherSplit ? CHAIN_FISSION_CHILD_COUNT[p.chainFissionLvl! - 1] : undefined,
+      childPowerShare: grantsAnotherSplit ? CHAIN_FISSION_POWER_SHARE : undefined,
+      fissionGen: childGen,
       proximityFuseDist: undefined,
       armAt: 0,
     });
@@ -410,8 +438,11 @@ function updateMissile(state: GameState, grid: Grid, p: MissileProjectile, dt: n
   // touch a wall, or physically collide.
   const proximityHit = p.proximityFuseDist !== undefined && findCoagulantHit(state, p.x, p.y, p.proximityFuseDist) !== null;
   if (reached || hitWall || hitCoagulant || proximityHit) {
-    spawnParticles(state, p.x, p.y, MISSILE_IMPACT_COLOR, 18, 160);
-    const coagulantMult = WEAPON_DEFS.missile?.coagulantMult ?? 1;
+    spawnParticles(state, p.x, p.y, p.color, 18, 160);
+    // Phase 6C-1 (S4.1): reads p.type now, not a hardcoded 'missile' —
+    // this branch is shared with Fission Charge, and each weapon's own
+    // WEAPON_DEFS.coagulantMult should apply to its own projectiles.
+    const coagulantMult = WEAPON_DEFS[p.type]?.coagulantMult ?? 1;
     clearAt(state, p.x, p.y, p.dmg, {
       radiusPx: p.splashRadius,
       coagulantMult,
@@ -424,6 +455,22 @@ function updateMissile(state: GameState, grid: Grid, p: MissileProjectile, dt: n
       // Phase 6B-2: Bunker Buster.
       armorScaled: p.armorScaled,
     });
+    // Phase 6C-1 (S5): Sticky — every submunition carrying this leaves a
+    // small burning patch, reusing the CausticCloud entity/renderer wholesale
+    // rather than a new persistent-effect type.
+    if (p.stickyBurn) {
+      state.clouds.push({
+        x: p.x,
+        y: p.y,
+        radius: p.stickyBurn.radius,
+        life: p.stickyBurn.life,
+        maxLife: p.stickyBurn.life,
+        dmgPerSec: p.stickyBurn.dmgPerSec,
+        color: p.color,
+        tickTimer: 0,
+        bubbleSeeds: spawnBubbleSeeds(),
+      });
+    }
     return false;
   }
   return true;

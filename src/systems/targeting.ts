@@ -1,6 +1,8 @@
-import type { Grid } from '../state';
+import type { GameState, Grid } from '../state';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { dist } from '../util/math';
+import { coagulantSurfaceDist } from './coagulants';
+import { nearestFrontierPoint, type FrontierPoint } from './frontier';
 
 export interface NearbyPoint {
   x: number;
@@ -45,4 +47,29 @@ export function findNearbyRevealedPoint(
     }
   }
   return best;
+}
+
+// Phase 6C-2 (docs/plans/phase-6c2-lance.md S3): Lance's ACQUIRE —
+// "highest mass in range," not nearest-wins (Decision 45's default,
+// unchanged for every other weapon). `phase === 'forming'` coagulants are
+// skipped, matching nearestFrontierPoint's own exclusion — a coagulant
+// that hasn't detached from the field yet is not a target for anything.
+//
+// Falls back to nearestFrontierPoint when no coagulant qualifies — an
+// early run has none at all, and a weapon that does nothing for the
+// first ninety seconds is the 2026-08-05 "cards appear to do nothing"
+// failure in a new costume. This is also, deliberately, the exact acquire
+// stage Threat Priority (6D) will replace wholesale.
+export function highestMassPoint(state: GameState, maxRange: number): FrontierPoint | null {
+  const t = state.tower;
+  let best: (typeof state.coagulants)[number] | null = null;
+  for (const c of state.coagulants) {
+    if (c.mass <= 0 || c.phase === 'forming') continue;
+    if (dist(t.x, t.y, c.x, c.y) > maxRange + c.radius) continue;
+    if (!best || c.mass > best.mass) best = c;
+  }
+  if (best) {
+    return { x: best.x, y: best.y, dist: coagulantSurfaceDist(best, t.x, t.y) };
+  }
+  return nearestFrontierPoint(state);
 }

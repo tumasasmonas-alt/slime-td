@@ -163,6 +163,87 @@ export function bladeRadius(lvl: number, perimeter: number): number {
   return towerCenteredRadius(BLADE_REACH, lvl, perimeter);
 }
 
+// Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S2.4): first-draft
+// numbers, like every other weapon's curves here — balance is not
+// gradeable until Phase 8 (CLAUDE.md).
+export function shockwaveDamage(lvl: number): number {
+  return (12 + (lvl - 1) * 4.5) * WEAPON_DAMAGE_SCALE;
+}
+
+export function shockwaveCooldown(lvl: number): number {
+  return Math.max(1.4, 3.2 - (lvl - 1) * 0.22);
+}
+
+const SHOCKWAVE_REACH: TowerCenteredReach = { margin: 30, base: 150, perLevel: 18 };
+
+// Ring Reach, anchored to the safe radius as a floor like every other
+// tower-centered weapon (docs/DECISIONS.md #16) — the ring starts AT this
+// floor and expands outward to it, per phase-6c1 S2.3: inward of the
+// floor is space nothing has ever occupied.
+export function shockwaveReach(lvl: number, perimeter: number): number {
+  return towerCenteredRadius(SHOCKWAVE_REACH, lvl, perimeter);
+}
+
+// The ring's OWN start — always the raw floor (margin + perimeter), never
+// the level-scaled reach above. towerCenteredRadius() returns whichever
+// of the two is larger, which is the right answer for "how far can this
+// weapon reach" but the wrong one for "where does a ring begin" — S2.3's
+// perimeter-floor rule applies to where the ring starts, not to how far
+// it can grow.
+export function shockwaveStartRadius(perimeter: number): number {
+  return SHOCKWAVE_REACH.margin + perimeter;
+}
+
+export const SHOCKWAVE_SPEED = 260; // px/s, the ring's own travel speed
+
+// Phase 6C-1 (S4.2): per-submunition damage, deliberately low — the
+// weapon's output is the COUNT (fissionCount below), the same principle
+// S6 used for Blades' Blade Count.
+export function fissionDamage(lvl: number): number {
+  return (9 + (lvl - 1) * 3.0) * WEAPON_DAMAGE_SCALE;
+}
+
+// Fourth attribute — one of the four weapons in arsenal S6 that earns
+// one, because a count is core to this weapon's identity.
+export function fissionCount(lvl: number): number {
+  return Math.min(3 + Math.floor((lvl - 1) / 1.5), 9);
+}
+
+export function fissionBlastRadius(lvl: number): number {
+  return 34 + (lvl - 1) * 3;
+}
+
+export function fissionScatter(lvl: number): number {
+  return 70 + (lvl - 1) * 4;
+}
+
+export function fissionCooldown(lvl: number): number {
+  return Math.max(1.1, 2.6 - (lvl - 1) * 0.17);
+}
+
+// Phase 6C-2 (docs/plans/phase-6c2-lance.md S4.1): first-draft numbers.
+// High power, slow cycle — the burst profile the game otherwise lacks.
+export function lanceDamage(lvl: number): number {
+  return (55 + (lvl - 1) * 22) * WEAPON_DAMAGE_SCALE;
+}
+
+// Divided by weaponMods().rate at the call site like every other weapon's
+// cooldown — Overclock reads as "charges faster."
+export function lanceChargeTime(lvl: number): number {
+  return Math.max(1.2, 3.0 - (lvl - 1) * 0.22);
+}
+
+export function lanceBeamWidth(lvl: number): number {
+  return 16 + (lvl - 1) * 1.6;
+}
+
+export const LANCE_RANGE = 520;
+// The beam's own duration term (S2.1) — resolves a second time at reduced
+// power after this many seconds, independent of Afterglow. Extension's
+// `duration` mod scales this window.
+export const LANCE_LINGER = 0.35;
+export const LANCE_LINGER_MULT = 0.3;
+
 // Single shared library for every weapon's data — upgrades, tiers, and
 // tunable variables all live here rather than one file per weapon, so
 // balance edits are one file to open. See docs/DECISIONS.md.
@@ -229,5 +310,34 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
     stats: (lvl, mods = IDENTITY_MODS) => `${(immolationDamage(lvl) * mods.damage).toFixed(0)} pwr · ${(IMMOLATION_TICK / mods.rate).toFixed(1)}s`,
     coagulantMult: 1,
     delivery: 'ring',
+  },
+  // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md).
+  shockwave: {
+    name: 'Shockwave',
+    icon: '🌊',
+    desc: (lvl) => `A ring travels outward from the core, damaging everything it passes through. Lv${lvl}: ${shockwaveDamage(lvl).toFixed(0)} pwr`,
+    stats: (lvl, mods = IDENTITY_MODS) =>
+      `${(shockwaveDamage(lvl) * mods.damage).toFixed(0)} pwr · ${(shockwaveCooldown(lvl) / mods.rate).toFixed(2)}s`,
+    coagulantMult: 1,
+    delivery: 'pulse',
+  },
+  fission: {
+    name: 'Fission Charge',
+    icon: '🎇',
+    desc: (lvl) => `Lobs a charge that bursts into ${fissionCount(lvl)} submunitions scattered across an area.`,
+    stats: (lvl, mods = IDENTITY_MODS) =>
+      `${(fissionDamage(lvl) * mods.damage).toFixed(0)} pwr · ${fissionCount(lvl)} submunitions · ${(fissionCooldown(lvl) / mods.rate).toFixed(2)}s`,
+    coagulantMult: 1,
+    delivery: 'projectile',
+  },
+  // Phase 6C-2 (docs/plans/phase-6c2-lance.md).
+  lance: {
+    name: 'Lance',
+    icon: '🔆',
+    desc: (lvl) => `Charges, then fires one piercing beam at the largest threat in range. Lv${lvl}: ${lanceDamage(lvl).toFixed(0)} pwr`,
+    stats: (lvl, mods = IDENTITY_MODS) =>
+      `${(lanceDamage(lvl) * mods.damage).toFixed(0)} pwr · ${(lanceChargeTime(lvl) / mods.rate).toFixed(2)}s charge`,
+    coagulantMult: 1,
+    delivery: 'beam',
   },
 };

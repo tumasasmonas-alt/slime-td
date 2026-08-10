@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Coagulant, Grid } from '../state';
+import type { Coagulant, Grid, MissileProjectile } from '../state';
 import { freshState } from '../state';
 import { gIdx, worldToCell } from '../grid/grid';
 import { updateProjectiles } from './projectiles';
@@ -598,6 +598,129 @@ describe('updateProjectiles — missile', () => {
 
       expect(state.projectiles[0]!.x).toBeGreaterThan(300); // now moving toward the target
     });
+  });
+});
+
+// Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S4): Fission
+// Charge's own projectile — type: 'missile' | 'fission', riding the exact
+// same detonate-and-cluster branch, so most coverage lives above. This
+// block is only what's genuinely new: the weapon always clusters (no
+// extension required), and the two extensions.
+describe('updateProjectiles — fission', () => {
+  it('bursts into submunitions on detonation without any extension socketed', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.9);
+    state.projectiles.push({
+      type: 'fission',
+      src: 'fission',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      speed: 220,
+      dmg: 20,
+      splashRadius: 34,
+      radius: 6,
+      color: '#ffd166',
+      life: 5,
+      targetPoint: { x: 305, y: 300 },
+      armAt: 0,
+      clusterCount: 4,
+      scatterDist: 70,
+      childPowerShare: 1,
+      fissionGen: 0,
+    });
+
+    updateProjectiles(state, 0.02);
+
+    const submunitions = state.projectiles.filter((p) => p.type === 'fission');
+    expect(submunitions.length).toBe(4);
+    // childPowerShare: 1 — full power, unlike Missile's own 0.25 share.
+    for (const s of submunitions) expect(s.dmg).toBe(20);
+  });
+
+  // The S9 risk 2 guard: Chain Fission must terminate by construction, not
+  // by luck. A generation-1 child (itself created by the burst above) is
+  // allowed to split once more; its own children (generation 2) must not.
+  it('Chain Fission grants exactly one extra generation of splitting, never a second', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.9);
+    state.projectiles.push({
+      type: 'fission',
+      src: 'fission',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      speed: 220,
+      dmg: 20,
+      splashRadius: 34,
+      radius: 6,
+      color: '#ffd166',
+      life: 5,
+      targetPoint: { x: 305, y: 300 },
+      armAt: 0,
+      clusterCount: 2,
+      scatterDist: 70,
+      childPowerShare: 1,
+      fissionGen: 0,
+      chainFissionLvl: 2, // grants 2 children per split
+    });
+
+    // Tick 1: the primary shot detonates, producing 2 generation-1
+    // children — each carrying its own clusterCount (Chain Fission
+    // granted), so they haven't detonated yet themselves.
+    updateProjectiles(state, 0.02);
+    const gen1 = state.projectiles.filter((p): p is MissileProjectile => p.type === 'fission');
+    expect(gen1.length).toBe(2);
+    for (const c of gen1) expect(c.clusterCount).toBe(2);
+
+    // Force them to detonate immediately, then tick again — this should
+    // produce generation-2 children, and NONE of them may carry a
+    // clusterCount of their own (the recursion must stop here).
+    for (const c of gen1) c.targetPoint = { x: c.x, y: c.y };
+    updateProjectiles(state, 0.02);
+    const gen2 = state.projectiles.filter((p): p is MissileProjectile => p.type === 'fission');
+    expect(gen2.length).toBe(4); // 2 parents x 2 children each
+    for (const c of gen2) expect(c.clusterCount).toBeUndefined();
+
+    // And critically: ticking again must NOT produce a third generation —
+    // gen2 children have no clusterCount, so they just fly/detonate
+    // normally with nothing left to spawn.
+    for (const c of gen2) c.targetPoint = { x: c.x, y: c.y };
+    updateProjectiles(state, 0.02);
+    expect(state.projectiles.filter((p) => p.type === 'fission').length).toBe(0);
+  });
+
+  it('Sticky leaves a burning cloud behind at the detonation point', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.9);
+    state.projectiles.push({
+      type: 'fission',
+      src: 'fission',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      speed: 220,
+      dmg: 20,
+      splashRadius: 34,
+      radius: 6,
+      color: '#ffd166',
+      life: 5,
+      targetPoint: { x: 305, y: 300 },
+      armAt: 0,
+      fissionGen: 0,
+      stickyBurn: { dmgPerSec: 9, life: 2, radius: 26 },
+    });
+
+    updateProjectiles(state, 0.02);
+
+    expect(state.clouds).toHaveLength(1);
+    expect(state.clouds[0]!.dmgPerSec).toBe(9);
   });
 });
 

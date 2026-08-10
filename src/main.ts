@@ -5,6 +5,7 @@ import { applyCameraTransform, applyScreenTransform, fitCamera, type Camera } fr
 import { buildGrid } from './grid/grid';
 import { flushDirtyCells, initSlimeLayer } from './grid/slimeLayer';
 import { drawAmbientGrid, drawArenaBounds, drawSafeZone } from './render/background';
+import { drawBeamFx, drawLanceCharge } from './render/beam';
 import { resizeCanvasToWindow, setupCanvas } from './render/canvas';
 import { drawChainFx } from './render/chainFx';
 import { drawClouds } from './render/clouds';
@@ -16,8 +17,10 @@ import { drawNovaFx } from './render/novaFx';
 import { drawOrbitals } from './render/orbitals';
 import { drawParticles } from './render/particles';
 import { drawProjectiles } from './render/projectiles';
+import { drawShockwaveRings } from './render/shockwave';
 import { drawTower } from './render/tower';
 import { freshState, type GameState } from './state';
+import { updateBeamFx } from './systems/beam';
 import { updateChainFx } from './systems/chainFx';
 import { updateClouds } from './systems/clouds';
 import { updateDps } from './systems/dps';
@@ -158,6 +161,7 @@ function update(dt: number): void {
   updateParticles(state, dt);
   updateChainFx(state, dt);
   updateNovaFx(state, dt);
+  updateBeamFx(state, dt);
   updateClouds(state, dt);
   updateTowerTick(state, dt); // regen + shake decay
   updateAnnounceFade(hudRefs, state, dt);
@@ -195,12 +199,15 @@ function render(): void {
     drawCoagulants(ctx, state);
     drawClouds(ctx, state);
     drawNovaFx(ctx, state);
+    drawShockwaveRings(ctx, state);
     drawSafeZone(ctx, state.tower.x, state.tower.y, state.grid.perimeter, state.contactPressure);
     drawImmolationRing(ctx, state);
+    drawLanceCharge(ctx, state);
     drawInfectionEvents(ctx, state);
     drawGems(ctx, state);
     drawOrbitals(ctx, state);
     drawProjectiles(ctx, state);
+    drawBeamFx(ctx, state);
     drawChainFx(ctx, state);
     drawParticles(ctx, state);
     drawTower(ctx, state);

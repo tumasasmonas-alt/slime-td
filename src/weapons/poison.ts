@@ -101,7 +101,10 @@ export function updatePoisonWeapon(state: GameState, dt: number): void {
   runWeaponPipeline(state, dt, lvl, poisonPipeline, 'poison');
 }
 
-function spawnBubbleSeeds(): BubbleSeed[] {
+// Phase 6C-1: exported so Fission's Sticky extension (systems/
+// projectiles.ts) can reuse it wholesale rather than duplicating the
+// bubble-seed generation for its own small burning-patch clouds.
+export function spawnBubbleSeeds(): BubbleSeed[] {
   const seeds: BubbleSeed[] = [];
   for (let i = 0; i < BUBBLE_COUNT; i++) {
     seeds.push({ a: rand(0, Math.PI * 2), r: rand(0.15, 0.7), speed: rand(1.5, 3), phase: rand(0, Math.PI * 2) });

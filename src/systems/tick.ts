@@ -7,6 +7,7 @@ import { updateEvents, updateEventSpawn } from './events';
 import { computeFrontier } from './frontier';
 import { applyAmbientGrowth } from './growth';
 import { updateMaturity } from './maturity';
+import { updateShockwaveRings } from './shockwave';
 
 // Tiers are flavour only (Decision 33) — this updates the name/color
 // announcement, nothing mechanical. The perimeter no longer moves with it
@@ -29,6 +30,11 @@ function simulateTick(state: GameState, dt: number): void {
   updateEventSpawn(state, dt);
   updateEvents(state, dt);
   updateCoagulants(state, dt);
+  // Phase 6C-1: Shockwave's ring damage — a fixed-timestep pass like
+  // everything else here, per CLAUDE.md. render/shockwave.ts draws a
+  // separately, continuously-computed radius, so nothing about this
+  // running only once per SIM_TICK is visible on screen (phase-6c1 S2.2).
+  updateShockwaveRings(state, dt);
   // Runs before ambient growth so this tick's decay is reflected in the
   // maturity-scaled ceiling/rate growth reads below, not a tick stale.
   updateMaturity(state, dt);

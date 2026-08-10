@@ -166,8 +166,15 @@ export interface ChainProjectile extends ProjectileBase {
   splitArcUsed?: boolean;
 }
 
+// Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S4.1): `type`
+// widened to include 'fission' rather than adding a near-identical
+// FissionProjectile interface — Fission Charge's whole identity is "the
+// Cluster Warhead pattern promoted from an extension to a weapon" (the
+// plan's own framing), so it is literally this shape, homing/detonating/
+// clustering exactly the way a cluster missile already does. `type`
+// stays the WEAPON_DEFS/coagulantMult lookup key either way.
 export interface MissileProjectile extends ProjectileBase {
-  type: 'missile';
+  type: 'missile' | 'fission';
   speed: number;
   splashRadius: number;
   targetPoint: { x: number; y: number };
@@ -176,6 +183,30 @@ export interface MissileProjectile extends ProjectileBase {
   // triggers); Cluster Warhead spawns this many submunitions on detonation.
   proximityFuseDist?: number;
   clusterCount?: number;
+  // Phase 6C-1 (S4.1): the two constants spawnClusterSubmunitions used to
+  // hardcode (systems/projectiles.ts), now per-projectile so Fission can
+  // set its own scatter distance and full-power children while Missile's
+  // Cluster Warhead keeps its original constants via the `??` defaults —
+  // the "parameterize the shared function" call from phase-6c1 S4.1,
+  // rather than a second near-identical implementation.
+  scatterDist?: number;
+  childPowerShare?: number;
+  // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S5, S9 risk 2):
+  // Fission's Chain Fission extension — `fissionGen` counts strictly up
+  // each time spawnClusterSubmunitions creates a child (0 = the original
+  // shot), and a child is only ever allowed to cluster-split again when
+  // its PARENT's own `fissionGen` was 0. That bounds the recursion to
+  // exactly one extra generation by construction — the value can never
+  // trigger a third split, not merely "shouldn't in practice." Chain
+  // Fission's own level (which count/power-share to hand the next split)
+  // rides along on `chainFissionLvl`, read only when a split is granted.
+  fissionGen?: number;
+  chainFissionLvl?: 1 | 2 | 3;
+  // Sticky: every submunition carrying this leaves a small burning patch
+  // on detonation (systems/projectiles.ts) — propagates to every
+  // generation via the `...p` spread in spawnClusterSubmunitions, so a
+  // Chain Fission run of grandchildren all leave one too.
+  stickyBurn?: { dmgPerSec: number; life: number; radius: number };
   // Salvo — a bonus missile spawns immediately but stays inert at the
   // tower (no movement, no detonation checks) until state.time reaches
   // this value, giving "sequenced over 0.4s" without a second timer
@@ -299,6 +330,79 @@ export interface NovaFx {
   x: number;
   y: number;
   radius: number;
+  life: number;
+  maxLife: number;
+  color: string;
+}
+
+// Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S2.1): a
+// persistent simulation entity, NOT a decoration like NovaFx above —
+// arsenal plan S9½'s "reuses the pulse renderer" claim was wrong for this
+// weapon (umbrella plan finding 2). Its radius grows in the fixed-
+// timestep sim tick (systems/shockwave.ts) and damages the band it
+// crosses; render/shockwave.ts reads `radius` continuously from
+// `state.time - bornAt` for a smooth visual independent of the sim's
+// tick-quantized damage passes (S2.2).
+export interface ShockwaveRing {
+  x: number;
+  y: number;
+  bornAt: number;
+  // Outer edge of the band damaged so far this ring's life — the sim tick
+  // advances `radius` and then damages [damagedTo, radius] before setting
+  // damagedTo = radius, so a cell is hit exactly once across the ring's
+  // whole life (S2.1's core invariant) rather than re-hit every tick.
+  damagedTo: number;
+  radius: number;
+  startRadius: number; // the perimeter floor (S2.3) — where damage begins
+  maxRadius: number;
+  speed: number;
+  power: number;
+  color: string;
+  // Implosion (S5): travels inward from maxRadius instead, stopping AT
+  // startRadius rather than the tower — S2.3's outward-only rule applied
+  // in reverse.
+  inward?: boolean;
+  // RESOLVE options baked in at fire time (weapons/shockwave.ts), applied
+  // to every damage pass this ring makes. Individual fields rather than a
+  // nested ClearOptions, mirroring CausticCloud/ProjectileBase above — the
+  // same reason both give: no type-only import cycle with grid/clear.ts,
+  // which already imports GameState from here.
+  ignoreResistance?: boolean;
+  flattenFalloff?: boolean;
+  overflow?: boolean;
+  kickback?: number;
+  priming?: number;
+  chill?: number;
+  shatter?: number;
+  armorShred?: number;
+  armorScaled?: number;
+  densityScaled?: number;
+}
+
+// Phase 6C-2 (docs/plans/phase-6c2-lance.md S4.2, S5.2): Lance's own
+// charge bookkeeping — NOT a cooldown-timer weapon (weapons/pipeline.ts's
+// cooldownReady), because the charge tell needs a live target to draw a
+// line toward, re-acquired every tick it's charging rather than once at
+// the moment it fires. This is what makes the target line jump to a
+// newly-formed bigger coagulant mid-charge instead of lying about it.
+export interface LanceCharge {
+  progress: number;
+  chargeTime: number;
+  // Inlined FrontierPoint shape rather than a type-only import from
+  // systems/frontier.ts — that file already imports GameState from here,
+  // matching the pattern GameState.pendingEmissions below already uses.
+  target: { x: number; y: number; dist: number } | null;
+}
+
+// Phase 6C-2 (S5.1, S6): a fading line — the beam's own flash on release,
+// and (render/beam.ts) the faint charge-time preview toward the current
+// target. Reuses NovaFx's fading-stroke vocabulary, generalized from a
+// circle to a line.
+export interface BeamFx {
+  x: number;
+  y: number;
+  toX: number;
+  toY: number;
   life: number;
   maxLife: number;
   color: string;
@@ -580,6 +684,15 @@ export interface GameState {
   // (Frost Nova, Immolation Ring once it has a visual) firing in the same
   // frame previously overwrote each other.
   novaFx: NovaFx[];
+  // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S2.1): Shockwave's
+  // travelling rings — a persistent simulation entity, not a decoration,
+  // so it lives alongside novaFx rather than inside it.
+  shockwaveRings: ShockwaveRing[];
+  // Phase 6C-2 (docs/plans/phase-6c2-lance.md S5-S6): Lance's charge state
+  // (null when Lance isn't equipped or isn't charging) and its beam
+  // flashes/preview lines.
+  lanceCharge: LanceCharge | null;
+  beamFx: BeamFx[];
 
   frontier: Float32Array | null;
 
@@ -699,6 +812,9 @@ export function freshState(): GameState {
     particles: [],
     gems: [],
     novaFx: [],
+    shockwaveRings: [],
+    lanceCharge: null,
+    beamFx: [],
 
     frontier: null,
 
@@ -708,7 +824,7 @@ export function freshState(): GameState {
     eventSpawnTimer: EVENT_INITIAL_DELAY,
     coagulants: [],
 
-    weaponTimers: { bolt: 0, blades: 0, chain: 0, frost: 0, poison: 0, missile: 0, immolation: 0 },
+    weaponTimers: { bolt: 0, blades: 0, chain: 0, frost: 0, poison: 0, missile: 0, immolation: 0, shockwave: 0, fission: 0, lance: 0 },
     bladeNextHit: {},
     simAcc: 0,
     announceTimer: 0,

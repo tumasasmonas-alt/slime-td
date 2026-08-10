@@ -5,16 +5,23 @@
 // S7.11): Ward Pulse was a weapon misfiled as a passive since the port —
 // it has a cooldown and a tower-centered radius like Frost and Blades,
 // not a flat per-level multiplier like everything in PassiveKey below.
-export type WeaponKey = 'bolt' | 'blades' | 'chain' | 'frost' | 'poison' | 'missile' | 'immolation';
+//
+// 'shockwave'/'fission' added Phase 6C-1 (docs/plans/phase-6c1-shockwave-
+// fission.md); 'lance' added 6C-2 (docs/plans/phase-6c2-lance.md).
+export type WeaponKey = 'bolt' | 'blades' | 'chain' | 'frost' | 'poison' | 'missile' | 'immolation' | 'shockwave' | 'fission' | 'lance';
 
 // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S3): what a weapon's
 // effect physically is, independent of which weapon it belongs to — the
 // axis a support gem reinterprets against instead of against a specific
-// WeaponKey. Five today (one per shipped weapon); the 6C+ catalogue adds
-// 'beam', 'summon' and 'tag'. A gem switching on WeaponKey instead of
-// DeliveryKind is the N x M cost the pipeline exists to avoid — see that
-// plan's S1, call 2's correction.
-export type DeliveryKind = 'projectile' | 'orbital' | 'pulse' | 'cloud' | 'ring';
+// WeaponKey. A gem switching on WeaponKey instead of DeliveryKind is the
+// N x M cost the pipeline exists to avoid — see that plan's S1, call 2's
+// correction.
+//
+// 'beam' added Phase 6C-2 for Lance (docs/plans/phase-6c2-lance.md S2) —
+// turned out to be about six touch points in tuning/gems.ts, not 20 x 6,
+// because 6A-2's Behaviour-class no-refusals rule already made most gems
+// archetype-blind. The 6D+ catalogue still has 'summon' and 'tag' ahead.
+export type DeliveryKind = 'projectile' | 'orbital' | 'pulse' | 'cloud' | 'ring' | 'beam';
 
 export type PassiveKey =
   | 'maxHp'

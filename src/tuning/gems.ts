@@ -100,15 +100,28 @@ export const AMPLIFIER_GEM_DEFS: Readonly<Record<AmplifierGemKey, AmplifierGemDe
     // are continuous, not timed) or ring (Immolation's tick is Overclock's
     // job, and it has no separate lingering effect to extend) — offering
     // it there would either do nothing or duplicate Overclock.
-    supports: (d) => d === 'pulse' || d === 'cloud',
-    desc: (d) => (d === 'pulse' ? '+40% freeze duration.' : '+40% cloud lifetime.'),
-    genericDesc: '+40% duration — freeze or cloud lifetime. Only legal on Frost Nova or Caustic Cloud.',
+    //
+    // Phase 6C-2 (docs/plans/phase-6c2-lance.md S2.1): 'beam' added,
+    // against this plan's own first recommendation (refuse) — the owner's
+    // call. A beam gets its OWN duration term (the line stays hot briefly
+    // and resolves a second time, weapons/lance.ts), independent of
+    // Lance's Afterglow extension, so this is never a dead socket the way
+    // refusing-until-Afterglow would have been.
+    supports: (d) => d === 'pulse' || d === 'cloud' || d === 'beam',
+    desc: (d) => {
+      if (d === 'pulse') return '+40% freeze duration.';
+      if (d === 'beam') return '+40% linger duration.';
+      return '+40% cloud lifetime.';
+    },
+    genericDesc: '+40% duration — freeze, cloud lifetime, or a beam\'s own linger window.',
     delta: () => ({ duration: 0.4 }),
   },
   velocity: {
     name: 'Velocity',
     icon: '💨',
-    // Only things that travel have a travel speed.
+    // Only things that travel have a travel speed. A beam is
+    // instantaneous (Phase 6C-2 S2.1) — no travel time to raise, so it
+    // stays excluded here with no change needed.
     supports: (d) => d === 'projectile' || d === 'orbital',
     desc: (d) => (d === 'orbital' ? '+35% orbit speed.' : '+35% projectile speed.'),
     genericDesc: '+35% travel speed. Only legal on projectile weapons or Orbiting Blades.',
@@ -177,7 +190,11 @@ export const BEHAVIOUR_GEM_DEFS: Readonly<Record<BehaviourGemKey, BehaviourGemDe
   splash: {
     name: 'Splash',
     icon: '🌊',
-    desc: (d) => (d === 'orbital' ? 'Blade hits gain a small area of effect.' : 'The rim of the hit lands nearly as hard as the centre.'),
+    desc: (d) => {
+      if (d === 'orbital') return 'Blade hits gain a small area of effect.';
+      if (d === 'beam') return 'The beam\'s edges land nearly as hard as its centre line.';
+      return 'The rim of the hit lands nearly as hard as the centre.';
+    },
     genericDesc: 'Flattens the falloff from centre to edge — distinct from Expansion (bigger radius, same shape).',
   },
   kickback: {
@@ -199,6 +216,11 @@ export const BEHAVIOUR_GEM_DEFS: Readonly<Record<BehaviourGemKey, BehaviourGemDe
       if (d === 'projectile') return 'Steers toward its target as it flies.';
       if (d === 'orbital') return 'Blades bias toward the side of the arena under the most threat.';
       if (d === 'cloud') return 'The cloud drifts toward the nearest mass instead of sitting still.';
+      // Phase 6C-2 (docs/plans/phase-6c2-lance.md S2.2): honest no-op on
+      // beam, the same pattern Missile's own Homing already established —
+      // Lance's ACQUIRE always targets the biggest coagulant in range
+      // (highestMassPoint), so there's nothing left for this to bias.
+      if (d === 'beam') return 'No effect — the beam already targets the largest threat in range.';
       return "The pulse's centre offsets toward the densest nearby threat."; // pulse, ring
     },
     genericDesc: 'Biases this weapon toward the threat — the specific reading depends on the weapon it sockets into.',
@@ -210,6 +232,7 @@ export const BEHAVIOUR_GEM_DEFS: Readonly<Record<BehaviourGemKey, BehaviourGemDe
       if (d === 'projectile') return '+2 projectiles in a spread, each at reduced power.';
       if (d === 'orbital') return '+2 blades, each at reduced power.';
       if (d === 'cloud') return '+2 smaller clouds around the target point.';
+      if (d === 'beam') return '+2 beams at diverging angles, each at reduced power.';
       return '+2 smaller pulses offset around the tower.'; // pulse, ring
     },
     genericDesc: '+2 emissions at reduced power each — more projectiles, blades, clouds, or pulses depending on the weapon.',
@@ -221,6 +244,7 @@ export const BEHAVIOUR_GEM_DEFS: Readonly<Record<BehaviourGemKey, BehaviourGemDe
       if (d === 'projectile') return 'Extra shots arrange in a fixed ring around the target instead of scattering.';
       if (d === 'orbital') return 'Blades lock to a fixed arc instead of spreading evenly.';
       if (d === 'cloud') return 'Extra clouds land in a fixed pattern instead of scattering.';
+      if (d === 'beam') return 'Extra beams lock to fixed diverging angles instead of scattering.';
       return 'Extra pulses arrange at a fixed radius instead of scattering.'; // pulse, ring
     },
     genericDesc: 'Like Multishot, but the extra emissions land in a fixed pattern instead of scattering randomly.',
