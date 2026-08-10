@@ -48,7 +48,14 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-10 (Phase 6C shipped in full — 6C-1 and 6C-2,
+**Last updated:** 2026-08-10 (**the Phase 5 gate ran and passed** —
+Decision 87 — closing a checkpoint open since Phase 5C and moved three
+times. Both verdicts: enhancement reads as *a decision, not a slider*,
+and the 65-gem count is a go, so **Phase 6D ships its full 19 gems** and
+is the next batch. The bugs that same playtest found were fixed and
+shipped first, as Decision 86, below.)
+
+**Previously:** 2026-08-10 (Phase 6C shipped in full — 6C-1 and 6C-2,
 both planned and then greenlit with full owner autonomy in the same
 session Phase 6B shipped in: three new weapons [Lance, Shockwave,
 Fission Charge], twelve real extensions, `clearAt` generalized to
@@ -224,8 +231,8 @@ Decision 76 and `docs/plans/phase-6a3-loop-fixes.md`.
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main`, committed and pushed |
-| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B + Phase 6C all complete**, plus a post-6C playtest fix pass (Decision 86). The Phase 5 gate is next. |
-| Blockers | **None.** Next is the Phase 5 gate, moved to run here for the third time (Decision 81) — ten weapons now compete for three deck slots. |
+| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B + Phase 6C all complete**, plus a post-6C playtest fix pass (Decision 86). **The Phase 5 gate has now run and passed** (Decision 87). **Phase 6D is next.** |
+| Blockers | **None.** Next is Phase 6D — the Conditional (11) + Targeting (8) gems, shipping at the full 19 per the gate's own go/no-go verdict. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
 still playtested — infection as a density field across a fixed perimeter,
@@ -463,13 +470,16 @@ src/
               (pure card-pool build/pick/apply logic) and sockets.ts
               (enhancement spend/withdraw, socket-count helpers)
   weapons/    one module per weapon (behavior only — data lives in tuning/),
-              all seven built on pipeline.ts's shared ready/acquire/deliver
-              stages since Phase 5A
+              all ten built on pipeline.ts's shared ready/acquire/deliver
+              stages since Phase 5A, driven from registry.ts's single loop
+              since 6A-2. Lance owns its own charge bookkeeping rather
+              than using cooldownReady (6C-2)
   render/     canvas draw calls, strictly separated from update logic
   tuning/     all numeric knobs: weapons, tiers, growth, events, coagulants,
               xp, geometry — plus, since Phase 5B: sockets.ts (the socket
-              ladder), coreGems.ts, extensions.ts (the placeholder pending
-              Phase 6 content)
+              ladder), coreGems.ts, and extensions.ts, which since 6B/6C
+              holds the real catalogue of 40 per-weapon extensions, not
+              the original placeholder
   ui/         DOM/CSS HUD, upgrade cards, start/game-over overlays, and
               since Phase 5C: inventory.ts (the pause + inventory screen)
               and weaponRow.ts (its shared row renderer, reused by 6-0)
@@ -493,7 +503,42 @@ src/
 
 *Newest first.*
 
-### 2026-08-10 (latest) — Post-6C playtest: three real bugs, bundles cut, XP/difficulty pacing pass. Decision 86.
+### 2026-08-10 (latest) — The Phase 5 gate ran and passed. Decision 87. Phase 6D is next.
+
+**Full account:** `docs/DECISIONS.md` #87; no separate session record —
+the gate produced two verdicts and no build. The bugs the same playtest
+found are the entry below (Decision 86), fixed and shipped first.
+
+**The gate is closed.** Open since Phase 5C and moved three times (after
+5C → after 6A → after 6B → after 6C), it ran against the post-6C build
+and passed on both of its questions:
+
+1. **"Is enhancement a decision or a slider?" → a decision.** The
+   socketing loop works as designed. This is the question every gate move
+   was made to protect — it cannot be answered with empty sockets, with
+   only one of the two socket-fillers real, or against a three-weapon
+   deck where every weapon is always equipped. Its passing configuration
+   is worth naming, since that's what a re-ask would compare against: two
+   independent socket lines (Decision 77), 40 real extensions, ~20 gems,
+   ten weapons against three deck slots.
+2. **The 65-gem catalogue count → go, unchanged.** `phase-5-6-arsenal.md`
+   §14's risk 2 is discharged, and it is the reason the gate was worth
+   running before 6D specifically. **6D ships its full 19 gems.**
+   Trimming the set, and slicing 6D into a Targeting-only 6D-1 to judge
+   first, were both offered and declined.
+
+**The named risk of the third gate move did not materialise** — that a
+bad gate result would strand 6C's twelve already-built extensions. Build
+order is unchanged, as it was after all three moves.
+
+**Planned** — **Phase 6D**: the Conditional (11) and Targeting (8) gems.
+Per the roadmap this is the cheap batch — 14 visually free, 5 modifiers,
+0 new renderers, no new subsystems — and it is where Threat Priority
+finally lands against the Carrier/Bulwark coagulant pair that Phase 4C
+shipped specifically to make it interesting. No blockers. Next step is a
+plan document and a greenlight, per the standing instruction.
+
+### 2026-08-10 — Post-6C playtest: three real bugs, bundles cut, XP/difficulty pacing pass. Decision 86.
 
 **Full account:** `docs/DECISIONS.md` #86; no separate session record —
 small enough to carry entirely in the decision and BACKLOG entries.

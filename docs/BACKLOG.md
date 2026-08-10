@@ -20,6 +20,24 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
+### ▶ Phase 6D — the Conditional (11) + Targeting (8) gems. Next up.
+
+The gate cleared this to ship at its **full 19 gems** (see below). Per
+`docs/plans/phase-6-roadmap.md` §3 this is the cheap batch: 14 visually
+free, 5 modifiers, 0 new renderers, no new subsystems. Threat Priority
+lands here against the Carrier/Bulwark coagulant pair 4C shipped
+specifically to make it interesting. Needs a plan document and a
+greenlight before any code.
+
+### ✅ The Phase 5 gate — ran and passed, 2026-08-10. Decision 87.
+
+Open since Phase 5C, moved three times, run against the post-6C build.
+Both verdicts passed: **enhancement is a decision, not a slider** (the
+socketing loop is sound as designed), and the **65-gem count is a go**,
+unchanged — so 6D ships all 19. Trimming the set and slicing 6D into a
+Targeting-only 6D-1 were both offered and declined. The bugs the same
+playtest turned up are the entry below, already fixed and shipped.
+
 ### ✅ Post-6C playtest fixes — shipped and committed, 2026-08-10.
 
 The owner playtested Phase 6C immediately after it shipped and found

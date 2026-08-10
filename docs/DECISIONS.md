@@ -2640,6 +2640,52 @@ already covered by the new regression tests.
 
 **Committed and pushed.**
 
+---
+
+## The Phase 5 gate — run and passed
+
+> Decision 87 closes a checkpoint that had been open since Phase 5C and
+> moved three times (Decisions 81 and its two predecessors). It is
+> recorded here rather than in a session file because it produced two
+> verdicts and no build.
+
+**87. The Phase 5 gate ran on 2026-08-10 and passed on both questions.**
+📋 *2026-08-10.*
+
+The gate was never only a bug hunt — it carried two verdicts that gate
+the batches after it. Both were answered by the owner after playing the
+post-6C build.
+
+**Verdict 1 — *"is enhancement a decision or a slider?"* → a decision.**
+The socketing loop works as designed: choosing what goes where reads as
+meaningful rather than as numbers going up. This is the question that
+moved the gate three times (it cannot be asked with empty sockets, nor
+with only one of the two socket-fillers real, nor against a three-weapon
+deck where every weapon is always equipped). **It is now closed.** The
+two independent socket lines (Decision 77), 40 real extensions, ~20
+gems, and ten weapons competing for three deck slots are the
+configuration it passed against — if any of those change materially,
+the question is worth re-asking, but not otherwise.
+
+**Verdict 2 — the 65-gem catalogue count → go, unchanged.** This was
+`phase-5-6-arsenal.md` §14's risk 2 and the reason the gate was worth
+running before 6D specifically. **6D ships its full 19 gems** (Conditional
+11 + Targeting 8) rather than a trimmed or sliced set. The alternatives
+offered and declined: trimming the 19 to a sharper subset, and splitting
+6D into a Targeting-only 6D-1 to judge before committing to Conditional.
+
+**The bugs the gate did find were fixed in the same pass and are
+Decision 86**, above — three real bugs, bundles cut, and the XP/difficulty
+retune. That work is already shipped; this decision records only the
+verdicts, which 86 does not carry.
+
+**Consequence for build order: none.** 6D is next exactly as
+`phase-6-roadmap.md` §3 has it. The gate's own risk — named when it moved
+the third time — that a bad result would strand 6C's twelve extensions,
+did not materialise.
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 
