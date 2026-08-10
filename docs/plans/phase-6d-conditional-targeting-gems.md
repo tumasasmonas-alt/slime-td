@@ -316,6 +316,97 @@ Two notes worth carrying into the build:
 
 **Recommendation: ship all 8 unchanged.**
 
+## 4c. 6D-0 designed: how the aura deck actually gets balanced
+
+> Written after the owner's correction that 6D-0 and 6D-3 had been *named*
+> rather than *designed*. The correction was right, and working it through
+> changed the answer: **the aura fix is not a damage buff.**
+
+### The finding that decides it
+
+`clearAt` applies `power` **per cell**, with a `1 - d/radius` falloff.
+Radius is not a divisor — a bigger radius removes strictly more mass at the
+same `power`. Ranking level-1 weapons by mass removed per second
+(`power × radius² ÷ cooldown`, dropping shared constants):
+
+| Weapon | Lv1 field throughput | vs Bolt |
+|---|---|---|
+| Immolation Ring | ~136,000 | **7.4×** |
+| Frost Nova | ~50,000 | 2.7× |
+| Bolt Turret | ~18,400 | 1.0× |
+| Orbiting Blades | ~12,200 | 0.7× |
+
+**Immolation and Frost already out-clear the projectiles at level 1 by a
+wide margin — and the deck still dies.** So a damage buff would be aimed at
+a stat that is already winning. The plan's earlier "raise Frost and
+Shockwave damage" line was wrong on that basis and is withdrawn.
+
+### Why the deck actually dies
+
+`systems/growth.ts:72-79`: ambient growth is not a front creeping inward.
+Density rises **everywhere simultaneously**, at a rate ramped by distance:
+
+```
+d < perimeter:  rate ∝ CREEP_RAMP × proximity      (heavily damped)
+d ≥ perimeter:  rate ∝ ((d - perimeter) / outerSpan) ^ 0.6, floored at CREEP_RAMP
+```
+
+Evaluated at the radii the aura weapons actually occupy:
+
+| Distance | Local ambient rate | Who lives here |
+|---|---|---|
+| 100px | 0.056 | Immolation, Blades |
+| 115px | 0.096 | Frost |
+| 250px | 0.31 | — |
+| 400px | 0.49 | — |
+| 1000px | 0.91 | where projectiles engage |
+
+**The aura weapons are parked in the one annulus the design guarantees is
+nearly empty**, and `applyCellDamage` early-returns on any cell below 0.001
+density. They are not under-powered; they are aimed at vacuum. An all-aura
+deck dies because it has no engagement, and no amount of `power` multiplies
+an empty cell.
+
+### The fix: move them to where the density is
+
+Aura value = **area covered × local growth rate × per-cell power ÷ cycle
+time**. The first two terms are what's broken, and both are fixed by the
+same edit — raising the `base`/`perLevel` terms of `TowerCenteredReach`.
+This is exactly what that struct exists to allow (*"the anchor is a FLOOR,
+not a lock"*), so DECISIONS #16 and the perimeter floor are untouched.
+
+| Weapon | `base` | `perLevel` | Lv1 radius | Lv8 radius | Lv1 gain |
+|---|---|---|---|---|---|
+| **Immolation** | 66 → **190** | 6 → **18** | 100 → 190 | 108 → 316 | ~3.6× area × ~2.5× local rate ≈ **9×** |
+| **Frost** | 115 → **210** | 12 → **20** | 115 → 210 | 199 → 350 | ~3.3× area × ~2.3× rate ≈ **7.5×** |
+| **Blades** | 64 → **165** | 2 → **14** | 105 → 165 | 105 → 263 | area × rate ≈ **6×**, plus below |
+
+**Blades needs two more edits, because it's the one aura that is genuinely
+low-throughput** (0.7× Bolt): its hit disc is only 16px, and its
+`perLevel: 2` term has never once cleared the floor at any level.
+- `HIT_RADIUS` 16 → **26** (2.6× area per blade)
+- `bladeCount` at level 1: 1 → **2**
+
+**Shockwave is excluded from the reach fix** — it already travels outward
+from the floor, so its reach is fine. Its weakness is band thickness; that
+is a `SHOCKWAVE_SPEED` / damage question and is handled with the weapon
+spread, not here.
+
+### Meeting the aura floor rule (§4b)
+
+At level 1, post-fix, Immolation is roughly **60×** Bolt's field throughput
+and Frost roughly **20×**, in a band that now actually contains density.
+That satisfies the owner's rule with room to spare — deliberately, because
+the rule is about an all-aura deck *surviving*, and the failure mode being
+corrected is a total-engagement failure rather than a small shortfall. The
+outcome test in §4b is what pins it; these numbers are the first draft.
+
+**The named risk:** auras now cover the perimeter band where contact damage
+happens, which is their design identity but also makes them strong at
+exactly the moment the core is threatened. If the playtest says they trivialize
+the defensive game, the lever is `perLevel` (how fast reach grows), not
+`base` — cutting `base` puts them back in the vacuum.
+
 ## 5. Armour — the fourth flat, capped axis
 
 Raised by the owner in the same pass: *"armour on slime and coagulants
@@ -351,6 +442,31 @@ Two findings fall out:
 joining §1's unbounded escalation instead of capping at full maturity. The
 flat-subtraction model stays; the ceiling goes.
 
+### ⚠️ Unbounded armour degenerates, and needs a bound
+
+Working the settled call through: `effectivePower = max(power - armor,
+power × 0.15)`. As `armor` grows without limit, **every weapon converges on
+exactly 15% of its damage** — the floor stops being a safety net and becomes
+the only term that matters. At that point weapon damage numbers no longer
+distinguish anything, Penetration stops mattering (it subtracts from a
+value already past the floor), and the arsenal flattens into "whoever fires
+fastest over the largest area."
+
+That is the opposite of the intent, and it arrives on a schedule: with
+`ARMOR_AT_FULL_MATURITY` at 35 and a doubling every 10 minutes, Lance is at
+the floor by ~25 minutes and Chain's forks by ~8.
+
+**Proposal: armour scales with time but is bounded as a *fraction*, not a
+constant** — cap effective armour at the point where the best-hitting weapon
+still keeps ~50% of its damage, and let the unbounded half of the
+difficulty curve be carried by coagulant **count and mass** (which have no
+such degeneracy) rather than by armour. Armour then becomes a real, growing
+tax that never erases weapon identity.
+
+This contradicts the letter of the settled call ("let it scale with time",
+unbounded), so per `CLAUDE.md`'s ground-truth protocol it is raised, not
+applied — see §8 Q1.
+
 **One interaction to handle, flagged rather than re-asked:** rising armour
 hits small-hit weapons hardest, which includes **Blades** — the weapon §2
 is trying to buff. Since the owner's standing position is that aura weapons
@@ -365,7 +481,7 @@ All settled by the owner on 2026-08-10, during this plan's review:
 | Question | Call |
 |---|---|
 | Difficulty shape | **Unbounded slow multiplier, no cap.** Threat climbs forever, matching uncapped player power. |
-| The opening | **Make the beginning easier.** Mid-game is right where it is now. It must then keep climbing. |
+| The opening | **Make the beginning easier — by about 10%, not a rollback.** The owner's calibration, given after the aura fix was designed: *"now it's like 10 percent too hard at the start."* Mid-game is right where it is. It must then keep climbing. Note the aura fix (§4c) is itself a large early-game buff, so the opening should be re-judged after it lands rather than cut twice. |
 | Weapon spread | **Both ends** — nerf Chain Bolt and Fission Charge, raise the weak ones. |
 | Aura weapons | **Stronger by default** — "using them is a risk to begin with." |
 | Armour | **Raise it, and let it scale with time.** Flat-subtraction model unchanged. |
@@ -441,10 +557,92 @@ Proposed per-archetype readings, to be settled in the batch's own plan:
 handling, three weapon modules and at least one renderer, and it is the
 kind of change the project's own record says only a playtest can grade.
 
+## 7a. 6D-3 designed: how the dead gems get fixed
+
+> Also written after the owner's correction. §4a diagnosed; this is the
+> design.
+
+### Step 1 — four weapons get four gems for free
+
+`weapons/chain.ts`, `missile.ts`, `fission.ts` and `lance.ts` push
+projectiles **without calling `projectileFlags()`**. Bolt does. Nothing
+else differs. Wiring those four call sites turns Fork, Chaining, Bounce and
+Ricochet on for four more weapons with **no new mechanism at all** — it is
+the single cheapest fix in the batch and should land first, before any
+design work.
+
+That takes the four gems from 1 weapon to 5. The remaining five weapons are
+the aura/cloud/beam archetypes, and they need Step 2.
+
+### Step 2 — reinterpret, don't port
+
+`tuning/gems.ts:158` says these need *"clearAt to report which coagulant a
+hit killed."* **That is only true of the literal "on kill" readings.** Every
+aura weapon already knows its own hit position, and the deferred-emission
+queue from 6A-2 already exists. So most readings are implementable
+weapon-locally, with no change to `clearAt` at all:
+
+| Gem | orbital (Blades) | pulse (Frost/Shockwave) | ring (Immolation) | cloud (Poison) | beam (Lance) |
+|---|---|---|---|---|---|
+| **Fork** | hit sheds a small projectile outward from the blade's own position | pulse spawns a second smaller pulse at its rim | spawns a second ring at 1.5× radius *(Second Ring's machinery)* | splits into two smaller clouds on expiry | beam splits into two diverging beams past its endpoint |
+| **Chaining** | hit arcs to the nearest target beyond the orbit | follow-up pulse centred on the farthest point it touched | a delayed outward ring at 2× radius | spawns a tendril cloud toward the nearest mass | beam continues from its endpoint to a second target |
+| **Bounce** | blade jumps to a different orbit radius on hit | re-emits a smaller pulse offset from centre | alternates inner/outer ring each tick | cloud hops to the next mass on expiry | beam reflects to a second target |
+| **Ricochet** | blades reverse orbit direction periodically, re-sweeping ground | an **inward**-travelling ring after the outward one *(Shockwave's own machinery)* | a second tick at reduced power shortly after | drift direction reverses | fires again along the same line at reduced power |
+
+**Only the `clearAt` return needs to change for the "on kill" cases**, and
+even then the cheap version suffices: have `clearAt` return the hit
+coagulants it touched alongside the mass figure, rather than threading kill
+events through all ~15 call sites. Same shape as 6C-1's `ClearOptions.shape`
+generalization — extend the one damage path rather than add a second.
+
+Several of these reuse machinery that already shipped, which is the
+strongest signal the readings are right rather than invented: Immolation's
+Fork *is* Second Ring, and pulse Ricochet *is* a Shockwave ring with a
+negative speed.
+
+### Step 3 — the emission-multiplication rule
+
+The bug is that Multishot divides damage by emission count unconditionally
+(`blades.ts:133`, `frost.ts:68`). The principled rule:
+
+> **Divide damage only when the extra emissions can overlap the same
+> target. When they cover new ground, damage stays whole.**
+
+That is not a buff for its own sake — it is what makes the division
+*correct* in the case where it currently applies. Three spread projectiles
+can all converge on one coagulant, so dividing keeps single-target output
+flat; that stays exactly as it is. Two blades on the *same* orbit can also
+overlap, so today's division is defensible there too. But two orbit centres
+at different radii, or two concentric rings, cannot both hit the same cell —
+so dividing there is a pure penalty for taking the gem.
+
+| Archetype | Multishot becomes | Damage |
+|---|---|---|
+| projectile | unchanged — a spread that can converge | **divided** (as today) |
+| **orbital** | the owner's satellite reading: extra orbit *centres*, each carrying blades, orbiting the core at their own radius | **whole** — distinct ground |
+| **ring** | concentric rings further out | **whole** — distinct ground |
+| **pulse** | sequential waves at full radius, not simultaneous shrunken ones | **partial** (later waves reduced, like Echo) — same ground, different time |
+| cloud | extra clouds around the point, less shrunken than today | **partial** — clouds can overlap |
+| beam | unchanged — diverging beams can converge on one target | **divided** |
+
+**Formation** is the fixed-pattern variant of each of the above, exactly as
+it is today — no separate design needed once Multishot is right.
+
+### What this does not do
+
+It does not touch the Amplifier class's honest refusals (Extension,
+Velocity). Those are enforced at socket time, so they are unavailable
+rather than dead, and the real fix is Phase 7's currency sink for banked
+gems — out of scope here and already recorded.
+
 ### Still open
 
-1. ~~"Lightning bolt"~~ — **settled: Chain Bolt**, the 496-DPS outlier.
-2. **Decision records needed.** Unbounded escalation supersedes the bounded
+1. **Armour's bound (§5).** Unbounded flat armour collapses every weapon
+   onto the 15% floor and erases weapon identity. Recommend bounding it as
+   a fraction and letting coagulant count/mass carry the unbounded part of
+   the curve. Needs the owner's yes, since it narrows a settled call.
+2. ~~"Lightning bolt"~~ — **settled: Chain Bolt**, the 496-DPS outlier.
+3. **Decision records needed.** Unbounded escalation supersedes the bounded
    `AMBIENT_ESCALATION` table and the event-interval floor; time-scaled
    armour extends Decision 44's model without replacing it. Both want
    entries in `docs/DECISIONS.md` when 6D-0 lands, per the ground-truth
