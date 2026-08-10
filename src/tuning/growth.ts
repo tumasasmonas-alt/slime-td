@@ -7,14 +7,18 @@
 // yet to lean on). AMBIENT_ESCALATION below is untouched by either cut —
 // this is the base rate the escalation curve multiplies, not the curve
 // itself, so the relative ramp shape over a run is preserved.
-export const AMBIENT_BASE = 0.015;
-export const CONTACT_SCALE = 15;
+// 2026-08-10: both raised ~30% — the owner's call, "make the slime
+// overall more difficult," part of the same pass as the coagulant
+// speed/arrival-damage and event-frequency bumps below. Same knobs,
+// same shape, just turned up instead of down this time.
+export const AMBIENT_BASE = 0.02;
+export const CONTACT_SCALE = 20;
 
 // Floor rate ambient growth creeps at inside the safe zone (damped
 // further by proximity to the tower), and the floor the outside ramp
 // itself never drops below near the line — see docs/DECISIONS.md #15. Chosen to roughly match the old front-line
 // speed at the line itself; a balance-pass knob like AMBIENT_BASE.
-export const CREEP_RAMP = 0.027;
+export const CREEP_RAMP = 0.035;
 
 // Fixed simulation timestep in seconds, decoupled from render framerate.
 export const SIM_TICK = 0.18;

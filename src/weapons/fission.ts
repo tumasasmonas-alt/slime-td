@@ -6,7 +6,9 @@ import { fissionBlastRadius, fissionCooldown, fissionCount, fissionDamage, fissi
 import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const FISSION_SPEED = 220;
-const FISSION_COLOR = '#ffd166';
+// 2026-08-10: the owner's call — blue, distinct from Shockwave's lighter
+// cyan (#7fd8ff) so the two don't read as the same weapon on screen.
+const FISSION_COLOR = '#4d94ff';
 // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S5): Sticky's
 // burning patch — small and short, so it reads as a lingering ember, not
 // a second Caustic Cloud.

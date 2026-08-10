@@ -25,12 +25,15 @@ export function updateClouds(state: GameState, dt: number): void {
     }
 
     // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Lingering
-    // Spores — drifts away from wherever it was dropped, at a fixed speed
-    // independent of Homing's toward-the-threat drift above.
-    if (c.driftOutward && c.originX !== undefined && c.originY !== undefined) {
-      const a = Math.atan2(c.y - c.originY, c.x - c.originX); // atan2(0,0) === 0 — a stationary cloud drifts east, not NaN
-      c.x += Math.cos(a) * c.driftOutward * dt;
-      c.y += Math.sin(a) * c.driftOutward * dt;
+    // Spores — drifts at a fixed speed, independent of Homing's
+    // toward-the-threat drift above. 2026-08-10 bug fix: `driftAngle` is
+    // chosen once at spawn (weapons/poison.ts), not recomputed from the
+    // cloud's own position each tick — the old atan2(c.y - originY,
+    // c.x - originX) was always atan2(0, 0) = 0 at spawn, so every cloud
+    // drifted due east regardless of the extension's own "outward" claim.
+    if (c.driftOutward && c.driftAngle !== undefined) {
+      c.x += Math.cos(c.driftAngle) * c.driftOutward * dt;
+      c.y += Math.sin(c.driftAngle) * c.driftOutward * dt;
     }
 
     c.tickTimer -= dt;

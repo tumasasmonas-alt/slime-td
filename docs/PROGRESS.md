@@ -219,12 +219,12 @@ Decision 76 and `docs/plans/phase-6a3-loop-fixes.md`.
 
 | | |
 |---|---|
-| Tests | 637 passing (52 test files) — one known flake (`grid/veinField.test.ts`, unseeded RNG, unrelated to 6C), see BACKLOG |
+| Tests | 633 passing (52 test files) — one known flake (`grid/veinField.test.ts`, unseeded RNG, unrelated), see BACKLOG |
 | Source | 90 modules under `src/` (6C added `systems/shockwave.ts`, `systems/beam.ts`, `weapons/shockwave.ts`, `weapons/fission.ts`, `weapons/lance.ts`, `render/shockwave.ts`, `render/beam.ts`; touched `grid/clear.ts`, `types.ts`, `state.ts`, `tuning/weapons.ts`, `tuning/extensions.ts`, `tuning/gems.ts`, `systems/targeting.ts`, `systems/projectiles.ts`, `weapons/registry.ts`, `main.ts`) |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main`, committed and pushed |
-| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B + Phase 6C all complete.** The Phase 5 gate is next. |
+| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B + Phase 6C all complete**, plus a post-6C playtest fix pass (Decision 86). The Phase 5 gate is next. |
 | Blockers | **None.** Next is the Phase 5 gate, moved to run here for the third time (Decision 81) — ten weapons now compete for three deck slots. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
@@ -373,7 +373,7 @@ owner-playtested end to end the way Phase 4 was.
    Fission again** — it's the freshest context, and it's also where the
    annulus/capsule shape system and its two documented approximations
    (coagulant overlap for both new shapes) live.
-9. **`docs/DECISIONS.md` #23–#85** — the load-bearing calls in short form.
+9. **`docs/DECISIONS.md` #23–#86** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
    68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
@@ -386,8 +386,11 @@ owner-playtested end to end the way Phase 4 was.
    batch's own tests caught); 81–85 are Phase 6C (the third gate move,
    the standing four-extensions-per-weapon rule, `ClearOptions.shape`,
    the `'beam'` archetype and its gem legality, the Shockwave-vs-cone
-   design check). #47–85 are implementation-time findings, not from a
-   design session — see the notes at the top of each section.
+   design check); 86 is the post-6C playtest fix pass (three real bugs,
+   bundles cut, the XP-curve retune caught and reverted once before
+   shipping, and a deliberate threat-side difficulty increase). #47–86
+   are implementation-time findings, not from a design session — see the
+   notes at the top of each section.
 10. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
     **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
     design and the shipped 5B/5C economy and screen, including the
@@ -490,7 +493,79 @@ src/
 
 *Newest first.*
 
-### 2026-08-10 (latest) — Phase 6C: Lance, Shockwave, Fission Charge; the `ClearOptions.shape` system; the `'beam'` archetype. Decisions 81–85.
+### 2026-08-10 (latest) — Post-6C playtest: three real bugs, bundles cut, XP/difficulty pacing pass. Decision 86.
+
+**Full account:** `docs/DECISIONS.md` #86; no separate session record —
+small enough to carry entirely in the decision and BACKLOG entries.
+
+**The owner playtested Phase 6C immediately after it shipped** (same
+pattern as every batch this project has actually run — Decision 76, 80,
+etc.: real bugs surface from play, review alone doesn't find them) and
+reported four bugs plus a set of pacing/difficulty calls in one message,
+inviting questions but mostly just directing fixes.
+
+**Three real bugs, all root-caused before touching code:**
+1. **Lingering Spores (Caustic Cloud) always drifted due east.** Traced
+   to `systems/clouds.ts` computing direction as
+   `atan2(c.y - originY, c.x - originX)` — and a cloud's origin was
+   always identical to its own spawn position, so this was `atan2(0, 0)
+   = 0` every time, not a genuinely computed "outward" direction. The
+   code's own comment lampshaded the degenerate case without noticing it
+   was the *only* case that ever ran.
+2. **Cluster submunitions always landed in a fixed cross pattern** —
+   Fission Charge, Chain Fission, and Missile's Cluster Warhead all
+   share `spawnClusterSubmunitions`, which placed children at evenly
+   spaced, fixed-starting-angle positions every burst. The owner asked
+   specifically for **fully random** angles per child, not a
+   randomly-rotated-but-still-even ring — confirmed by a follow-up
+   message repeating the request when the first fix pass was still being
+   scoped.
+3. **Twin Canister (Caustic Cloud) always landed at the same fixed
+   +40/+40 diagonal offset.** Same shape of fix as #2 — a random angle
+   at the same distance.
+
+**Bundles cut entirely**, the owner's verdict after playing with them:
+*"sounded good on paper but not good."* Removed rather than gated off —
+`tuning/bundles.ts`, the `CardChoice` variant, the pool builder, both
+call sites, and the render branch are all gone, per CLAUDE.md's own
+"delete rather than leave dead code" convention. `CARDS_PER_DRAW`
+dropped 4 → 3 the same session, a separate but related legibility call.
+
+**The XP curve tightened again**, and this is where a first attempt was
+caught and reverted before shipping: raising a flat multiplier on the
+whole curve looked like the obvious fix, but it would have raised
+`xpToNext(1)` too — breaking Decision 61's explicit guarantee that the
+early rush survives any retune *by construction*
+(`^(level - 1)` is exactly 1 at level 1 no matter what `XP_GROWTH` is
+set to). `XP_GROWTH` alone (1.08 → 1.12) is the only lever that doesn't
+reopen that guarantee, and the test suite's own pinned
+`xpToNext(1) === 19` assertion is what caught the first attempt.
+
+**A deliberate, threat-side-only difficulty pass**, per the owner's
+direct request ("make the slime overall more difficult"): coagulant
+travel speed and arrival damage, Infection Event frequency, ambient
+growth rate, and core contact damage all raised ~30-40%. Every constant
+touched already carried a "not finalized, balance-pass knob" comment
+from when the 3C playtest gate tuned it *down* — this reverses that
+tuning pass rather than inventing a new mechanism. No weapon damage or
+player-side stat was touched.
+
+**Fission Charge recolored to blue**, distinct from Shockwave's cyan, so
+the two read as different weapons on screen.
+
+**Verified:** typecheck clean, build clean, 633/633 tests (7 bundle
+tests removed with the mechanism, 3 new regression guards added —
+guarding specifically against the *class* of bug found here, not just
+the instance: two clouds with different `driftAngle` values must end up
+in different places; repeated casts of the same extension must not all
+pick the same angle). **Not verified live in the browser** — the
+owner's explicit call this session, trusting the automated suite given
+every change here is either a pure tuning constant or already covered
+by a new regression test written specifically for it.
+
+633/633 tests, typecheck clean, build clean. **Committed and pushed.**
+
+### 2026-08-10 — Phase 6C: Lance, Shockwave, Fission Charge; the `ClearOptions.shape` system; the `'beam'` archetype. Decisions 81–85.
 
 **Full account:** `docs/sessions/2026-08-10-phase-6c-lance-shockwave-fission.md`,
 plus `docs/plans/phase-6c-lance-shockwave-fission.md` (the umbrella),

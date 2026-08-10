@@ -19,7 +19,10 @@ const MULTISHOT_OFFSET_FRACTION = 0.6;
 // cloud; Cloud Radius (cloudRadius) is pure `mods`, no code here.
 const CORROSIVE_SHRED: readonly [number, number, number] = [0.3, 0.45, 0.6];
 const LINGERING_DRIFT: readonly [number, number, number] = [12, 18, 24];
-const TWIN_CANISTER_OFFSET = 40;
+// 2026-08-10 bug fix: was a fixed +40/+40 diagonal offset every time —
+// the owner's report ("spread the drops randomly"). Now a random angle
+// at a fixed distance from the target.
+const TWIN_CANISTER_DIST = 40;
 const TWIN_CANISTER_RADIUS_MULT = 0.6;
 const TWIN_CANISTER_LIFE_MULT = 2;
 
@@ -59,8 +62,7 @@ export const poisonPipeline: WeaponPipeline = {
         homing,
         armorShred,
         driftOutward,
-        originX: x,
-        originY: y,
+        driftAngle: rand(0, Math.PI * 2),
         ...opts,
       });
     }
@@ -71,8 +73,9 @@ export const poisonPipeline: WeaponPipeline = {
     // which just makes more of the same cloud).
     const twinLvl = extensionLevel(state, 'poison', 'twinCanister');
     if (twinLvl > 0) {
-      const tx = target.x + TWIN_CANISTER_OFFSET;
-      const ty = target.y + TWIN_CANISTER_OFFSET;
+      const twinAngle = rand(0, Math.PI * 2);
+      const tx = target.x + Math.cos(twinAngle) * TWIN_CANISTER_DIST;
+      const ty = target.y + Math.sin(twinAngle) * TWIN_CANISTER_DIST;
       const twinLife = life * TWIN_CANISTER_LIFE_MULT;
       state.clouds.push({
         x: tx,
@@ -87,8 +90,7 @@ export const poisonPipeline: WeaponPipeline = {
         homing,
         armorShred,
         driftOutward,
-        originX: tx,
-        originY: ty,
+        driftAngle: rand(0, Math.PI * 2),
         ...opts,
       });
     }

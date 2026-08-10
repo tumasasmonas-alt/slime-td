@@ -2543,6 +2543,103 @@ errors throughout.
 
 **Committed and pushed.**
 
+## Post-6C playtest — three real bugs, bundles cut, and a difficulty/pacing pass
+
+> Decision 86 came from the owner's live playtest of Phase 6C immediately
+> after it shipped, 2026-08-10 — the same pattern as 6A-3 (Decision 76)
+> and every other batch this project has actually run: real bugs surface
+> from play, not review. Reported as a flat list; grouped here by kind.
+
+**86. Three real bugs found by playtesting, all fixed the same session,
+plus bundles cut and a deliberate difficulty pass.** 📋 *2026-08-10.*
+
+**Bug — Lingering Spores (Caustic Cloud) always drifted due east.**
+`systems/clouds.ts` derived drift direction as
+`atan2(c.y - originY, c.x - originX)`, and a cloud's `originX`/`originY`
+were always set to its own spawn `x`/`y` — so this was `atan2(0, 0) = 0`
+at the exact moment it mattered, every single time. The code's own
+comment even lampshaded the edge case (*"a stationary cloud drifts
+east, not NaN"*) without noticing the edge case was the only case that
+ever ran. Fixed by choosing a random `driftAngle` once at spawn
+(`weapons/poison.ts`) and holding it fixed, rather than re-deriving
+direction from a position that never differs from the origin.
+`originX`/`originY` are deleted from `CausticCloud` — nothing else read
+them.
+
+**Bug — cluster submunitions (Fission Charge, Chain Fission, and
+Missile's Cluster Warhead) always landed in the same fixed pattern.**
+`spawnClusterSubmunitions` (`systems/projectiles.ts`) placed children at
+`(k / count) * 2π` — evenly spaced starting at a fixed angle every
+single burst, reading on screen as a static cross/star shape rather than
+a scatter. Fixed to an independently random angle per child, per the
+owner's explicit call ("I want the subcharges and bounces to be random
+not fixed pattern") over the alternative (a randomly-rotated but still
+evenly-spaced ring) — some overlap between children is accepted as the
+honest cost of a genuinely random scatter. Shared by all three
+consumers; none of the existing tests asserted exact positions, so
+nothing else needed updating for it to apply everywhere at once.
+
+**Bug — Twin Canister's second cloud always landed at the same
+diagonal offset.** A flat `+40/+40` from the target, every time. Same
+fix shape as the cluster bug above: a random angle at the same fixed
+distance.
+
+**Content call — support gem bundles removed from the level-up pool
+entirely.** *"Sounded good on paper but not good"* — the owner's verdict
+after playing with them live. `tuning/bundles.ts` is deleted, along with
+`CardChoice`'s `'bundle'` variant, `buildBundlePool`, `BUNDLES_PER_DRAW`,
+the bundle-interval branch in `pickCards`, the bundle case in
+`applyCardChoice`, and the bundle rendering branch in
+`ui/upgradeCards.ts` — removed outright rather than gated off, since
+nothing else in the game reads a bundle once the level-up draw stops
+offering one (CLAUDE.md's own convention: delete rather than leave dead
+code behind).
+
+**Pacing call — the level-up draw shrinks from 4 cards to 3**
+(`CARDS_PER_DRAW`, `systems/cards.ts`) — a shorter, more legible draw,
+settled the same session as the bundle removal.
+
+**Pacing call — the XP curve tightens again.** `XP_GROWTH`
+(`tuning/xp.ts`) raised from 1.08 to 1.12, after a live playtest still
+found "too many levels" even with 6A-3's geometric factor in place
+(Decision 76). **A flat multiplier on the whole curve was tried first
+and reverted** — it would have raised `xpToNext(1)` too, which breaks
+Decision 61's explicit guarantee that the early rush survives any
+retune *by construction* (`^(level - 1)` evaluates to exactly 1 at
+level 1 regardless of what `XP_GROWTH` itself is set to). `XP_GROWTH`
+alone is the only lever that tightens the curve without reopening that
+guarantee — caught by the test suite's own pinned `xpToNext(1) === 19`
+assertion before it shipped.
+
+**Difficulty call — the slime made overall harder**, the owner's direct
+request: coagulant travel speed (`COAGULANT_SPEED_K`/`MIN`/`MAX`,
+`tuning/coagulants.ts`) and arrival damage
+(`COAGULANT_ARRIVAL_DAMAGE_MULT`) both raised ~30-40%; Infection Event
+frequency (`EVENT_INTERVAL_BASE`/`FLOOR`, `tuning/events.ts`) shortened
+~30%, ramp shape unchanged; ambient growth rate and core contact damage
+(`AMBIENT_BASE`, `CREEP_RAMP`, `CONTACT_SCALE`, `tuning/growth.ts`) all
+raised ~30%. Every one of these already carried a "not finalized,
+balance-pass knob" comment from when it was first tuned down during the
+3C playtest gate — this is the same knob, turned the other way, not a
+new mechanism. No weapon damage or player-side stat was touched; this is
+a threat-side-only pass.
+
+**Content call — Fission Charge recolored to blue**, distinct from
+Shockwave's lighter cyan (`#7fd8ff`) so the two don't read as the same
+weapon on screen when both are equipped.
+
+**Verified:** typecheck clean, build clean, 633/633 tests (down from 637
+— seven bundle-specific tests removed with the mechanism, three new
+regression guards added: two different `driftAngle` values produce
+genuinely different cloud positions, repeated Lingering Spores casts
+don't all pick the same angle, repeated Twin Canister casts don't all
+land at the same offset). **Not verified live in the browser this
+session** — the owner's explicit call, trusting the test suite and
+typecheck given the changes are either pure-function tuning constants or
+already covered by the new regression tests.
+
+**Committed and pushed.**
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

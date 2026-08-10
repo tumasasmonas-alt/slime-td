@@ -1,5 +1,4 @@
 import type { ExtensionInstance, GameState } from '../state';
-import { BUNDLE_INTERVAL, GEM_BUNDLES, type GemBundle } from '../tuning/bundles';
 import { CORE_GEM_KEYS, type CoreGemKey } from '../tuning/coreGems';
 import { EXTENSION_MAX_LEVEL, EXTENSIONS_BY_WEAPON, type ExtensionKey } from '../tuning/extensions';
 import { ALL_GEM_KEYS } from '../tuning/gems';
@@ -20,10 +19,13 @@ import type { GemKey, WeaponKey } from '../types';
 // gone too — it existed only for the legacy damage/atkSpeed passives,
 // which are deleted now that Amplifier/Overclock exist as real gems.
 //
-// Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S8): 'bundle' is the
-// pacing beat the level-up loop had none of — every BUNDLE_INTERVAL
-// levels, the normal draw is replaced by three thematic packages instead
-// of four atoms, and picking one grants every gem it holds.
+// Phase 6A-2 introduced 'bundle' — every BUNDLE_INTERVAL levels, the
+// normal draw was replaced by three thematic packages instead of four
+// atoms, picking one granting every gem it held. **Removed 2026-08-10**
+// per the owner's live playtest verdict: "sounded good on paper but not
+// good." `tuning/bundles.ts` and every reference to it are gone rather
+// than gated off — nothing else in the game reads a bundle once the
+// level-up draw stops offering one.
 //
 // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S3): the pool stopped
 // gating gems/core gems on socket availability or ownership at all, per
@@ -45,7 +47,6 @@ export type CardChoice =
   | { kind: 'extension'; weaponKey: WeaponKey; extKind: ExtensionKey; nextLevel: 1 | 2 | 3 }
   | { kind: 'gem'; key: GemKey }
   | { kind: 'coreGem'; key: CoreGemKey }
-  | { kind: 'bundle'; bundle: GemBundle }
   | { kind: 'heal' };
 
 // The extension instance for (weaponKey, extKind), wherever it currently
@@ -106,15 +107,6 @@ export function buildCoreGemPool(state: GameState): CardChoice[] {
   return CORE_GEM_KEYS.filter((key) => !owned.has(key)).map((key) => ({ kind: 'coreGem', key }));
 }
 
-// Offered unconditionally (Phase 6A-3 S3) — it used to require every gem
-// a package holds to have a legal home; now a bundle's gems bank the same
-// way a standalone gem pick does, so there's nothing left to gate on.
-// `state` stays a parameter for symmetry with the other pool builders
-// even though this one no longer reads it.
-export function buildBundlePool(_state: GameState): CardChoice[] {
-  return GEM_BUNDLES.map((bundle) => ({ kind: 'bundle' as const, bundle }));
-}
-
 // Unbiased Fisher-Yates — sort(() => Math.random() - 0.5) is not a
 // uniform permutation and would have corrupted the pool-dilution
 // measurement the Phase 5B gate exists to take (arsenal plan S13 audit
@@ -128,22 +120,15 @@ export function shuffled<T>(arr: T[]): T[] {
   return out;
 }
 
-export const CARDS_PER_DRAW = 4;
-
-export const BUNDLES_PER_DRAW = 3;
+// 2026-08-10: lowered from 4, the owner's call during the same live
+// playtest that removed bundles — a shorter, more legible draw.
+export const CARDS_PER_DRAW = 3;
 
 // Core gems get one guaranteed slot every second level-up rather than a
 // separate draw or a slot in every draw (docs/plans/phase-5b-framework.md
 // S4, settled 2026-08-08) — a separate draw goes dead once the 3 sockets
 // fill, and a slot in every draw permanently spends a quarter of the pool
 // on defence.
-//
-// Phase 6A-2: a bundle level (docs/plans/phase-6a2-behaviour-gems.md S8)
-// pre-empts both the core-gem cadence and the normal weapon-side draw for
-// that level-up — one special beat, not stacked on top of the ordinary
-// one. Falls through to the ordinary draw if no bundle is currently
-// legal (e.g. very early, before enough sockets exist for a whole
-// package), so a bundle level is never a guaranteed dead draw.
 //
 // Phase 6A-3: the `{ kind: 'heal' }` fallback below stays as a genuine
 // last resort, but is expected to become unreachable in practice now
@@ -152,11 +137,6 @@ export const BUNDLES_PER_DRAW = 3;
 // owned) is exhausted, which needs no weapons equipped at all today
 // since gems are always offered regardless.
 export function pickCards(state: GameState): CardChoice[] {
-  if (state.tower.level % BUNDLE_INTERVAL === 0) {
-    const bundles = shuffled(buildBundlePool(state)).slice(0, BUNDLES_PER_DRAW);
-    if (bundles.length > 0) return bundles;
-  }
-
   const weaponSide = shuffled(buildWeaponSidePool(state));
   const wantsCoreSlot = state.tower.level % 2 === 0;
   const coreCandidates = wantsCoreSlot ? shuffled(buildCoreGemPool(state)) : [];
@@ -177,7 +157,7 @@ export function pickCards(state: GameState): CardChoice[] {
 //
 // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S4, S6): 'extension' and
 // 'coreGem' no longer apply their effect immediately — they grant a
-// banked instance, exactly like 'gem' and 'bundle' already did. The
+// banked instance, exactly like 'gem' already did. The
 // *caller* (ui/upgradeCards.ts) opens the inventory/socket picker
 // immediately afterward for every kind that just banked something, same
 // as it already did for gems — a pick is never invisible without this
@@ -197,10 +177,6 @@ export function applyCardChoice(state: GameState, choice: CardChoice): void {
     }
   } else if (choice.kind === 'gem') {
     state.gemInventory.push({ id: state.nextGemId++, kind: choice.key });
-  } else if (choice.kind === 'bundle') {
-    for (const key of choice.bundle.gems) {
-      state.gemInventory.push({ id: state.nextGemId++, kind: key });
-    }
   } else if (choice.kind === 'coreGem') {
     const owned = state.coreGems.includes(choice.key) || state.coreGemInventory.some((c) => c.kind === choice.key);
     if (!owned) state.coreGemInventory.push({ id: state.nextGemId++, kind: choice.key }); // defensive — buildCoreGemPool already excludes owned kinds

@@ -3,7 +3,7 @@ import { clearAt } from '../grid/clear';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../tuning/world';
-import { dist, lerp } from '../util/math';
+import { dist, lerp, rand } from '../util/math';
 import { spawnChainFx } from './chainFx';
 import { findCoagulantHit } from './coagulants';
 import { nearestFrontierPoint } from './frontier';
@@ -395,7 +395,14 @@ function spawnClusterSubmunitions(p: MissileProjectile): MissileProjectile[] {
   const grantsAnotherSplit = p.chainFissionLvl !== undefined && (p.fissionGen ?? 0) === 0;
   const children: MissileProjectile[] = [];
   for (let k = 0; k < count; k++) {
-    const a = (k / count) * Math.PI * 2;
+    // 2026-08-10 bug fix: was `(k / count) * Math.PI * 2` — evenly spaced
+    // starting at a fixed angle every single burst, so every cluster (and
+    // every Chain Fission re-split) landed in the exact same "cross"
+    // shape relative to the world. Independently random per child, per
+    // the owner's report ("I want the subcharges and bounces to be
+    // random not fixed pattern") — some overlap between children is
+    // possible and accepted, matching how scattered a real burst reads.
+    const a = rand(0, Math.PI * 2);
     children.push({
       ...p,
       dmg: p.dmg * powerShare,

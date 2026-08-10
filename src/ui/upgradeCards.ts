@@ -84,15 +84,6 @@ function describeCard(choice: CardChoice): { icon: string; name: string; rank: s
   if (choice.kind === 'gem') {
     return { icon: gemIcon(choice.key), name: gemName(choice.key), rank: 'GEM', desc: gemGenericDesc(choice.key) };
   }
-  if (choice.kind === 'bundle') {
-    const names = choice.bundle.gems.map((g) => gemName(g)).join(' + ');
-    return {
-      icon: gemIcon(choice.bundle.gems[0]!),
-      name: choice.bundle.name,
-      rank: 'BUNDLE',
-      desc: `Grants all of: ${names}.`,
-    };
-  }
   if (choice.kind === 'coreGem') {
     const def = PASSIVE_DEFS[choice.key];
     return { icon: def.icon, name: def.name, rank: 'CORE GEM', desc: def.desc };
@@ -106,8 +97,8 @@ function selectCard(refs: CardRefs, state: GameState, choice: CardChoice): void 
   refs.overlay.classList.add('hidden');
   if (choice.kind !== 'heal') {
     // S10 Q1, extended by Phase 6A-3 S4 — every kind that just banked an
-    // instance (gem, bundle, and now extension/coreGem too) drops
-    // straight into the socket picker rather than re-showing cards or
+    // instance (gem, extension, coreGem) drops straight into the socket
+    // picker rather than re-showing cards or
     // silently unpausing; the inventory close handler (main.ts) already
     // knows how to resume whichever pending level-ups are left once the
     // player closes it. 'heal' is the only kind left with nothing to

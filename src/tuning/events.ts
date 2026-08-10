@@ -32,8 +32,12 @@ export const VEIN_WEIGHT = 0.6;
 // (tuning/growth.ts): decoupled from the tier table. A straight lerp to
 // a floor rather than a breakpoint table, since there's no existing
 // curve here to preserve.
-const EVENT_INTERVAL_BASE = 26;
-const EVENT_INTERVAL_FLOOR = 10;
+// 2026-08-10: lowered (base 26→18, floor 10→7) — the owner's call,
+// "increase event happening speed" as part of a broader difficulty
+// pass. Ramp time is untouched, so the relative escalation shape over a
+// run is preserved; only the absolute cadence at both ends moved.
+const EVENT_INTERVAL_BASE = 18;
+const EVENT_INTERVAL_FLOOR = 7;
 const EVENT_INTERVAL_RAMP_TIME = 420;
 
 export function eventSpawnInterval(elapsedSeconds: number): number {

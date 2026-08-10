@@ -286,14 +286,20 @@ export interface CausticCloud {
 
   // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Corrosive —
   // applied on every damage tick, same as the RESOLVE fields above.
-  // Lingering Spores — outward drift speed (px/s), away from wherever the
-  // cloud was dropped, distinct from Homing's toward-the-threat drift
-  // above; the two never combine meaningfully so nothing gates one on the
-  // other's absence.
+  // Lingering Spores — outward drift speed (px/s), distinct from Homing's
+  // toward-the-threat drift above; the two never combine meaningfully so
+  // nothing gates one on the other's absence.
+  //
+  // 2026-08-10 bug fix: a cloud has no origin OTHER than itself at spawn
+  // time, so "away from where it was dropped" has no defined direction —
+  // the original implementation computed it as atan2(c.y - originY,
+  // c.x - originX), which is atan2(0, 0) = 0 at the moment of spawn,
+  // making every cloud drift due east forever, not actually outward.
+  // `driftAngle` is chosen once, randomly, at spawn (weapons/poison.ts)
+  // and held fixed — originX/originY are no longer needed.
   armorShred?: number;
   driftOutward?: number;
-  originX?: number;
-  originY?: number;
+  driftAngle?: number;
 }
 
 export interface Particle {

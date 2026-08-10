@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freshState } from '../state';
-import { BUNDLE_INTERVAL, GEM_BUNDLES } from '../tuning/bundles';
-import { applyCardChoice, buildBundlePool, buildCoreGemPool, buildWeaponSidePool, pickCards, shuffled, type CardChoice } from './cards';
+import { applyCardChoice, buildCoreGemPool, buildWeaponSidePool, CARDS_PER_DRAW, pickCards, shuffled, type CardChoice } from './cards';
 
 describe('shuffled', () => {
   it('returns a permutation — same elements, same length', () => {
@@ -235,12 +234,12 @@ describe('pickCards — core-gem cadence (settled 2026-08-08: every second level
     expect(choices.length).toBeGreaterThan(0);
   });
 
-  it('draws up to 4 cards total', () => {
+  it('draws up to CARDS_PER_DRAW cards total', () => {
     const state = freshState();
     state.tower.level = 2;
     state.weapons.bolt = 1;
     const choices = pickCards(state);
-    expect(choices.length).toBeLessThanOrEqual(4);
+    expect(choices.length).toBeLessThanOrEqual(CARDS_PER_DRAW);
   });
 });
 
@@ -257,13 +256,6 @@ describe('Phase 6A-3 — the pool never goes dead on socket exhaustion (the play
     state.weapons.bolt = 0; // socketCount(0) = 1
     state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] };
     expect(buildWeaponSidePool(state).some((c) => c.kind === 'extension' && c.weaponKey === 'bolt')).toBe(true);
-  });
-
-  it('still offers bundles with zero free sockets anywhere', () => {
-    const state = freshState();
-    state.weapons.bolt = 0;
-    state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'amplifier' }] };
-    expect(buildBundlePool(state).length).toBeGreaterThan(0);
   });
 
   it('still offers core gem cards once all 3 sockets are full, as long as a kind is unowned', () => {
@@ -381,73 +373,5 @@ describe('applyCardChoice', () => {
     state.tower.hp = 10;
     applyCardChoice(state, { kind: 'heal' });
     expect(state.tower.hp).toBe(state.tower.maxHp);
-  });
-
-  // Phase 6A-2 (docs/plans/phase-6a2-behaviour-gems.md S8): a bundle
-  // grants every gem it holds in one pick.
-  it('bundle: grants an instance of every gem in the package', () => {
-    const state = freshState();
-    const before = state.nextGemId;
-    applyCardChoice(state, {
-      kind: 'bundle',
-      bundle: { name: 'Test Package', gems: ['multishot', 'pierce', 'velocity'] },
-    });
-    expect(state.gemInventory).toEqual([
-      { id: before, kind: 'multishot' },
-      { id: before + 1, kind: 'pierce' },
-      { id: before + 2, kind: 'velocity' },
-    ]);
-  });
-});
-
-// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S3): supersedes the
-// pre-6A-3 legal-home filtering entirely — a bundle's gems bank the same
-// way a standalone gem pick does now, so there's nothing left to gate on.
-describe('buildBundlePool — Phase 6A-3: offered unconditionally, socket/ownership-blind', () => {
-  it('offers every bundle in the catalogue regardless of equipped weapons', () => {
-    const state = freshState();
-    const names = buildBundlePool(state).map((c) => (c.kind === 'bundle' ? c.bundle.name : null));
-    expect(names).toHaveLength(GEM_BUNDLES.length);
-  });
-
-  it('offers a bundle even when a gem it holds has nowhere legal to go', () => {
-    const state = freshState();
-    state.weapons.immolation = 1; // 'ring' — Velocity refuses it, and no other weapon is equipped
-    const names = buildBundlePool(state).map((c) => (c.kind === 'bundle' ? c.bundle.name : null));
-    expect(names).toContain('Ballistics Package'); // needs Velocity — offered anyway now
-  });
-});
-
-describe('pickCards — bundle levels (Phase 6A-2, revised by 6A-3)', () => {
-  it('draws bundles instead of the normal pool on a bundle-interval level', () => {
-    const state = freshState();
-    state.tower.level = BUNDLE_INTERVAL;
-    state.weapons.bolt = 5;
-
-    const choices = pickCards(state);
-
-    expect(choices.length).toBeGreaterThan(0);
-    for (const c of choices) expect(c.kind).toBe('bundle');
-  });
-
-  // Phase 6A-3: supersedes the pre-6A-3 "falls back when no bundle is
-  // legal" test — bundles no longer check legality, so this scenario
-  // (which used to force a fallback) now still draws bundles.
-  it('draws bundles on a bundle level even with no weapons equipped at all', () => {
-    const state = freshState();
-    state.tower.level = BUNDLE_INTERVAL;
-    const choices = pickCards(state);
-    expect(choices.length).toBeGreaterThan(0);
-    for (const c of choices) expect(c.kind).toBe('bundle');
-  });
-
-  it('draws the ordinary pool on a non-bundle level', () => {
-    const state = freshState();
-    state.tower.level = BUNDLE_INTERVAL + 1;
-    state.weapons.bolt = 5;
-
-    const choices = pickCards(state);
-
-    expect(choices.some((c) => c.kind === 'bundle')).toBe(false);
   });
 });

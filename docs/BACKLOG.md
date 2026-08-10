@@ -20,6 +20,51 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
+### ✅ Post-6C playtest fixes — shipped and committed, 2026-08-10.
+
+The owner playtested Phase 6C immediately after it shipped and found
+three real bugs, plus made three content/pacing/difficulty calls in the
+same pass. Decision 86.
+
+**Three bugs, all fixed:**
+- **Lingering Spores always drifted due east**, never actually outward —
+  its direction was computed as `atan2(0, 0)` every time (a cloud's
+  "origin" was always identical to its own position at spawn). Fixed to
+  a random `driftAngle` chosen once at spawn and held fixed.
+- **Cluster submunitions (Fission Charge, Chain Fission, Missile's
+  Cluster Warhead) always landed in the same fixed cross pattern** —
+  `spawnClusterSubmunitions` placed children at evenly-spaced, fixed
+  starting angles every burst. Fixed to a fully random angle per child,
+  the owner's explicit call over a randomly-rotated-but-still-even
+  alternative.
+- **Twin Canister always landed at the same fixed diagonal offset.**
+  Fixed to a random angle at the same distance.
+
+**Bundles removed entirely.** *"Sounded good on paper but not good"* —
+`tuning/bundles.ts` and every reference to it (the `CardChoice` variant,
+the pool builder, the pick-cards branch, the apply-choice case, the
+render branch) are deleted, not gated off. `CARDS_PER_DRAW` also dropped
+4 → 3, same session.
+
+**XP curve tightened again** (`XP_GROWTH` 1.08 → 1.12) — 6A-3's fix
+wasn't enough on its own. A flat multiplier on the whole curve was tried
+and reverted because it broke Decision 61's level-1 guarantee; `XP_GROWTH`
+alone is the only lever that doesn't.
+
+**A deliberate, threat-side-only difficulty pass** — coagulant speed and
+arrival damage, Infection Event frequency, ambient growth rate, and core
+contact damage all raised ~30-40%, per the owner's direct request to
+make the slime "overall more difficult." No weapon or player-side stat
+touched.
+
+**Fission Charge recolored to blue**, distinct from Shockwave's cyan.
+
+633/633 tests (net −4: 7 bundle tests removed, 3 new regression guards
+added), typecheck clean, build clean. **Not verified live in the
+browser this session** — the owner's call, trusting the automated suite
+given the change shapes (pure tuning constants, or already covered by
+the new regression tests).
+
 ### ✅ Phase 6C (6C-1 + 6C-2) — shipped and committed, 2026-08-10.
 
 Full account: `docs/plans/phase-6c-lance-shockwave-fission.md` (the

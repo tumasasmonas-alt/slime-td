@@ -92,7 +92,7 @@ describe('updateClouds', () => {
   // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Lingering
   // Spores' outward drift, distinct from Homing's toward-the-threat drift.
   describe('driftOutward (Lingering Spores)', () => {
-    it('drifts a cloud away from its own origin over time', () => {
+    it('drifts a cloud along its own driftAngle over time', () => {
       const state = freshState();
       state.grid = makeTestGrid();
       state.clouds.push({
@@ -106,8 +106,7 @@ describe('updateClouds', () => {
         tickTimer: 5,
         bubbleSeeds: [],
         driftOutward: 20,
-        originX: 300,
-        originY: 300,
+        driftAngle: 0,
       });
 
       updateClouds(state, 0.5);
@@ -115,6 +114,51 @@ describe('updateClouds', () => {
       const c = state.clouds[0]!;
       const distFromOrigin = Math.hypot(c.x - 300, c.y - 300);
       expect(distFromOrigin).toBeGreaterThan(0);
+    });
+
+    // 2026-08-10 bug fix regression guard: the original implementation
+    // derived direction from atan2(c.y - originY, c.x - originX), which
+    // is atan2(0, 0) = 0 at spawn — every cloud drifted due east
+    // regardless of the extension's own "outward" claim. Two clouds with
+    // different driftAngle values must end up in genuinely different
+    // places, not just "moved."
+    it('two clouds with different driftAngle values drift in different directions', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.clouds.push(
+        {
+          x: 300,
+          y: 300,
+          radius: 30,
+          life: 3.4,
+          maxLife: 3.4,
+          dmgPerSec: 10,
+          color: '#8aff4d',
+          tickTimer: 5,
+          bubbleSeeds: [],
+          driftOutward: 20,
+          driftAngle: 0, // east
+        },
+        {
+          x: 300,
+          y: 300,
+          radius: 30,
+          life: 3.4,
+          maxLife: 3.4,
+          dmgPerSec: 10,
+          color: '#8aff4d',
+          tickTimer: 5,
+          bubbleSeeds: [],
+          driftOutward: 20,
+          driftAngle: Math.PI, // west
+        },
+      );
+
+      updateClouds(state, 0.5);
+
+      const [east, west] = state.clouds;
+      expect(east!.x).toBeGreaterThan(300);
+      expect(west!.x).toBeLessThan(300);
     });
 
     it('does not drift a cloud with no driftOutward set (no regression)', () => {

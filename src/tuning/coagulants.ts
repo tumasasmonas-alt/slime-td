@@ -168,9 +168,13 @@ export function coagulantRadius(mass: number): number {
 // K/MIN/MAX trio is scaled uniformly, so the inverse-sqrt *shape* (the
 // mass-to-speed curve, "big mass, slow movement") is unchanged — only
 // the absolute speeds it produces are smaller.
-const COAGULANT_SPEED_K = 60;
-const COAGULANT_SPEED_MIN = 4;
-const COAGULANT_SPEED_MAX = 22.5;
+//
+// 2026-08-10: raised ~30% across the board — the owner's call, "increase
+// slime arriving speed" as part of a broader difficulty pass. Same
+// uniform-scaling rule as the cut above, applied in the other direction.
+const COAGULANT_SPEED_K = 78;
+const COAGULANT_SPEED_MIN = 5;
+const COAGULANT_SPEED_MAX = 29;
 
 export function coagulantSpeed(mass: number): number {
   return clamp(COAGULANT_SPEED_K / Math.sqrt(mass), COAGULANT_SPEED_MIN, COAGULANT_SPEED_MAX);
@@ -183,7 +187,11 @@ export function coagulantSpeed(mass: number): number {
 // depositMass, which grows the deposit area outward rather than
 // clipping at the perimeter disc, so mass is never destroyed on
 // arrival — only combat kills destroy mass).
-export const COAGULANT_ARRIVAL_DAMAGE_MULT = 0.1;
+//
+// 2026-08-10: raised from 0.1, same difficulty pass as the speed bump
+// above — a faster-arriving coagulant should also hurt more when it
+// gets there, not just get there sooner.
+export const COAGULANT_ARRIVAL_DAMAGE_MULT = 0.14;
 
 // Rule 2 — killing is a sink; death yields XP (via the existing
 // clearAt/gem pipeline, since coagulant damage flows through the same

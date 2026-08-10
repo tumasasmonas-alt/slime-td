@@ -24,7 +24,16 @@ const XP_QUADRATIC = 0.45;
 // "the intended early rush survives" holds by construction, not by luck.
 // First-draft, unmeasured (the owner declined the measurement pass in
 // favour of shipping now) — expect a retune after a playtest.
-const XP_GROWTH = 1.08;
+//
+// 2026-08-10: raised again, from 1.08, after a live playtest still found
+// "too many levels" even with the geometric factor in place. This is
+// deliberately the ONLY lever pulled to slow the curve down — a flat
+// multiplier on `base` was tried and reverted, because it would have
+// scaled xpToNext(1) too, and Decision 61's whole point is that the
+// early rush survives any retune *by construction*: `^(level-1)`
+// evaluates to 1 at level 1 regardless of what XP_GROWTH itself is, so
+// only XP_GROWTH can move without re-opening that guarantee.
+const XP_GROWTH = 1.12;
 
 export function xpToNext(level: number): number {
   const base = XP_BASE + XP_LINEAR * level + XP_QUADRATIC * level * level;

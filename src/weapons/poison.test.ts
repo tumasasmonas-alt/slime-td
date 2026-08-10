@@ -94,7 +94,7 @@ describe('updatePoisonWeapon', () => {
       expect(state.clouds[0]!.armorShred).toBeCloseTo(0.45, 5);
     });
 
-    it('Lingering Spores sets driftOutward and an origin on the cloud', () => {
+    it('Lingering Spores sets driftOutward and a driftAngle on the cloud', () => {
       const state = freshState();
       state.grid = makeTestGrid();
       state.tower.x = 150;
@@ -108,8 +108,34 @@ describe('updatePoisonWeapon', () => {
 
       const cloud = state.clouds[0]!;
       expect(cloud.driftOutward).toBe(12);
-      expect(cloud.originX).toBe(cloud.x);
-      expect(cloud.originY).toBe(cloud.y);
+      expect(cloud.driftAngle).toBeGreaterThanOrEqual(0);
+      expect(cloud.driftAngle).toBeLessThan(Math.PI * 2);
+    });
+
+    // 2026-08-10 bug fix regression guard — see systems/clouds.test.ts's
+    // matching test for the full story: the old implementation derived
+    // direction from the cloud's own position relative to an "origin"
+    // that was always identical to it at spawn, so every cloud drifted
+    // due east no matter what. Firing the weapon twice must not produce
+    // the same angle twice in a row (astronomically unlikely by chance).
+    it('Lingering Spores does not give every cloud the same drift angle', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.poison = 1;
+      state.weaponSockets.poison = { extensions: [{ id: 1, weaponKey: 'poison', kind: 'lingeringSpores', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      const angles = new Set<number>();
+      for (let i = 0; i < 20; i++) {
+        state.weaponTimers.poison = 0;
+        updatePoisonWeapon(state, 0.016);
+        angles.add(state.clouds[state.clouds.length - 1]!.driftAngle!);
+      }
+
+      expect(angles.size).toBeGreaterThan(1);
     });
 
     it('Lingering Spores extends the cloud’s lifetime (mods channel)', () => {
@@ -152,6 +178,31 @@ describe('updatePoisonWeapon', () => {
       const [first, second] = state.clouds;
       expect(second!.radius).toBeLessThan(first!.radius);
       expect(second!.life).toBeGreaterThan(first!.life);
+    });
+
+    // 2026-08-10 bug fix: was a fixed +40/+40 diagonal offset every single
+    // shot — the owner's report ("spread the drops randomly"). Firing
+    // twice must not land the second canister in the same spot twice.
+    it('Twin Canister lands at a different offset each shot', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.poison = 1;
+      state.weaponSockets.poison = { extensions: [{ id: 1, weaponKey: 'poison', kind: 'twinCanister', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      const positions = new Set<string>();
+      for (let i = 0; i < 20; i++) {
+        state.weaponTimers.poison = 0;
+        state.clouds = [];
+        updatePoisonWeapon(state, 0.016);
+        const second = state.clouds[1]!;
+        positions.add(`${second.x.toFixed(2)},${second.y.toFixed(2)}`);
+      }
+
+      expect(positions.size).toBeGreaterThan(1);
     });
 
     it('Cloud Radius raises the cloud’s radius (mods channel)', () => {
