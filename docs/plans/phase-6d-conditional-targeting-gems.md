@@ -156,7 +156,149 @@ the weapon is still bad for everyone who doesn't roll it. §2's tuning fix
 must land regardless; Proximity should make aura builds *exciting*, not be
 the thing that makes them *viable*.
 
-## 4. The Targeting gems — all eight hold up
+## 3a. What the nine Conditional gems actually do
+
+Asked directly by the owner. Proposed numbers are first-draft, sized
+against the existing gems (Amplifier is +45% damage) and expected to move.
+
+| Gem | What it does | The condition, concretely |
+|---|---|---|
+| **Penetration** | Subtracts a flat amount from the target's armour before damage applies | Always on, but only *matters* against armoured targets. With §5's armour rise this goes from nice to essential. Decision 44 called it "obvious and load-bearing." |
+| **Virulence** | More damage against high-**maturity** ground | Maturity is the 4A field that hardens tissue into the scar ring. This is the generic answer to "the scar ring is unkillable" — the thing Solvent does as a whole weapon. |
+| **Saturation** | More damage scaled by how **dense** the tissue is at the hit | Rewards firing into the thick of it rather than nibbling the frontier edge. Distinct from Pierce, which *ignores* the density penalty rather than paying you for density. |
+| **Giant-Slayer** | More damage against **high-mass** coagulants | Behemoths and Bulwarks. Pairs with Threat Priority — one finds the big thing, the other kills it. |
+| **Culling** | More damage against **low-mass** coagulants, and instantly finishes near-dead ones | The mirror. Answers Blastoma fragments and the motes that stream past while you fight a wall. Pairs with Triage. |
+| **Corrosion** | Hits stack a lasting **armour reduction** on the target | Overlaps Poison's Corrosive extension; kept as the universal version because §5 makes armour matter. Builds up over sustained fire rather than applying at once. |
+| **Desperation** | Damage scales up as **core integrity drops** | Comeback gem. Strongest when you are closest to losing — dead weight in a run going well, which is the point. |
+| **Proximity** | More damage the **closer to the core** the target is | The other comeback gem, and the one that pays for letting things get close. **This is the aura weapons' own zone** (§2), so it compounds their fix. |
+| **Momentum** | Damage **ramps while the weapon keeps landing hits**; resets on a miss or a kill | Rewards sustained fire into a big target. Soft-overlaps Blades' Serration extension, which is the same streak idea per-weapon. |
+
+The shape of the class: **six read the target** (armour, maturity, density,
+mass high, mass low, distance-to-core), **two read your own state** (core
+HP, hit streak), and **one writes a debuff** (Corrosion). None of them are
+flat multipliers — that is what makes them Conditional rather than a
+second Amplifier class.
+
+## 4. The Targeting gems — seven of eight hold up
+
+Reviewed against shipped code; no duplicates, and the mechanism is cheap
+(they replace stage 2 of the pipeline, at most one per weapon, which the
+pipeline enforces structurally).
+
+**One cut recommended.** **Scattershot** ("targets randomly within reach")
+is the weak entry: every other gem in the class is a *strategy*, and this
+one is the absence of one. It reads as a downgrade from nearest-wins rather
+than a trade, and "coverage" is already better served by Multishot,
+Formation and §7's aura reinterpretation. **Recommend 7 ship, 1 cut.**
+
+The other seven are genuinely distinct, and the class holds together as a
+set of tensions rather than a list: Threat Priority ↔ Triage (biggest vs
+weakest), Breach Priority ↔ Vigilance (defend the core vs starve the
+reservoir), Fixation ↔ the Priming gem (focus one target vs spread fire —
+a real anti-synergy the player can discover). Field Priority is the only
+one that targets the grid rather than coagulants, which earns its slot.
+
+Two notes to carry into the build:
+- **Threat Priority already exists in effect** — Lance's
+  `highestMassPoint()` (6C-2) is exactly this, hardcoded as its identity.
+  The gem generalizes it; Lance's own targeting should route *through* the
+  same helper rather than duplicating it.
+- **Opportunist** ("target whatever another weapon hit last") needs a
+  shared last-hit record that doesn't exist yet. Small, but it's the one
+  Targeting gem carrying new state. Everything else reads what's already
+  in `GameState`.
+
+## 4a. ⚠️ The shipped-gem audit — four gems work on exactly one weapon
+
+The owner asked for the audit to cover **all** shipped support gems, not
+just Multishot. Done below, against code rather than against the gem
+descriptions. The headline finding is bad enough to change 6D's scope.
+
+### Fork, Chaining, Bounce and Ricochet are wired into Bolt Turret alone
+
+`systems/resolveOpts.ts` exposes `projectileFlags()`, which turns these
+four gems into real behaviour. **Exactly one weapon module imports it:**
+`weapons/bolt.ts`. Not Chain Bolt, not Missile, not Fission, not Lance —
+`chain.ts` and `missile.ts` push projectiles with no behaviour flags at
+all — and none of the five non-projectile weapons.
+
+`tuning/gems.ts`'s own class comment (line 149) discloses part of this:
+the four are *"REAL on the `projectile` archetype only in this batch...
+their orbital/pulse/cloud/ring readings below are honest descriptions of
+the design's intent, not yet backed by code."* **The reality is narrower
+than the disclosure** — it is not the projectile archetype, it is one
+weapon of the ten.
+
+**Four of twenty gems do nothing on nine of ten weapons, while showing the
+player a description that promises an effect.** Socket Fork into Frost and
+the inventory screen reads *"Splits into two on a kill, each continuing
+outward."* Nothing splits. The comment argues against disclosing this in
+the copy (*"that would read as an unfinished-game admission mid-run"*),
+which was defensible when the gap was one batch old and the fix was
+scheduled. It is not defensible as a shipped state: the copy isn't
+undisclosed, it's **wrong**.
+
+### The full audit
+
+| Gem | Status across the ten weapons |
+|---|---|
+| Amplifier, Overclock, Expansion, Attunement | ✅ Real everywhere. |
+| Extension, Velocity | ⚪ **Refused** on archetypes with no such term — enforced at socket time, so honest. But an all-aura deck can never use either, and they bank forever (Phase 7's currency sink doesn't exist yet). |
+| Splash, Overflow, Kickback, Priming | ✅ Real everywhere — they ride `clearAt`, which is archetype-agnostic. |
+| Echo, Barrage | ✅ Real everywhere — deferred-emission queue, archetype-agnostic. |
+| Pierce | ✅ Real everywhere, with a genuine per-archetype reading. **The model the others should follow.** |
+| **Homing** | 🟡 Real on projectile/orbital/cloud/pulse/ring; explicit **no-op on `beam`** (honest, disclosed in the description itself). |
+| **Multishot, Formation** | 🔴 Technically wired everywhere, but **damage is divided by the emission count**, so on Blades it is a **precise zero** and on Frost a **downgrade** (§7). |
+| **Fork, Chaining, Bounce, Ricochet** | 🔴 **Bolt Turret only.** Dead on nine weapons, with copy that says otherwise. |
+
+**So: 6 gems of 20 are dead or worse on most of the roster.** That is the
+"dead gems" problem the owner named, quantified.
+
+### What this adds to the batch
+
+§7 was scoped as "reimagine emission multiplication on auras." The audit
+says the job is bigger and has two halves:
+
+1. **Make Fork/Chaining/Bounce/Ricochet real beyond Bolt.** The blocker is
+   named in the same comment: it needs `clearAt` to report *which*
+   coagulant a hit killed, not just how much mass moved. That is a real
+   change across its call sites — but it is the same class of change
+   6C-1's `ClearOptions.shape` already made successfully, and it unlocks
+   four gems on ten weapons rather than one.
+2. **Make Multishot/Formation buy coverage instead of dividing damage**
+   (§7).
+
+Both are 6D-3. This is now the largest sub-batch, not a polish pass.
+
+## 4b. The aura floor rule
+
+Added by the owner mid-review: *"aura weapons have to be by default at
+level 1 stronger than projectile ones, because if I run all aura weapons I
+die."*
+
+The code explains the death precisely. At level 1 the aura radii are
+Blades **105**, Immolation **100**, Frost **115** — and contact damage
+begins at 90. **An all-aura deck has no reach at all**: it cannot touch the
+infection until the infection is already 10–25px from the damage line. It
+isn't that the deck is weak, it's that it does not engage.
+
+**Adopted as an explicit, testable rule for 6D-0:**
+
+> At level 1, with no gems and no extensions, each aura weapon's effective
+> output must exceed the projectile baseline — and a deck of three aura
+> weapons must be survivable, not merely slower.
+
+"Effective" is load-bearing: **paper DPS already satisfies this and it did
+not save the run.** Blades' level-1 paper DPS is 48 against Bolt's 27 —
+nearly double — and the deck still dies, because output multiplied by an
+engagement rate near zero is near zero. So the rule is enforced on both
+terms: reach first (so the weapon has targets before the breach line),
+damage second.
+
+Guarded by tests in the spirit of Decision 20 — an **outcome** test ("a
+level-1 all-aura deck survives the opening N minutes") rather than a
+mechanism test pinning a specific radius, so it survives the retune it is
+certain to get.
 
 Reviewed against shipped code; no duplicates, and the mechanism is cheap
 (they replace stage 2 of the pipeline, at most one per weapon, which the
@@ -301,9 +443,7 @@ kind of change the project's own record says only a playtest can grade.
 
 ### Still open
 
-1. **"Lightning bolt"** — Chain Bolt (the 496-DPS outlier) or Bolt Turret
-   (287)? The nerf target depends on it. Chain is the arc weapon and the
-   statistical outlier, so it's assumed unless corrected.
+1. ~~"Lightning bolt"~~ — **settled: Chain Bolt**, the 496-DPS outlier.
 2. **Decision records needed.** Unbounded escalation supersedes the bounded
    `AMBIENT_ESCALATION` table and the event-interval floor; time-scaled
    armour extends Decision 44's model without replacing it. Both want
