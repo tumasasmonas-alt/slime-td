@@ -48,12 +48,26 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-10 (**the Phase 5 gate ran and passed** —
-Decision 87 — closing a checkpoint open since Phase 5C and moved three
-times. Both verdicts: enhancement reads as *a decision, not a slider*,
-and the 65-gem count is a go, so **Phase 6D ships its full 19 gems** and
-is the next batch. The bugs that same playtest found were fixed and
-shipped first, as Decision 86, below.)
+**Last updated:** 2026-08-10, evening (**the Phase 5 gate ran and
+passed** — Decision 87 — and **Phase 6D was fully planned as four
+sub-batches, all greenlit**. No code shipped this session; the tree is
+clean and the next machine starts on **6D-0**, the balance pass.)
+
+**Phase 6D grew from "add 19 gems" into a balance-and-honesty pass**,
+because reading the tuning constants against shipped code found four
+structural defects the design docs didn't show. In short: every threat
+axis is a ramp that **flattens** (ambient 3.1× at t=560s, events 2.6× at
+t=420s, armour capped at `maturity × 20`) while player power is uncapped
+— the same 17–21× vs 3.1× mismatch the 2026-08-05 playtest measured and
+that was absorbed, never fixed. The aura weapons are **aimed at vacuum**:
+ambient growth rises everywhere at a rate ramped by distance
+(0.056 at 100px vs 0.49 at 400px), and every aura is floored at
+`perimeter + margin` = ~105px, with **Orbiting Blades' radius identical
+at level 1, 8 and 12**. And **six of twenty shipped gems are dead or
+worse on most of the roster** — Fork/Chaining/Bounce/Ricochet are wired
+into Bolt Turret *alone*, while Multishot divides damage for a precise
+zero on Blades and a downgrade on Frost. Full account:
+`docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
 
 **Previously:** 2026-08-10 (Phase 6C shipped in full — 6C-1 and 6C-2,
 both planned and then greenlit with full owner autonomy in the same
@@ -231,8 +245,8 @@ Decision 76 and `docs/plans/phase-6a3-loop-fixes.md`.
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main`, committed and pushed |
-| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B + Phase 6C all complete**, plus a post-6C playtest fix pass (Decision 86). **The Phase 5 gate has now run and passed** (Decision 87). **Phase 6D is next.** |
-| Blockers | **None.** Next is Phase 6D — the Conditional (11) + Targeting (8) gems, shipping at the full 19 per the gate's own go/no-go verdict. |
+| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B + Phase 6C all complete**, plus a post-6C playtest fix pass (Decision 86). **The Phase 5 gate has run and passed** (Decision 87). **Phase 6D is planned in full and greenlit — no code written yet.** |
+| Blockers | **None.** Start with **6D-0** (`docs/plans/phase-6d0-balance-shape.md`) — tuning only, and **playtest it before 6D-1**, since its result changes what the other three should be. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
 still playtested — infection as a density field across a fixed perimeter,
@@ -503,7 +517,71 @@ src/
 
 *Newest first.*
 
-### 2026-08-10 (latest) — The Phase 5 gate ran and passed. Decision 87. Phase 6D is next.
+### 2026-08-10 (latest, evening) — Phase 6D planned in full: four sub-batches, all greenlit. No code.
+
+**Full account:** `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
+**The builds:** `docs/plans/phase-6d0-balance-shape.md`,
+`phase-6d1-targeting-gems.md`, `phase-6d2-conditional-gems.md`,
+`phase-6d3-gem-reality.md`. The umbrella
+(`phase-6d-conditional-targeting-gems.md`) carries the findings and
+reasoning; the four carry the builds.
+
+**Start here next session: 6D-0, and playtest it before touching 6D-1.**
+
+**The batch grew from "add 19 gems" to four sub-batches** because reading
+tuning constants against shipped code found four structural defects:
+
+1. **The threat plateaus, player power doesn't.** Ambient caps at 3.1× at
+   t=560s, events at 2.6× at t=420s, armour at `maturity × 20`. Same
+   mismatch the 2026-08-05 playtest measured (17–21× vs 3.1×) — absorbed
+   into the rework, never fixed. The 2026-08-10 pass raised each *base*
+   30–40% while preserving ramp shape, which is exactly why the owner
+   reports "too hard at the start, too easy later."
+2. **The aura weapons are aimed at vacuum.** Ambient growth rises
+   everywhere at once, ramped by distance (0.056 at 100px, 0.49 at
+   400px); every aura floors at `perimeter + margin` ≈ 105px.
+   **Blades' radius is identical at level 1, 8 and 12** — `perLevel: 2`
+   never clears the floor. **A first draft proposed raising Frost's and
+   Shockwave's damage and was withdrawn**: `clearAt` applies power *per
+   cell*, so Immolation already out-clears Bolt 7.4× per shot. The lever
+   is reach, not damage.
+3. **Six of twenty shipped gems are dead or worse.**
+   Fork/Chaining/Bounce/Ricochet are wired into **Bolt Turret alone** —
+   only `bolt.ts` imports `projectileFlags()`. Multishot divides damage
+   unconditionally: a precise **zero** on Blades, a **downgrade** on
+   Frost. The descriptions aren't undisclosed, they're **wrong**.
+4. **Armour is inconsequential** — flat 20 against level-8 hits of
+   44–313, and it never scales with time.
+
+**Two traps caught before any code.** Unbounded armour would drive every
+weapon onto the 15% floor and erase weapon identity (Lance by ~25min);
+bounded instead, with ambient/event escalation carrying the unbounded
+half. And **all seven Targeting gems would have shipped dead on the aura
+weapons** — `pipeline.ts:28` says self-centred weapons have no ACQUIRE
+stage to replace, the same defect as #3 pre-baked into the pipeline and
+scheduled to repeat in the very next batch.
+
+**The owner's correction mid-session shaped the result:** *"you planned
+the balance phase and gem reality phase without actually thinking through
+what that means."* True — both were headings with a sentence each.
+Designing them properly is what produced the withdrawal in #2 and the
+finding that most of the `clearAt` blocker is avoidable (every aura
+weapon already knows its own hit position).
+
+**Settled:** unbounded escalation; opening ~10% easier; both ends of the
+weapon spread (Chain Bolt nerfed on both levers, ~40%); aura fix is
+reach; armour raised, time-scaled, bounded; **9 Conditional gems, not 11**
+(Shatter and Sterilizer are already shipped as 6B extensions; Corrosion
+kept because armour now matters); **7 Targeting, not 8** (Scattershot
+cut); 6D-3 at full scope including the `clearAt` return change.
+
+**A new check this session invented and should be repeated:** audit the
+unbuilt catalogue against *shipped extensions*. 6B checked candidate
+extensions against shipped gems and found six duplicates; nobody checked
+the reverse, so three catalogued gems had quietly shipped under extension
+names.
+
+### 2026-08-10 — The Phase 5 gate ran and passed. Decision 87.
 
 **Full account:** `docs/DECISIONS.md` #87; no separate session record —
 the gate produced two verdicts and no build. The bugs the same playtest

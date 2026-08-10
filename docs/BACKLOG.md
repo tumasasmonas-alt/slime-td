@@ -20,14 +20,45 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### ▶ Phase 6D — the Conditional (11) + Targeting (8) gems. Next up.
+### ▶ Phase 6D — planned in full, greenlit, four sub-batches. **Start with 6D-0.**
 
-The gate cleared this to ship at its **full 19 gems** (see below). Per
-`docs/plans/phase-6-roadmap.md` §3 this is the cheap batch: 14 visually
-free, 5 modifiers, 0 new renderers, no new subsystems. Threat Priority
-lands here against the Carrier/Bulwark coagulant pair 4C shipped
-specifically to make it interesting. Needs a plan document and a
-greenlight before any code.
+Planned 2026-08-10 evening. **No code written yet.** Full reasoning:
+`docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`; umbrella
+`docs/plans/phase-6d-conditional-targeting-gems.md`.
+
+- **6D-0** — balance shape (`phase-6d0-balance-shape.md`). Unbounded
+  escalation, opening ~10% easier, **the aura reach fix**, weapon spread
+  from both ends, armour raised/time-scaled/bounded. Tuning only.
+  **Playtest before 6D-1** — its result changes what the rest should be.
+- **6D-1** — 7 Targeting gems (`phase-6d1-targeting-gems.md`).
+  Scattershot cut. Includes the aura ACQUIRE problem: 5 real readings +
+  2 honest refusals.
+- **6D-2** — 9 Conditional gems (`phase-6d2-conditional-gems.md`).
+  Shatter and Sterilizer cut as duplicates of shipped 6B extensions.
+- **6D-3** — the gem-reality fix (`phase-6d3-gem-reality.md`). Largest;
+  touches `clearAt`. Makes six already-shipped gems do what they claim.
+
+**The roadmap's "cheap batch, 0 new renderers" estimate for 6D is now
+wrong** — that was written before the audit. 6D-3 alone needs new
+rendering (satellite orbits, concentric rings). `phase-6-roadmap.md` §3's
+6D row should be corrected when 6D lands.
+
+### 🔴 Six shipped gems don't do what they say — folded into 6D-3.
+
+Recorded here as a bug, not just a plan item, because it is a shipped
+defect: **Fork, Chaining, Bounce and Ricochet are wired into Bolt Turret
+alone** (only `weapons/bolt.ts` imports `projectileFlags()`), and
+**Multishot/Formation divide damage unconditionally** — a precise zero on
+Blades, a downgrade on Frost. The inventory copy describes effects that
+never happen. `tuning/gems.ts:158` discloses part of this as "projectile
+archetype only"; the reality is one weapon of ten.
+
+### 🟡 Blades' `perLevel` reach term has never worked — folded into 6D-0.
+
+`BLADE_REACH.perLevel` is 2, so `64 + 2×(lvl-1)` never clears the
+`perimeter + margin` = 105 floor at any level, ever. Orbiting Blades'
+radius is identical at level 1, 8 and 12. Immolation's clears its own
+floor only at level 7. Guarded by a new test in 6D-0.
 
 ### ✅ The Phase 5 gate — ran and passed, 2026-08-10. Decision 87.
 
