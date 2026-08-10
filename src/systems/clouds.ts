@@ -24,6 +24,15 @@ export function updateClouds(state: GameState, dt: number): void {
       }
     }
 
+    // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Lingering
+    // Spores — drifts away from wherever it was dropped, at a fixed speed
+    // independent of Homing's toward-the-threat drift above.
+    if (c.driftOutward && c.originX !== undefined && c.originY !== undefined) {
+      const a = Math.atan2(c.y - c.originY, c.x - c.originX); // atan2(0,0) === 0 — a stationary cloud drifts east, not NaN
+      c.x += Math.cos(a) * c.driftOutward * dt;
+      c.y += Math.sin(a) * c.driftOutward * dt;
+    }
+
     c.tickTimer -= dt;
     if (c.tickTimer <= 0) {
       c.tickTimer = CLOUD_TICK;
@@ -35,6 +44,7 @@ export function updateClouds(state: GameState, dt: number): void {
         overflow: c.overflow,
         kickback: c.kickback,
         priming: c.priming,
+        armorShred: c.armorShred,
       });
     }
     if (c.life > 0) remaining.push(c);

@@ -1,9 +1,5 @@
 import type { GameState } from '../state';
-import {
-  PLACEHOLDER_EXTENSION_DESC,
-  PLACEHOLDER_EXTENSION_MAX_LEVEL,
-  PLACEHOLDER_EXTENSION_NAME,
-} from '../tuning/extensions';
+import { EXTENSION_MAX_LEVEL, extensionDesc, extensionIcon, extensionName } from '../tuning/extensions';
 import { gemGenericDesc, gemIcon, gemName } from '../tuning/gems';
 import { PASSIVE_DEFS } from '../tuning/passives';
 import { WEAPON_DEFS } from '../tuning/weapons';
@@ -79,10 +75,10 @@ function describeCard(choice: CardChoice): { icon: string; name: string; rank: s
   if (choice.kind === 'extension') {
     const weaponDef = WEAPON_DEFS[choice.weaponKey];
     return {
-      icon: weaponDef?.icon ?? '🔧',
-      name: `${weaponDef?.name ?? choice.weaponKey} — ${PLACEHOLDER_EXTENSION_NAME}`,
-      rank: `Lv${choice.nextLevel}/${PLACEHOLDER_EXTENSION_MAX_LEVEL}`,
-      desc: PLACEHOLDER_EXTENSION_DESC(choice.nextLevel),
+      icon: extensionIcon(choice.extKind),
+      name: `${weaponDef?.name ?? choice.weaponKey} — ${extensionName(choice.extKind)}`,
+      rank: `Lv${choice.nextLevel}/${EXTENSION_MAX_LEVEL}`,
+      desc: extensionDesc(choice.extKind, choice.nextLevel),
     };
   }
   if (choice.kind === 'gem') {

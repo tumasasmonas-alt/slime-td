@@ -1,5 +1,6 @@
 import type { GameState } from '../state';
 import { clearAt } from '../grid/clear';
+import { extensionLevel } from '../systems/extensions';
 import { nearestFrontierPoint } from '../systems/frontier';
 import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
 import { weaponMods } from '../systems/weaponMods';
@@ -17,6 +18,20 @@ const FX_COLOR = '#bfe9ff';
 // with level/Expansion rather than needing their own tuning knob.
 const HOMING_OFFSET_FRACTION = 0.3;
 const MULTISHOT_OFFSET_FRACTION = 0.35;
+
+// Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S2-S4): Frost's
+// four extensions. Chill Field extends the pulse's own freeze coverage
+// with a longer standing duration at the nova's OWN radius (never a
+// fraction of it — an inward reading would sit inside the perimeter
+// floor and refreeze nothing, S1's outward-only rule); Shatter Core marks
+// hit coagulants chilled and rewards it on any later hit; Rime suppresses
+// regrowth after a freeze lapses; Freeze Duration (frostDuration) is pure
+// `mods` and needs no code here.
+const CHILL_FIELD_DURATION: readonly [number, number, number] = [0.4, 0.6, 0.8];
+const SHATTER_CHILL_SECONDS = 2.5;
+const SHATTER_DAMAGE_MULT: readonly [number, number, number] = [0.3, 0.45, 0.6];
+const RIME_MULT: readonly [number, number, number] = [0.5, 0.35, 0.2];
+const RIME_SECONDS = 3.0;
 
 // Untargeted — pulses outward from the tower on a cooldown, damaging and
 // freezing growth in radius. The freeze mechanic itself (clearAt's
@@ -52,6 +67,16 @@ export const frostPipeline: WeaponPipeline = {
 
     const perDmg = (frostDamage(lvl) * mods.damage * powerMult) / plan.count;
     const perRadius = plan.count > 1 ? radius / 1.6 : radius;
+
+    // Chill Field ADDS to the base freeze rather than taking a max with
+    // it — the base is already 2.0s, well above any of Chill Field's own
+    // 0.4-0.8s values, so a max() would make the extension a silent no-op
+    // (caught while writing this weapon's own tests).
+    const chillFieldLvl = extensionLevel(state, 'frost', 'chillField');
+    const freezeDuration = FREEZE_DURATION * mods.duration + (chillFieldLvl > 0 ? CHILL_FIELD_DURATION[chillFieldLvl - 1]! : 0);
+    const shatterLvl = extensionLevel(state, 'frost', 'shatterCore');
+    const rimeLvl = extensionLevel(state, 'frost', 'rime');
+
     for (let i = 0; i < plan.count; i++) {
       const angle = (i / plan.count) * Math.PI * 2;
       const spreadDist = plan.count > 1 ? radius * MULTISHOT_OFFSET_FRACTION : 0;
@@ -59,8 +84,11 @@ export const frostPipeline: WeaponPipeline = {
       const y = originY + Math.sin(angle) * spreadDist;
       clearAt(state, x, y, perDmg, {
         radiusPx: perRadius,
-        freezeDuration: FREEZE_DURATION * mods.duration,
+        freezeDuration,
         coagulantMult,
+        chill: shatterLvl > 0 ? SHATTER_CHILL_SECONDS : undefined,
+        shatter: shatterLvl > 0 ? SHATTER_DAMAGE_MULT[shatterLvl - 1] : undefined,
+        suppressRegrowth: rimeLvl > 0 ? { mult: RIME_MULT[rimeLvl - 1]!, seconds: RIME_SECONDS } : undefined,
         ...opts,
       });
       // Phase 5B-6: pushed onto a list now, not assigned to a single slot —

@@ -21,6 +21,9 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     parts: [],
     startMass: 50,
     lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
     ...overrides,
   };
 }
@@ -39,6 +42,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 20,
     ...overrides,
@@ -233,7 +238,131 @@ describe('updateProjectiles — chain', () => {
     expect(p.vy).toBeLessThan(0); // steering north, toward the coagulant
     expect(Math.abs(p.vx)).toBeLessThan(Math.abs(p.vy)); // not toward the due-east grid cluster
   });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Chain's
+  // four extensions, exercised at the behaviour layer — weapons/chain.ts's
+  // own test file checks that each is baked onto the projectile correctly
+  // at spawn.
+  describe('extensions', () => {
+    it('Static Buildup grows per-hop damage instead of decaying it', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      revealAt(state.grid, 305, 300, 0.6);
+      revealAt(state.grid, 340, 300, 0.6);
+      state.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 2,
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+        hopGrowth: 1.25,
+      });
+
+      updateProjectiles(state, 0.1);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'chain') throw new Error('expected a chain projectile');
+      expect(p.dmg).toBeCloseTo(20 * 1.25, 5); // grew, not decayed
+    });
+
+    it('Backlash boosts only the hop that turns out to be the last one', () => {
+      const withBacklash = freshState();
+      withBacklash.grid = makeTestGrid();
+      revealAt(withBacklash.grid, 305, 300, 0.6);
+      withBacklash.coagulants = [];
+      withBacklash.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 1, // this impact IS the final hop — no next target exists anyway
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+        finalHopMult: 2,
+      });
+      const removedWithBacklash = removedMassFromHit(withBacklash, 305, 300);
+
+      const plain = freshState();
+      plain.grid = makeTestGrid();
+      revealAt(plain.grid, 305, 300, 0.6);
+      plain.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 1,
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+      });
+      const removedPlain = removedMassFromHit(plain, 305, 300);
+
+      expect(removedWithBacklash).toBeGreaterThan(removedPlain);
+    });
+
+    it('Split Arc spawns one branch on the first hop transition, never a second time', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      revealAt(state.grid, 305, 300, 0.6);
+      revealAt(state.grid, 340, 300, 0.6);
+      revealAt(state.grid, 340, 260, 0.6); // a second candidate so the branch has somewhere to go too
+      state.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 3,
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+        splitArcPower: 0.5,
+      });
+
+      updateProjectiles(state, 0.1);
+
+      // The parent continues (hopsLeft was 3, now 2, > 0) plus one branch.
+      expect(state.projectiles.length).toBeGreaterThanOrEqual(2);
+      const branch = state.projectiles.find((p) => p.type === 'chain' && p.splitArcUsed && p.dmg < 20 * 0.82);
+      expect(branch).toBeDefined();
+    });
+  });
 });
+
+// Phase 6B-2: shared by the Backlash test above — fires one hit at
+// (hitX, hitY) via the existing chain projectile already pushed onto
+// state.projectiles, and returns how much grid density it removed.
+function removedMassFromHit(state: ReturnType<typeof freshState>, hitX: number, hitY: number): number {
+  const grid = state.grid!;
+  const { cx, cy } = { cx: Math.floor(hitX / grid.cellSize), cy: Math.floor(hitY / grid.cellSize) };
+  const idx = cy * grid.cols + cx;
+  const before = grid.growth[idx]!;
+  updateProjectiles(state, 0.1);
+  return before - grid.growth[idx]!;
+}
 
 describe('updateProjectiles — missile', () => {
   it('steers toward its target point and keeps flying while short of it', () => {
@@ -253,6 +382,7 @@ describe('updateProjectiles — missile', () => {
       color: '#ff9d6b',
       life: 5,
       targetPoint: { x: 500, y: 300 },
+      armAt: 0,
     });
 
     updateProjectiles(state, 0.1);
@@ -283,6 +413,7 @@ describe('updateProjectiles — missile', () => {
       color: '#ff9d6b',
       life: 5,
       targetPoint: { x: 302, y: 300 }, // already within MISSILE_REACH_DIST
+      armAt: 0,
     });
 
     updateProjectiles(state, 0.001); // negligible travel — reach check dominates
@@ -309,6 +440,7 @@ describe('updateProjectiles — missile', () => {
       color: '#ff9d6b',
       life: 5,
       targetPoint: { x: 1000, y: 300 }, // far beyond the revealed wall
+      armAt: 0,
     });
 
     // A small dt so this frame's step (vx*dt = 6px) lands inside the
@@ -339,12 +471,133 @@ describe('updateProjectiles — missile', () => {
       color: '#ff9d6b',
       life: 5,
       targetPoint: { x: 1000, y: 300 }, // far beyond the coagulant
+      armAt: 0,
     });
 
     updateProjectiles(state, 0.02);
 
     expect(state.projectiles).toHaveLength(0);
     expect(c.mass).toBeLessThan(50);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Missile's
+  // extensions that live in updateMissile itself. Bunker Buster and Salvo
+  // are covered at the spawn layer in weapons/missile.test.ts.
+  describe('extensions', () => {
+    it('Proximity Fuse detonates before reaching the target point or touching revealed tissue', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ x: 340, y: 300, radius: 5 });
+      state.coagulants = [c];
+      state.projectiles.push({
+        type: 'missile',
+        src: 'missile',
+        x: 300,
+        y: 300,
+        vx: 300,
+        vy: 0,
+        speed: 300,
+        dmg: 30,
+        splashRadius: 60,
+        radius: 5,
+        color: '#ff9d6b',
+        life: 5,
+        targetPoint: { x: 1000, y: 300 }, // far beyond the coagulant — without the fuse this frame wouldn't detonate
+        armAt: 0,
+        proximityFuseDist: 50, // well past the coagulant's own tiny hit radius
+      });
+
+      updateProjectiles(state, 0.02); // one small step — still short of `radius`-based physical contact
+
+      expect(state.projectiles).toHaveLength(0); // detonated on proximity alone
+      expect(c.mass).toBeLessThan(50);
+    });
+
+    it('Cluster Warhead spawns submunitions on detonation', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      revealAt(state.grid, 305, 300, 0.9);
+      state.projectiles.push({
+        type: 'missile',
+        src: 'missile',
+        x: 300,
+        y: 300,
+        vx: 300,
+        vy: 0,
+        speed: 300,
+        dmg: 40,
+        splashRadius: 60,
+        radius: 5,
+        color: '#ff9d6b',
+        life: 5,
+        targetPoint: { x: 305, y: 300 },
+        armAt: 0,
+        clusterCount: 4,
+      });
+
+      updateProjectiles(state, 0.02);
+
+      const submunitions = state.projectiles.filter((p) => p.type === 'missile' && !p.clusterCount);
+      expect(submunitions.length).toBe(4);
+      for (const s of submunitions) {
+        expect(s.dmg).toBeLessThan(40);
+        expect(s.dmg).toBeGreaterThan(0);
+      }
+    });
+
+    it('a Salvo missile with armAt in the future stays inert at its spawn point', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.time = 1;
+      state.projectiles.push({
+        type: 'missile',
+        src: 'missile',
+        x: 300,
+        y: 300,
+        vx: 0,
+        vy: 0,
+        speed: 300,
+        dmg: 30,
+        splashRadius: 60,
+        radius: 5,
+        color: '#ff9d6b',
+        life: 5,
+        targetPoint: { x: 500, y: 300 },
+        armAt: 1.5, // in the future
+      });
+
+      updateProjectiles(state, 0.02);
+
+      expect(state.projectiles).toHaveLength(1);
+      expect(state.projectiles[0]!.x).toBe(300); // hasn't moved
+      expect(state.projectiles[0]!.y).toBe(300);
+    });
+
+    it('once armAt passes, the missile flies normally', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.time = 2; // past armAt
+      state.projectiles.push({
+        type: 'missile',
+        src: 'missile',
+        x: 300,
+        y: 300,
+        vx: 0,
+        vy: 0,
+        speed: 300,
+        dmg: 30,
+        splashRadius: 60,
+        radius: 5,
+        color: '#ff9d6b',
+        life: 5,
+        targetPoint: { x: 500, y: 300 },
+        armAt: 1.5,
+      });
+
+      updateProjectiles(state, 0.02);
+
+      expect(state.projectiles[0]!.x).toBeGreaterThan(300); // now moving toward the target
+    });
   });
 });
 
@@ -543,5 +796,40 @@ describe('updateProjectiles — behaviour flags', () => {
 
     // Forked into two children, not hopped as a single chaining projectile.
     expect(state.projectiles).toHaveLength(2);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Bolt's
+  // Tracking Rounds — re-runs nearestFrontierPoint every tick and turns
+  // toward it, unlike Homing's one-target-captured-at-spawn steering.
+  it('reacquireRate: turns a bolt toward the nearest frontier point mid-flight', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    // A revealed cell north of the projectile's current position and path
+    // — computeFrontier needs a real frontier scan, so seed it directly
+    // via state.frontier instead (the same shape nearestFrontierPoint reads).
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.frontier = new Float32Array(48);
+    state.frontier.fill(9999);
+    state.frontier[12] = 50; // sector pointing due "north" of the tower in this 48-sector scheme (index 12 of 48 = 90°)
+    state.projectiles.push({
+      type: 'bolt',
+      src: 'bolt',
+      x: 300,
+      y: 300,
+      vx: 300, // flying due east
+      vy: 0,
+      dmg: 10,
+      radius: 4,
+      color: '#fff',
+      life: 5,
+      reacquireRate: Math.PI, // a large turn rate so one tick shows a clear result
+    });
+
+    updateProjectiles(state, 0.05);
+
+    // Started flying due east (vy = 0); with a frontier point to the
+    // "north" pulling it, vy should have turned away from exactly 0.
+    expect(state.projectiles[0]!.vy).not.toBe(0);
   });
 });

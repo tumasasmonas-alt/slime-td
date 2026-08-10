@@ -23,6 +23,9 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     parts: [],
     startMass: 50,
     lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
     ...overrides,
   };
 }
@@ -44,6 +47,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 20,
     ...overrides,
@@ -538,6 +543,162 @@ describe('clearAt', () => {
         const unprimedRemoved = 1000 - cControl.mass;
 
         expect(primedRemoved).toBeCloseTo(unprimedRemoved * 3, 5);
+      });
+    });
+
+    // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S2): Shatter
+    // Core — a hit marks the coagulant chilled; a LATER hit against an
+    // already-chilled coagulant deals bonus damage. The ordering rule
+    // (S2's own comment in clear.ts) is the one worth pinning: the hit
+    // that APPLIES chill must not itself benefit from it.
+    describe('chill / shatter', () => {
+      it('a hit that applies chill does not itself benefit from the shatter bonus', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000 });
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, chill: 2.5, shatter: 2 });
+        const firstHitRemoved = 1000 - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: 1000 });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 }); // no chill/shatter at all
+        const unshatteredRemoved = 1000 - cControl.mass;
+
+        expect(firstHitRemoved).toBeCloseTo(unshatteredRemoved, 5);
+      });
+
+      it('a later hit against an already-chilled coagulant deals the shatter bonus', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000 });
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, chill: 2.5 }); // chills it, no shatter on this weapon
+        const afterFirst = c.mass;
+        // shatter is a BONUS fraction, not the multiplier itself (matching
+        // every other "+X%" value in the codebase) — 2 means +200%, i.e. x3.
+        clearAt(state, 105, 105, 50, { radiusPx: 20, shatter: 2 }); // a second weapon, reading the chill
+        const secondRemoved = afterFirst - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: afterFirst });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 }); // same starting mass, no shatter
+        const controlRemoved = afterFirst - cControl.mass;
+
+        expect(secondRemoved).toBeCloseTo(controlRemoved * 3, 5);
+      });
+
+      it('the chill lapses — a hit after chilledUntil gets no bonus', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000, chilledUntil: 5 });
+        state.coagulants = [c];
+        state.time = 10; // past chilledUntil
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, shatter: 2 });
+        const removed = 1000 - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: 1000 });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const controlRemoved = 1000 - cControl.mass;
+
+        expect(removed).toBeCloseTo(controlRemoved, 5);
+      });
+    });
+
+    // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S3): Corrosive
+    // (armorShred) and Bunker Buster (armorScaled) — both read the same
+    // effective-armour value, and both respect COAGULANT_ARMOR_FLOOR
+    // (arsenal plan S12.3, the same rule bounding Penetration), pinned so
+    // a later retune can't quietly remove it.
+    describe('armorShred / armorScaled', () => {
+      it('a debuffed coagulant takes more damage than the same coagulant at full armour', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000, armor: 40 });
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, armorShred: 0.5 }); // strips 50% of armour on this hit
+        const afterShred = c.mass;
+        clearAt(state, 105, 105, 50, { radiusPx: 20 }); // a plain second hit, benefiting from the debuff
+        const debuffedRemoved = afterShred - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: afterShred, armor: 40 }); // same starting mass, full armour
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const fullArmorRemoved = afterShred - cControl.mass;
+
+        expect(debuffedRemoved).toBeGreaterThan(fullArmorRemoved);
+      });
+
+      it('the armour debuff lapses after its window', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000, armor: 40, armorDebuff: 0.5, armorDebuffUntil: 5 });
+        state.coagulants = [c];
+        state.time = 10; // past armorDebuffUntil
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20 });
+        const removed = 1000 - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: 1000, armor: 40 });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const controlRemoved = 1000 - cControl.mass;
+
+        expect(removed).toBeCloseTo(controlRemoved, 5);
+      });
+
+      it('Bunker Buster deals more damage against a more-armoured target', () => {
+        // Both armour values stay well under `power` (50) so the base
+        // power-minus-armour term doesn't collapse to the floor for
+        // either — isolating armorScaled's own effect rather than mixing
+        // it with the floor's separate behaviour (covered above).
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const light = makeCoagulant({ mass: 1000, armor: 5 });
+        const heavy = makeCoagulant({ mass: 1000, armor: 20 });
+        state.coagulants = [light];
+        clearAt(state, 105, 105, 50, { radiusPx: 20, armorScaled: 0.12 });
+        const lightRemoved = 1000 - light.mass;
+
+        state.coagulants = [heavy];
+        clearAt(state, 105, 105, 50, { radiusPx: 20, armorScaled: 0.12 });
+        const heavyRemoved = 1000 - heavy.mass;
+
+        expect(heavyRemoved).toBeGreaterThan(lightRemoved);
+      });
+
+      // Arsenal plan S12.3: "Penetration cannot push past Decision 44's
+      // armor floor" — COAGULANT_ARMOR_FLOOR is a GUARANTEED MINIMUM
+      // (max(power - armor, power * FLOOR)), not a cap, so a target with
+      // absurd armour and zero shred still takes the floor-guaranteed
+      // amount rather than being unclearable. Corrosive can only ever
+      // raise damage toward `power` from there — it can't create some
+      // separate, larger ceiling the floor doesn't already bound.
+      it('even at absurd armour with zero shred, a hit still deals the floor-guaranteed minimum', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 100_000, armor: 1_000_000 });
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20 }); // no armorShred at all
+        const removed = 100_000 - c.mass;
+
+        expect(removed).toBeGreaterThan(0); // the floor guarantees SOME damage, not zero
       });
     });
   });

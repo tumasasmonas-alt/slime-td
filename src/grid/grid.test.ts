@@ -21,6 +21,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     matBucket: new Int8Array(16),
     maxRange: 100,
     perimeter: 50,
+    regrowMult: new Float32Array(16),
+    regrowTimer: new Float32Array(16),
     ...overrides,
   };
 }

@@ -1,7 +1,7 @@
 import type { ExtensionInstance, GameState } from '../state';
 import { BUNDLE_INTERVAL, GEM_BUNDLES, type GemBundle } from '../tuning/bundles';
 import { CORE_GEM_KEYS, type CoreGemKey } from '../tuning/coreGems';
-import { PLACEHOLDER_EXTENSION_KIND, PLACEHOLDER_EXTENSION_MAX_LEVEL } from '../tuning/extensions';
+import { EXTENSION_MAX_LEVEL, EXTENSIONS_BY_WEAPON, type ExtensionKey } from '../tuning/extensions';
 import { ALL_GEM_KEYS } from '../tuning/gems';
 import type { GemKey, WeaponKey } from '../types';
 
@@ -35,8 +35,14 @@ import type { GemKey, WeaponKey } from '../types';
 // game with levels, so a re-roll of one you already own (socketed or
 // banked) levels that instance in place instead of creating a new one,
 // and still leaves the pool for good once maxed.
+//
+// Phase 6B-1 (docs/plans/phase-6b-incumbent-extensions.md S1): "card
+// pool" here means the level-up draw, never the two socket LINES a
+// weapon holds them in (tuning/sockets.ts) — the two got conflated once
+// mid-review and it cost a whole round trip; naming the distinction once,
+// here, is cheaper than repeating it.
 export type CardChoice =
-  | { kind: 'extension'; weaponKey: WeaponKey; extKind: string; nextLevel: 1 | 2 | 3 }
+  | { kind: 'extension'; weaponKey: WeaponKey; extKind: ExtensionKey; nextLevel: 1 | 2 | 3 }
   | { kind: 'gem'; key: GemKey }
   | { kind: 'coreGem'; key: CoreGemKey }
   | { kind: 'bundle'; bundle: GemBundle }
@@ -48,7 +54,7 @@ export type CardChoice =
 // always levels this same instance rather than creating a second), so
 // "find it anywhere" is a safe, unambiguous lookup, and the object this
 // returns can be mutated in place regardless of which array holds it.
-function findOwnedExtension(state: GameState, weaponKey: WeaponKey, extKind: string): ExtensionInstance | undefined {
+function findOwnedExtension(state: GameState, weaponKey: WeaponKey, extKind: ExtensionKey): ExtensionInstance | undefined {
   const socketed = state.weaponSockets[weaponKey]?.extensions.find((e) => e.kind === extKind);
   if (socketed) return socketed;
   return state.extensionInventory.find((e) => e.weaponKey === weaponKey && e.kind === extKind);
@@ -58,19 +64,26 @@ function findOwnedExtension(state: GameState, weaponKey: WeaponKey, extKind: str
 // more (Phase 6A-3 S3/S3a): both bank rather than requiring somewhere to
 // go immediately, so every weapon in the fixed deck is always a candidate
 // for its own extension, and every gem key is always a candidate.
+//
+// Phase 6B-1 (docs/plans/phase-6b-incumbent-extensions.md S6): the
+// placeholder's single card-per-weapon becomes EXTENSIONS_BY_WEAPON's
+// four real candidates — each independently offered, independently
+// levelled, independently retired once maxed.
 export function buildWeaponSidePool(state: GameState): CardChoice[] {
   const pool: CardChoice[] = [];
 
   for (const key of Object.keys(state.weapons) as WeaponKey[]) {
-    const existing = findOwnedExtension(state, key, PLACEHOLDER_EXTENSION_KIND);
-    const currentLevel = existing?.level ?? 0;
-    if (currentLevel >= PLACEHOLDER_EXTENSION_MAX_LEVEL) continue; // owner's rule: maxed, gone for good
-    pool.push({
-      kind: 'extension',
-      weaponKey: key,
-      extKind: PLACEHOLDER_EXTENSION_KIND,
-      nextLevel: (currentLevel + 1) as 1 | 2 | 3,
-    });
+    for (const extKind of EXTENSIONS_BY_WEAPON[key] ?? []) {
+      const existing = findOwnedExtension(state, key, extKind);
+      const currentLevel = existing?.level ?? 0;
+      if (currentLevel >= EXTENSION_MAX_LEVEL) continue; // owner's rule: maxed, gone for good
+      pool.push({
+        kind: 'extension',
+        weaponKey: key,
+        extKind,
+        nextLevel: (currentLevel + 1) as 1 | 2 | 3,
+      });
+    }
   }
 
   for (const key of ALL_GEM_KEYS) {

@@ -2,6 +2,7 @@ import type { GameState } from '../state';
 import { clearAt } from '../grid/clear';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { findCoagulantHit } from '../systems/coagulants';
+import { extensionLevel } from '../systems/extensions';
 import { nearestFrontierPoint } from '../systems/frontier';
 import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
 import { weaponMods } from '../systems/weaponMods';
@@ -17,6 +18,20 @@ const VISUAL_RADIUS = 10;
 const BLADE_COLOR = '#cfe8ff';
 const BLADE_GLOW_COLOR = '#6df0ff';
 
+// Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7, S1): Blades'
+// four extensions. Counter-Rotation's second ring orbits OUTWARD at
+// 1.25x radius — every tower-centred radius floors at `perimeter`
+// (CLAUDE.md's own sharp-edge list), so an inward second ring would sweep
+// the safe zone and hit nothing, the exact failure prototype bug #5 named.
+const COUNTER_ROTATION_RADIUS_MULT = 1.25;
+const COUNTER_ROTATION_COUNT: readonly [number, number, number] = [1, 1, 2];
+const SERRATION_RAMP: readonly [number, number, number] = [0.12, 0.18, 0.25];
+const SERRATION_CAP = 2;
+const BLADESTORM_MULT: readonly [number, number, number] = [1.6, 1.9, 2.2];
+const BLADESTORM_WINDOW = 2.0;
+const WHIRL_RADIUS_MULT: readonly [number, number, number] = [1.25, 1.35, 1.45];
+const WHIRL_DURATION = 0.3;
+
 // No targeting at all — blades circle the tower and damage whatever
 // revealed tissue they sweep through, each on its own per-slot cooldown
 // (state.bladeNextHit) so a blade can't hit the same patch every single
@@ -29,6 +44,76 @@ const BLADE_GLOW_COLOR = '#6df0ff';
 // equipped; the per-slot hit cooldown that would elsewhere live in READY
 // or ACQUIRE is intrinsic to DELIVER here, since it's per-blade, not
 // per-weapon. Self-centered — no ACQUIRE stage.
+// Phase 6B-2: one ring's worth of blade rendering + hit resolution,
+// extracted so Counter-Rotation's second ring can call it a second time
+// rather than duplicating the loop. `slotBase` gives the second ring a
+// disjoint range of bladeNextHit/bladeStreak/bladeWhirlUntil keys — both
+// rings share GameState's sparse per-slot maps, so without an offset a
+// slot index from one ring would collide with the other's.
+function runBladeRing(
+  state: GameState,
+  grid: NonNullable<GameState['grid']>,
+  t: GameState['tower'],
+  count: number,
+  spin: number,
+  radius: number,
+  dmg: number,
+  hitCooldown: number,
+  opts: ReturnType<typeof resolveOpts>,
+  serrationLvl: number,
+  whirlLvl: number,
+  slotBase: number,
+  arcStart: number | null,
+  arcSpan: number,
+): void {
+  for (let i = 0; i < count; i++) {
+    const a = arcStart !== null
+      ? arcStart + (count <= 1 ? arcSpan / 2 : (i / (count - 1)) * arcSpan) + spin * 0.15
+      : spin + (i / count) * Math.PI * 2;
+    const bx = t.x + Math.cos(a) * radius;
+    const by = t.y + Math.sin(a) * radius;
+    state.orbitals.push({
+      x: bx,
+      y: by,
+      radius: VISUAL_RADIUS,
+      shape: 'shuriken',
+      color: BLADE_COLOR,
+      glowColor: BLADE_GLOW_COLOR,
+    });
+
+    const slot = slotBase + i;
+    const { cx, cy } = worldToCell(grid, bx, by);
+    const ci = gIdx(grid, cx, cy);
+    const nextAllowed = state.bladeNextHit[slot] ?? 0;
+    // Whirl: a blade that recently landed a hit flares its own reach —
+    // read before this hit, so the flare from the PREVIOUS hit is what
+    // widens this one, not itself.
+    const flareActive = whirlLvl > 0 && (state.bladeWhirlUntil[slot] ?? 0) > state.time;
+    const hitRadius = flareActive ? HIT_RADIUS * WHIRL_RADIUS_MULT[whirlLvl - 1]! : HIT_RADIUS;
+    // Coagulants are entities, not grid cells — a blade sweeping
+    // through already-cleared space still needs to connect with a
+    // blob sitting there, which isRevealedIdx alone can't see.
+    const onTarget = isRevealedIdx(grid, ci) || findCoagulantHit(state, bx, by, hitRadius) !== null;
+    if (onTarget && state.time >= nextAllowed) {
+      const streak = serrationLvl > 0 ? (state.bladeStreak[slot] ?? 0) : 0;
+      const serrationMult = serrationLvl > 0 ? Math.min(SERRATION_CAP, 1 + streak * SERRATION_RAMP[serrationLvl - 1]!) : 1;
+      clearAt(state, bx, by, dmg * serrationMult, {
+        radiusPx: hitRadius,
+        coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1,
+        ...opts,
+      });
+      state.bladeNextHit[slot] = state.time + hitCooldown;
+      if (serrationLvl > 0) state.bladeStreak[slot] = streak + 1;
+      if (whirlLvl > 0) state.bladeWhirlUntil[slot] = state.time + WHIRL_DURATION;
+    } else if (serrationLvl > 0 && state.time >= nextAllowed) {
+      // Cooldown elapsed but nothing was here to hit — a miss, which
+      // resets the streak rather than leaving it stale until the next
+      // real connection.
+      state.bladeStreak[slot] = 0;
+    }
+  }
+}
+
 export const bladesPipeline: WeaponPipeline = {
   ready: () => true,
   deliver: (state, lvl, _target, powerMult = 1) => {
@@ -53,7 +138,15 @@ export const bladesPipeline: WeaponPipeline = {
     // every other archetype — is genuinely the blade's own orbital speed.
     // Two gems both meaning "spin faster" would be a duplicate; keeping
     // them on separate axes is what avoids that.
-    const spin = state.time * SPIN_SPEED * mods.velocity;
+    //
+    // Bladestorm: orbit speed spikes for BLADESTORM_WINDOW seconds after
+    // any coagulant dies (state.lastCoagulantDeathAt — attributing the
+    // kill to THIS weapon specifically would need the clearAt return
+    // channel the BACKLOG already defers).
+    const bladestormLvl = extensionLevel(state, 'blades', 'bladestorm');
+    const bladestormActive = bladestormLvl > 0 && state.time - state.lastCoagulantDeathAt < BLADESTORM_WINDOW;
+    const spinVelocity = mods.velocity * (bladestormActive ? BLADESTORM_MULT[bladestormLvl - 1]! : 1);
+    const spin = state.time * SPIN_SPEED * spinVelocity;
     const radius = bladeRadius(lvl, grid.perimeter) * mods.area;
     // Pierce: no per-blade hit cooldown — never stopped by what it cuts.
     // Reusing ignoreResistance as the signal (only Pierce ever sets it)
@@ -77,33 +170,52 @@ export const bladesPipeline: WeaponPipeline = {
     // "biases toward" language rather than "locks to."
     const homingPhase = !plan.formation && hasHomingGem(state, 'blades') ? baseAngle : 0;
 
-    state.orbitals = [];
-    for (let i = 0; i < count; i++) {
-      const a = plan.formation
-        ? arcStart + (count <= 1 ? arcSpan / 2 : (i / (count - 1)) * arcSpan) + spin * 0.15
-        : spin + homingPhase + (i / count) * Math.PI * 2;
-      const bx = t.x + Math.cos(a) * radius;
-      const by = t.y + Math.sin(a) * radius;
-      state.orbitals.push({
-        x: bx,
-        y: by,
-        radius: VISUAL_RADIUS,
-        shape: 'shuriken',
-        color: BLADE_COLOR,
-        glowColor: BLADE_GLOW_COLOR,
-      });
+    const serrationLvl = extensionLevel(state, 'blades', 'serration');
+    const whirlLvl = extensionLevel(state, 'blades', 'whirl');
 
-      const { cx, cy } = worldToCell(grid, bx, by);
-      const ci = gIdx(grid, cx, cy);
-      const nextAllowed = state.bladeNextHit[i] ?? 0;
-      // Coagulants are entities, not grid cells — a blade sweeping
-      // through already-cleared space still needs to connect with a
-      // blob sitting there, which isRevealedIdx alone can't see.
-      const onTarget = isRevealedIdx(grid, ci) || findCoagulantHit(state, bx, by, HIT_RADIUS) !== null;
-      if (onTarget && state.time >= nextAllowed) {
-        clearAt(state, bx, by, dmg, { radiusPx: HIT_RADIUS, coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1, ...opts });
-        state.bladeNextHit[i] = state.time + hitCooldown;
-      }
+    state.orbitals = [];
+    runBladeRing(
+      state,
+      grid,
+      t,
+      count,
+      spin + homingPhase,
+      radius,
+      dmg,
+      hitCooldown,
+      opts,
+      serrationLvl,
+      whirlLvl,
+      0,
+      plan.formation ? arcStart : null,
+      arcSpan,
+    );
+
+    // Counter-Rotation: a second ring, spinning the OTHER way, orbiting
+    // OUTWARD at COUNTER_ROTATION_RADIUS_MULT — every tower-centred radius
+    // floors at `perimeter`, so an inward second ring would sweep the
+    // safe zone and hit nothing (docs/plans/phase-6b2-extension-content.md
+    // S1). Disjoint slot range (1000+) so its hit-cooldown/streak/whirl
+    // state never collides with the main ring's.
+    const counterLvl = extensionLevel(state, 'blades', 'counterRotation');
+    if (counterLvl > 0) {
+      const counterCount = COUNTER_ROTATION_COUNT[counterLvl - 1]!;
+      runBladeRing(
+        state,
+        grid,
+        t,
+        counterCount,
+        -spin + homingPhase,
+        radius * COUNTER_ROTATION_RADIUS_MULT,
+        dmg,
+        hitCooldown,
+        opts,
+        serrationLvl,
+        whirlLvl,
+        1000,
+        plan.formation ? arcStart : null,
+        arcSpan,
+      );
     }
   },
   // Phase 6A-2: declared on the pipeline itself so

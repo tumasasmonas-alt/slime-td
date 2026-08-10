@@ -20,6 +20,53 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
+### ✅ Phase 6B (6B-1 + 6B-2) — shipped and committed, 2026-08-10.
+
+Full account: `docs/plans/phase-6b-incumbent-extensions.md` (the
+umbrella plan and 6B-1: two independent socket lines, the real extension
+catalogue) and `docs/plans/phase-6b2-extension-content.md` (6B-2: all 28
+extensions and four new mechanisms). Decisions 77–80.
+
+**Two independent socket lines replace the shared pool arsenal plan §5
+introduced** — extensions and support gems no longer compete for the
+same socket, restoring Decision 32's original design after the owner
+caught the drift during review. The extension line opens on its own
+ladder (0/1/2 slots at 0–4/5–9/10+ points invested); the gem line is
+unchanged. A fully-invested weapon now holds 7 sockets (2 + 5), up from
+5 — intentional, confirmed by the owner, not a balance risk to flag.
+
+**All 28 extensions shipped** — four per weapon across the seven
+incumbents (supersedes arsenal plan §12's "3 ship" call), replacing the
+single `'placeholder'` *Prototype Mount*. Four new mechanisms: coagulant
+chilling (Shatter Core, `Coagulant.chilledUntil`), a coagulant armour
+debuff respecting `COAGULANT_ARMOR_FLOOR` (Corrosive/Bunker Buster),
+regrowth suppression (`Grid.regrowMult`/`regrowTimer`, Rime/Ash), and the
+ring's second radius (Second Ring/Flare). Two real implementation bugs
+were caught by the batch's own tests before reaching the browser: Chill
+Field's `max()` against the base freeze made it a silent no-op (fixed to
+add instead), and Shatter Core's damage bonus was wired as the literal
+multiplier instead of a `+X%` fraction, making it a 70% damage
+*reduction* at level 1 (fixed to `1 + bonus`, matching every sibling
+field's convention) — see Decision 80.
+
+**Immolation Ring's last balance gap closed**: `immolationDamage()` now
+carries `WEAPON_DAMAGE_SCALE`, same as every other weapon. Its dead
+`maxLevel: 6` field is deleted along with the field entirely (arsenal
+plan §6 retired weapon-level caps; nothing had read it since 5B). See
+Decision 79 — the old entry below is resolved and removed.
+
+589/589 tests (up from 513 — 76 new), typecheck clean, build clean,
+verified live via the same debug-harness technique Decisions 75/76 used
+(the Browser pane wasn't compositing frames this session either) — a run
+with all seven weapons, each carrying two real extensions and two gems,
+ran 900+ ticks with zero console errors; the loadout screen's DOM
+confirmed both socket lines render correctly at their expected counts.
+
+**Next: the Phase 5 gate** — *"is enhancement a decision or a slider?"*
+— the first point at which both things a socket can hold (extensions,
+gems) are real content on every incumbent weapon. Full nine-batch
+phasing: `docs/plans/phase-6-roadmap.md` §3.
+
 ### ✅ Phase 6-0 and all of Phase 6A (6A-1/6A-2/6A-3) — shipped and committed, 2026-08-09.
 
 Full account: `docs/plans/phase-6-0-weapon-select.md` (6-0),
@@ -107,6 +154,14 @@ silently ignore the gem's stated effect while still socketing it
 rather than silently accepting the socket. Revisit only if Immolation
 Ring's own identity changes in a later balance pass.
 
+**Still true after Phase 6B-2**, which added two more radii to this
+weapon (Second Ring at 1.4×, Flare's pulse at 1.8×) without touching the
+underlying issue — both are still centred on the tower directly, the
+same assumption that keeps Homing and Multishot/Formation unwired. If
+Immolation Ring's render ever moves to a shared, non-tower-assumed
+origin, that would be the moment to revisit all three gems at once
+rather than one at a time.
+
 ### Phase 5 (5A/5B/5C) — done, for reference
 
 Plans: `docs/plans/phase-5-6-arsenal.md` (the catalogue design),
@@ -168,7 +223,8 @@ Full detail in the session record §17.
 | **5C** | ✅ Pause + inventory UI (Decision 72) — +/- spending, socket dots, core row, manage-loadout round trip. **Phase 5 complete.** |
 | **6-0** | ✅ Pre-run weapon select — shipped and committed 2026-08-09. Reused `ui/weaponRow.ts`'s 'select' mode. |
 | **6A** | ✅ Gem foundation + Behaviour class — shipped and committed 2026-08-09 (6A-1/6A-2, Decisions 74–75). Immolation Ring's visual fixed in the same batch. |
-| **6** | Remaining arsenal content — re-planned into nine batches 2026-08-09 (`docs/plans/phase-6-roadmap.md`), **next: 6B**, gated by **the Phase 5 gate** after 6B |
+| **6B** | ✅ Incumbent extensions — shipped and committed 2026-08-10 (6B-1/6B-2, Decisions 77–80). Two independent socket lines (reversing arsenal plan §5, restoring Decision 32); all 28 extensions across the seven incumbents; Immolation's last balance gap and dead `maxLevel` field closed. |
+| **6** | Remaining arsenal content — re-planned into nine batches 2026-08-09 (`docs/plans/phase-6-roadmap.md`), **next: the Phase 5 gate**, then 6C |
 | **7** | Meta — currency, unlocks, persistent deck builder |
 | **8** | Terminal phase, real balance pass, leaderboard |
 | **9** | VFX and feel |
@@ -227,35 +283,6 @@ is part of the weapon, not polish." Ward Pulse slipped through because
 it's classed as a *passive*, and freeze slipped through because it's a
 *field state*. **The rule should be scoped to any mechanic with a
 world-space effect, not just weapons.**
-
-### 🟡 Immolation Ring still needs the `WEAPON_DAMAGE_SCALE` pass, and its dead `maxLevel` field deleted
-*Discovered 2026-08-08 during the Ward Pulse → Immolation Ring promotion
-(Decision 70), narrowed 2026-08-09 once Phase 6A shipped (Decision 75).*
-Originally three gaps; **two are now closed for free.** `weaponMods()`
-(6A-1) applies its `rate` and `damage` multipliers uniformly to every
-weapon including Immolation Ring, so it now responds to **Overclock** and
-**Amplifier** exactly like its six siblings — no Immolation-specific code
-was needed once the mechanism existed.
-
-**Still open — one balance gap:**
-- Immolation Ring never received Phase 4C-1's **`WEAPON_DAMAGE_SCALE`**
-  (+50%) pass, which every other weapon's damage function carries. Its
-  base damage formula (`10 * lvl`, now also scaled by `weaponMods`) is
-  still missing that flat multiplier the other six have.
-
-**This remains a balance call, not a bug** — whether Immolation Ring
-should get the same +50% is the owner's decision. Natural home is Phase
-6B, when the weapon gets its real extensions alongside the rest of the
-incumbent roster.
-
-**A second, unrelated gap belongs on this list, found 2026-08-09:**
-Immolation Ring also still carries `maxLevel: 6` while the other six
-carry `8`. Weapon `maxLevel` is now **dead data** — arsenal plan §6
-retired it outright (no cap, no diminishing returns) and 5B removed the
-last code path that read it, but the field was never deleted from
-`WeaponDef`. Harmless today, misleading to anyone reading the defs.
-Delete the field in 6B alongside the rest of this entry rather than as
-its own errand.
 
 ### 🟡 Infection events fire too often at the start of a run
 *Found in the 2026-08-07 Phase 3D playtest.* The owner's read: the opening
@@ -721,6 +748,29 @@ Anything that's just "built the thing" lives in git and PROGRESS.md.
   513/513 tests, typecheck clean, build clean, verified live end to end
   (placement, unsocket, both directions of the maxHp clamp, Escape/
   click-again cancel, the legacy per-row picker still working).
+
+- **Immolation Ring's remaining `WEAPON_DAMAGE_SCALE` gap, and its dead
+  `maxLevel` field.** *(Discovered 2026-08-08 during the Ward Pulse
+  promotion, narrowed 2026-08-09, closed 2026-08-10 in Phase 6B-1,
+  Decision 79.)* The last of three balance gaps — the other two closed
+  for free once `weaponMods()` shipped in 6A-1. `immolationDamage()` now
+  carries the same +50% pass every other weapon's damage function has;
+  the classification-accident reasoning (Ward Pulse misfiled as a
+  passive when the pass shipped) held throughout. `WeaponDef.maxLevel`
+  deleted from the interface and all seven defs — arsenal plan §6
+  retired weapon-level caps outright and nothing had read the field
+  since 5B.
+
+- **Two real bugs, both caught by extension outcome tests before
+  reaching the browser.** *(Found while building Phase 6B-2,
+  2026-08-10, Decision 80.)* Shatter Core's damage bonus was wired as
+  the literal multiplier rather than a `+X%` fraction (matching every
+  sibling field's convention), making a level-1 hit deal 70% *less*
+  damage instead of 30% more — fixed to `1 + bonus`. Chill Field took a
+  `max()` against the base freeze duration, which the base (2.0s) always
+  dominated, making the extension a silent no-op — fixed to add instead.
+  Neither reached the browser; both were caught by the outcome test each
+  extension's own plan section (§10) called for.
 
 - **Four built weapons (Blades, Frost, Missile, Immolation Ring) were
   unreachable in any run.** *(Found and fixed 2026-08-09, Phase 6-0.)*

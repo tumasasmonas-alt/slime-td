@@ -1,4 +1,4 @@
-import type { GameState, Grid, MissileProjectile, Projectile } from '../state';
+import type { ChainProjectile, GameState, Grid, MissileProjectile, Projectile } from '../state';
 import { clearAt } from '../grid/clear';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { WEAPON_DEFS } from '../tuning/weapons';
@@ -6,6 +6,7 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../tuning/world';
 import { dist, lerp } from '../util/math';
 import { spawnChainFx } from './chainFx';
 import { findCoagulantHit } from './coagulants';
+import { nearestFrontierPoint } from './frontier';
 import { spawnParticles } from './particles';
 import { findNearbyRevealedPoint } from './targeting';
 
@@ -41,7 +42,17 @@ export function updateProjectiles(state: GameState, dt: number): void {
     if (p.life <= 0) continue;
 
     if (p.type === 'missile') {
-      if (updateMissile(state, grid, p, dt)) remaining.push(p);
+      // Phase 6B-2: Cluster Warhead — checked BEFORE calling updateMissile
+      // since a `false` return means it just detonated and cleared its
+      // own fields; the submunitions still need p.clusterCount and the
+      // final x/y updateMissile leaves it at, so they're built from the
+      // pre-call snapshot's clusterCount but read x/y after the call.
+      const hadCluster = p.clusterCount;
+      if (updateMissile(state, grid, p, dt)) {
+        remaining.push(p);
+      } else if (hadCluster) {
+        remaining.push(...spawnClusterSubmunitions(p));
+      }
       continue;
     }
 
@@ -53,6 +64,28 @@ export function updateProjectiles(state: GameState, dt: number): void {
       const speed = Math.hypot(p.vx, p.vy);
       p.vx = lerp(p.vx, Math.cos(a) * speed, HOMING_STEER);
       p.vy = lerp(p.vy, Math.sin(a) * speed, HOMING_STEER);
+    }
+
+    // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Bolt's
+    // Tracking Rounds — unlike Homing (one target, captured at spawn),
+    // this re-runs nearestFrontierPoint every tick and turns toward
+    // whatever it finds at a fixed rate, so a bolt can retarget mid-flight
+    // if its original target dies first.
+    if (p.reacquireRate) {
+      const retarget = nearestFrontierPoint(state);
+      if (retarget) {
+        const a = Math.atan2(retarget.y - p.y, retarget.x - p.x);
+        const speed = Math.hypot(p.vx, p.vy);
+        const heading = Math.atan2(p.vy, p.vx);
+        const maxTurn = p.reacquireRate * dt;
+        let diff = a - heading;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const turn = Math.max(-maxTurn, Math.min(maxTurn, diff));
+        const newHeading = heading + turn;
+        p.vx = Math.cos(newHeading) * speed;
+        p.vy = Math.sin(newHeading) * speed;
+      }
     }
 
     p.x += p.vx * dt;
@@ -99,18 +132,38 @@ export function updateProjectiles(state: GameState, dt: number): void {
         // rather than folded in so Chain's 23 pre-existing tests, and its
         // visual trail (spawnChainFx), stay exactly as they were.
         spawnChainFx(state, p.legStart.x, p.legStart.y, p.x, p.y);
-        clearAt(state, p.x, p.y, p.dmg, { radiusPx: CHAIN_IMPACT_RADIUS * areaMult, coagulantMult, ...resolveOpts });
+
+        // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7):
+        // Backlash — the hop that's about to be the LAST one (hopsLeft
+        // reaching 0 after this impact) deals a bonus multiplier. Checked
+        // before the decrement below so "final" means "this landing".
+        const willBeFinalHop = p.hopsLeft - 1 <= 0;
+        const hitDmg = willBeFinalHop && p.finalHopMult ? p.dmg * p.finalHopMult : p.dmg;
+        clearAt(state, p.x, p.y, hitDmg, { radiusPx: CHAIN_IMPACT_RADIUS * areaMult, coagulantMult, ...resolveOpts });
         p.visited.add(i);
         p.hopsLeft -= 1;
         if (p.hopsLeft > 0) {
-          const next = findNextChainHop(state, grid, p.x, p.y, p.visited);
+          const next = findNextChainHop(state, grid, p.x, p.y, p.visited, p.densityBias);
           if (next) {
             const a = Math.atan2(next.y - p.y, next.x - p.x);
             p.legStart = { x: p.x, y: p.y };
             p.vx = Math.cos(a) * CHAIN_HOP_SPEED;
             p.vy = Math.sin(a) * CHAIN_HOP_SPEED;
-            p.dmg *= CHAIN_DAMAGE_DECAY;
+            // Static Buildup: grows per-hop damage instead of decaying it.
+            p.dmg *= p.hopGrowth ?? CHAIN_DAMAGE_DECAY;
             remaining.push(p);
+
+            // Split Arc: the first hop transition (matching the card's
+            // "the 2nd hop also spawns a branch" — one branch per flight,
+            // never re-triggered on later hops via `splitArcUsed`) spawns
+            // a child continuing the remaining hops on its own path.
+            // Return-children shape, same reason spawnForks() doesn't push
+            // onto state.projectiles directly (this loop is mid-iteration
+            // over it).
+            if (p.splitArcPower && !p.splitArcUsed) {
+              p.splitArcUsed = true;
+              remaining.push(...spawnChainSplitArc(state, grid, p));
+            }
           }
         }
         continue;
@@ -229,20 +282,52 @@ function spawnForks(p: Projectile): Projectile[] {
 // nearby coagulant — whichever is closer, same "just another close thing"
 // rule targeting already applies (Decision 45). Also used by the generic
 // `chains` flag (docs/plans/phase-6a2-behaviour-gems.md S3).
+//
+// Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Conductive's
+// `densityBias` discounts the grid candidate's distance (findNearbyRevealedPoint
+// already always picks the densest cell in range, so a flat multiplier on
+// its score wouldn't change anything within the grid choice alone) — it
+// makes the grid candidate look closer than it is when comparing against a
+// coagulant, so Chain leans toward dense terrain over the nearest blob.
 function findNextChainHop(
   state: GameState,
   grid: Grid,
   x: number,
   y: number,
   visited: Set<number>,
+  densityBias?: number,
 ): { x: number; y: number } | null {
   const gridPoint = findNearbyRevealedPoint(grid, x, y, CHAIN_HOP_SEARCH_RADIUS, visited);
   const blob = findCoagulantHit(state, x, y, CHAIN_HOP_SEARCH_RADIUS);
   if (!blob) return gridPoint;
   if (!gridPoint) return { x: blob.x, y: blob.y };
   const blobDist = dist(x, y, blob.x, blob.y);
-  const gridDist = dist(x, y, gridPoint.x, gridPoint.y);
+  const gridDist = dist(x, y, gridPoint.x, gridPoint.y) / (densityBias ?? 1);
   return blobDist < gridDist ? { x: blob.x, y: blob.y } : gridPoint;
+}
+
+// Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Split Arc —
+// one branch, spawned once per flight, carrying the remaining hops on its
+// own independent path at reduced power. Reuses findNextChainHop for its
+// own first target rather than duplicating the search.
+function spawnChainSplitArc(state: GameState, grid: Grid, p: ChainProjectile): Projectile[] {
+  if (p.hopsLeft <= 0) return [];
+  const branchVisited = new Set(p.visited);
+  const next = findNextChainHop(state, grid, p.x, p.y, branchVisited);
+  if (!next) return [];
+  const a = Math.atan2(next.y - p.y, next.x - p.x);
+  return [
+    {
+      ...p,
+      dmg: p.dmg * p.splitArcPower!,
+      vx: Math.cos(a) * CHAIN_HOP_SPEED,
+      vy: Math.sin(a) * CHAIN_HOP_SPEED,
+      legStart: { x: p.x, y: p.y },
+      visited: branchVisited,
+      splitArcPower: undefined,
+      splitArcUsed: true,
+    },
+  ];
 }
 
 // Phase 6A-2: Bounce's distinct reading from Chaining (docs/plans/
@@ -271,8 +356,42 @@ function findNextBounceHop(state: GameState, _grid: Grid, x: number, y: number, 
   return best;
 }
 
+// Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Cluster
+// Warhead's submunitions — smaller, weaker missiles fired outward from
+// the detonation point at spawn (not homing onto a new target, since the
+// detonation itself already resolved the primary target). Reuses the
+// existing missile-collision path (updateMissile itself) by giving each
+// submunition a targetPoint a short distance from where it spawned.
+const CLUSTER_POWER_SHARE = 0.25;
+const CLUSTER_SPREAD_DIST = 70;
+
+function spawnClusterSubmunitions(p: MissileProjectile): MissileProjectile[] {
+  const count = p.clusterCount!;
+  const children: MissileProjectile[] = [];
+  for (let k = 0; k < count; k++) {
+    const a = (k / count) * Math.PI * 2;
+    children.push({
+      ...p,
+      dmg: p.dmg * CLUSTER_POWER_SHARE,
+      splashRadius: p.splashRadius * 0.6,
+      targetPoint: { x: p.x + Math.cos(a) * CLUSTER_SPREAD_DIST, y: p.y + Math.sin(a) * CLUSTER_SPREAD_DIST },
+      vx: Math.cos(a) * p.speed,
+      vy: Math.sin(a) * p.speed,
+      clusterCount: undefined,
+      proximityFuseDist: undefined,
+      armAt: 0,
+    });
+  }
+  return children;
+}
+
 // Returns whether the missile should keep flying this frame.
 function updateMissile(state: GameState, grid: Grid, p: MissileProjectile, dt: number): boolean {
+  // Salvo: an armed-later missile sits inert at its spawn point until its
+  // arming time — no steering, no detonation checks, so it visibly waits
+  // its turn rather than flying immediately alongside the first shot.
+  if (p.armAt > state.time) return true;
+
   const tx = p.targetPoint.x;
   const ty = p.targetPoint.y;
 
@@ -286,7 +405,11 @@ function updateMissile(state: GameState, grid: Grid, p: MissileProjectile, dt: n
   const { cx, cy } = worldToCell(grid, p.x, p.y);
   const hitWall = isRevealedIdx(grid, gIdx(grid, cx, cy));
   const hitCoagulant = findCoagulantHit(state, p.x, p.y, p.radius);
-  if (reached || hitWall || hitCoagulant) {
+  // Proximity Fuse: an extra, earlier trigger — a coagulant within its
+  // distance detonates the missile before it would otherwise reach,
+  // touch a wall, or physically collide.
+  const proximityHit = p.proximityFuseDist !== undefined && findCoagulantHit(state, p.x, p.y, p.proximityFuseDist) !== null;
+  if (reached || hitWall || hitCoagulant || proximityHit) {
     spawnParticles(state, p.x, p.y, MISSILE_IMPACT_COLOR, 18, 160);
     const coagulantMult = WEAPON_DEFS.missile?.coagulantMult ?? 1;
     clearAt(state, p.x, p.y, p.dmg, {
@@ -298,6 +421,8 @@ function updateMissile(state: GameState, grid: Grid, p: MissileProjectile, dt: n
       overflow: p.overflow,
       kickback: p.kickback,
       priming: p.priming,
+      // Phase 6B-2: Bunker Buster.
+      armorScaled: p.armorScaled,
     });
     return false;
   }

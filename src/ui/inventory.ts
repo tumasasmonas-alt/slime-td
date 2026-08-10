@@ -1,7 +1,7 @@
 import type { CoreGemInstance, ExtensionInstance, GameState, GemInstance } from '../state';
 import { gemIcon, gemName } from '../tuning/gems';
 import { PASSIVE_DEFS } from '../tuning/passives';
-import { PLACEHOLDER_EXTENSION_NAME } from '../tuning/extensions';
+import { extensionDesc, extensionIcon, extensionName } from '../tuning/extensions';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import type { GemKey, WeaponKey } from '../types';
 import {
@@ -15,7 +15,7 @@ import {
   unsocketGem,
 } from '../systems/gemSockets';
 import { investPoints, withdrawPoints } from '../systems/sockets';
-import { renderWeaponRow } from './weaponRow';
+import { renderWeaponRow, type WeaponRowHighlight, type WeaponRowPickerOpen } from './weaponRow';
 
 export interface InventoryRefs {
   overlay: HTMLElement;
@@ -35,17 +35,22 @@ function requireEl(id: string): HTMLElement {
 }
 
 // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S6c): which weapon's
-// gem picker is expanded, if any — module-level UI state, same pattern
+// picker is expanded, if any — module-level UI state, same pattern
 // ui/weaponSelect.ts's `draft` already uses for transient screen state
 // that doesn't belong in GameState. Reset whenever the overlay closes so
 // it never reopens stale on the next visit.
-let gemPickerFor: WeaponKey | null = null;
+//
+// Phase 6B-1 (docs/plans/phase-6b-incumbent-extensions.md S2): now
+// carries which of the two independent socket lines opened it — the gem
+// and extension pickers are separate lists since 6B-1's reversal of
+// arsenal plan S5 (extensions no longer share a socket with gems).
+let pickerFor: { key: WeaponKey; kind: 'gem' | 'extension' } | null = null;
 
 // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5): the click-to-place
 // state — which banked instance (if any) is currently selected for
 // placement. Set by clicking an entry in the side panel; cleared by
 // clicking it again, pressing Escape, or a successful placement. Also
-// module-level for the same reason gemPickerFor is: this is a property of
+// module-level for the same reason pickerFor is: this is a property of
 // the *screen*, not of GameState, and must never survive a screen close.
 type Placing =
   | { kind: 'gem'; instance: GemInstance }
@@ -104,19 +109,20 @@ export function openInventory(refs: InventoryRefs, state: GameState): void {
 
 export function closeInventory(refs: InventoryRefs): void {
   refs.overlay.classList.add('hidden');
-  gemPickerFor = null;
+  pickerFor = null;
   placing = null;
 }
 
-// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5): whether — and how —
-// `placing` fits weapon `key`. undefined outside placing mode (renders
-// with no highlight, same as before this batch); 'no' for a core gem,
-// which never fits a weapon row at all.
-function highlightFor(state: GameState, key: WeaponKey): 'ok' | 'no' | undefined {
-  if (!placing) return undefined;
-  if (placing.kind === 'gem') return gemLegalFor(state, key, placing.instance.kind) ? 'ok' : 'no';
-  if (placing.kind === 'extension') return extensionLegalFor(state, key, placing.instance) ? 'ok' : 'no';
-  return 'no';
+// Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5), revised 6B-1 for
+// two independent lines: which of a weapon's two socket lines `placing`
+// lights up. A gem never highlights the extension line and vice versa —
+// only the line that could actually receive it lights at all, so
+// selecting a gem never dims/lights the extension dots.
+function highlightFor(state: GameState, key: WeaponKey): WeaponRowHighlight {
+  if (!placing) return {};
+  if (placing.kind === 'gem') return { gems: gemLegalFor(state, key, placing.instance.kind) ? 'ok' : 'no' };
+  if (placing.kind === 'extension') return { extensions: extensionLegalFor(state, key, placing.instance) ? 'ok' : 'no' };
+  return {};
 }
 
 // Only succeeds (and clears `placing`) when the target is actually legal
@@ -156,6 +162,7 @@ export function renderInventory(refs: InventoryRefs, state: GameState): void {
   for (const key of Object.keys(state.weapons) as WeaponKey[]) {
     const lvl = state.weapons[key];
     if (lvl === undefined) continue; // absent means never equipped; 0 means equipped but unspent (S9 Q4) and still renders
+    const pickerOpen: WeaponRowPickerOpen = pickerFor?.key === key ? pickerFor.kind : null;
     const row = renderWeaponRow(
       key,
       lvl,
@@ -170,14 +177,19 @@ export function renderInventory(refs: InventoryRefs, state: GameState): void {
           withdrawPoints(state, k, 1);
           renderInventory(refs, state);
         },
-        onEmptySocketClick: (k) => {
-          // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5): placing
-          // mode takes priority — an empty-dot click either places the
-          // selected item or (if illegal) does nothing. Only when
-          // nothing is selected does the click fall back to the pre-6A-3
-          // per-row picker.
+        // Phase 6A-3 (docs/plans/phase-6a3-loop-fixes.md S5), split in two
+        // by 6B-1: placing mode takes priority — an empty-dot click either
+        // places the selected item or (if illegal) does nothing. Only
+        // when nothing is selected does the click fall back to the
+        // per-row picker for that line.
+        onEmptyGemSocketClick: (k) => {
           if (placing) attemptPlaceInWeapon(state, k);
-          else gemPickerFor = gemPickerFor === k ? null : k;
+          else pickerFor = pickerFor?.key === k && pickerFor.kind === 'gem' ? null : { key: k, kind: 'gem' };
+          renderInventory(refs, state);
+        },
+        onEmptyExtensionSocketClick: (k) => {
+          if (placing) attemptPlaceInWeapon(state, k);
+          else pickerFor = pickerFor?.key === k && pickerFor.kind === 'extension' ? null : { key: k, kind: 'extension' };
           renderInventory(refs, state);
         },
         onUnsocketGem: (k, gemId) => {
@@ -187,16 +199,22 @@ export function renderInventory(refs: InventoryRefs, state: GameState): void {
         onSocketGem: (k, gemId) => {
           const instance = state.gemInventory.find((g) => g.id === gemId);
           if (instance) socketGem(state, k, instance);
-          gemPickerFor = null;
+          pickerFor = null;
           renderInventory(refs, state);
         },
         onUnsocketExtension: (k, extId) => {
           unsocketExtension(state, k, extId);
           renderInventory(refs, state);
         },
+        onSocketExtension: (k, extId) => {
+          const instance = state.extensionInventory.find((e) => e.id === extId);
+          if (instance) socketExtension(state, k, instance);
+          pickerFor = null;
+          renderInventory(refs, state);
+        },
       },
       undefined,
-      gemPickerFor === key,
+      pickerOpen,
       highlightFor(state, key),
     );
     refs.weapons.appendChild(row);
@@ -219,7 +237,7 @@ function renderHint(refs: InventoryRefs): void {
     label = gemName(placing.instance.kind);
   } else if (placing.kind === 'extension') {
     const weaponDef = WEAPON_DEFS[placing.instance.weaponKey];
-    label = `${weaponDef?.name ?? placing.instance.weaponKey}: ${PLACEHOLDER_EXTENSION_NAME}`;
+    label = `${weaponDef?.name ?? placing.instance.weaponKey}: ${extensionName(placing.instance.kind)}`;
   } else {
     label = PASSIVE_DEFS[placing.instance.kind].name;
   }
@@ -305,7 +323,7 @@ function renderGemSection(refs: InventoryRefs, state: GameState): void {
       } else {
         const instance = state.gemInventory.find((g) => g.kind === kind)!;
         placing = { kind: 'gem', instance };
-        gemPickerFor = null; // placing mode and the old per-row picker are mutually exclusive
+        pickerFor = null; // placing mode and the old per-row picker are mutually exclusive
       }
       renderInventory(refs, state);
     });
@@ -326,16 +344,17 @@ function renderExtensionSection(refs: InventoryRefs, state: GameState): void {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = selected ? 'inv-entry inv-entry-selected' : 'inv-entry';
+    btn.title = extensionDesc(ext.kind, ext.level);
     btn.innerHTML =
-      `<span class="inv-entry-icon">${weaponDef?.icon ?? '?'}</span>` +
-      `<span class="inv-entry-name">${weaponDef?.name ?? ext.weaponKey}: ${PLACEHOLDER_EXTENSION_NAME}</span>` +
+      `<span class="inv-entry-icon">${extensionIcon(ext.kind)}</span>` +
+      `<span class="inv-entry-name">${weaponDef?.name ?? ext.weaponKey}: ${extensionName(ext.kind)}</span>` +
       `<span class="inv-entry-count">Lv${ext.level}</span>`;
     btn.addEventListener('click', () => {
       if (selected) {
         placing = null;
       } else {
         placing = { kind: 'extension', instance: ext };
-        gemPickerFor = null;
+        pickerFor = null;
       }
       renderInventory(refs, state);
     });
@@ -362,7 +381,7 @@ function renderCoreGemSection(refs: InventoryRefs, state: GameState): void {
         placing = null;
       } else {
         placing = { kind: 'coreGem', instance: c };
-        gemPickerFor = null;
+        pickerFor = null;
       }
       renderInventory(refs, state);
     });

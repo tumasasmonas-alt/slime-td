@@ -142,6 +142,11 @@ export function splatterOnDeath(state: GameState, c: Coagulant): void {
   // arriving at the core is a failure, not something to celebrate. Field
   // kept its name rather than being renamed, per the project owner.
   state.nodesPurged += 1;
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S6): Blades'
+  // Bladestorm reads this — "the field just broke somewhere," any weapon,
+  // any coagulant, since attributing a kill to a specific weapon needs
+  // the clearAt return channel the BACKLOG already defers.
+  state.lastCoagulantDeathAt = state.time;
 }
 
 // Blastoma fractures once its mass drops to c.splitAtMass (Phase 4C-1,
@@ -187,6 +192,9 @@ function splitCoagulant(c: Coagulant, towardX: number, towardY: number): [Coagul
     parts: [], // a fragment is always a plain circle, even splitting off a Bulwark someday
     startMass: fragmentMass,
     lastHitAt: -Infinity, // a fresh fragment hasn't been hit yet, even though its parent had
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
   });
   return [make(1), make(-1)];
 }

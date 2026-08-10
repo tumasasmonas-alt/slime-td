@@ -19,6 +19,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 100,
     ...overrides,

@@ -17,6 +17,8 @@ function makeTestGrid(): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 20,
   };
@@ -66,6 +68,8 @@ describe('updateImmolationWeapon', () => {
       bucket: new Int8Array(size),
       maturity: new Float32Array(size),
       matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
       maxRange: 500,
       perimeter: 200, // larger than the base+perLevel formula alone would give at level 1
     };
@@ -129,5 +133,99 @@ describe('updateImmolationWeapon', () => {
 
     // Amplified damage clears strictly more density than the un-amplified run.
     expect(state.grid.growth[i]!).toBeLessThan(stateNoGem.grid.growth[i]!);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S5): Immolation's
+  // four extensions. Second Ring and Flare both go OUTWARD (S1's rule —
+  // every tower-centred radius floors at `perimeter`, so an inward second
+  // ring sweeps the safe zone and hits nothing).
+  describe('extensions', () => {
+    it('Backdraft scales damage up with the density currently crossing the ring', () => {
+      const dense = freshState();
+      dense.grid = makeTestGrid();
+      dense.weapons.immolation = 1;
+      dense.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'backdraft', level: 3 }], gems: [] };
+      dense.tower.x = 100;
+      dense.tower.y = 100;
+      // Fill the whole grid dense — the ring's own sample points all read high density.
+      dense.grid.growth.fill(0.9);
+      const i = 10 * dense.grid.cols + 10;
+
+      const sparse = freshState();
+      sparse.grid = makeTestGrid();
+      sparse.weapons.immolation = 1;
+      sparse.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'backdraft', level: 3 }], gems: [] };
+      sparse.tower.x = 100;
+      sparse.tower.y = 100;
+      sparse.grid.growth[i] = 0.9; // only the tower's own cell has anything
+
+      updateImmolationWeapon(dense, 0.1);
+      updateImmolationWeapon(sparse, 0.1);
+
+      // Denser surroundings -> a bigger Backdraft multiplier -> more
+      // cleared at the tower's own cell.
+      expect(dense.grid.growth[i]!).toBeLessThan(sparse.grid.growth[i]!);
+    });
+
+    it('Second Ring adds a second, OUTWARD purge at 1.4x radius', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.weapons.immolation = 1;
+      state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'secondRing', level: 1 }], gems: [] };
+      state.tower.x = 100;
+      state.tower.y = 100;
+      // A cell well outside the base ring but inside 1.4x it.
+      const baseRadius = 66 + (0) * 6; // IMMOLATION_REACH base at level 1 (perimeter=20 doesn't dominate: margin+perimeter=30 < 66)
+      const cx = Math.floor((state.tower.x + baseRadius * 1.2) / state.grid.cellSize);
+      const cy = Math.floor(state.tower.y / state.grid.cellSize);
+      const i = cy * state.grid.cols + cx;
+      state.grid.growth[i] = 0.9;
+
+      updateImmolationWeapon(state, 0.1);
+
+      expect(state.grid.growth[i]).toBeLessThan(0.9);
+    });
+
+    it('Flare fires an extra pulse every 4th tick', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.weapons.immolation = 1;
+      state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'flare', level: 3 }], gems: [] };
+      state.tower.x = 100;
+      state.tower.y = 100;
+      // Well outside the base ring but inside its 1.8x Flare radius.
+      const cx = Math.floor((state.tower.x + 66 * 1.5) / state.grid.cellSize);
+      const cy = Math.floor(state.tower.y / state.grid.cellSize);
+      const i = cy * state.grid.cols + cx;
+      state.grid.growth[i] = 0.9;
+
+      for (let tick = 1; tick <= 3; tick++) {
+        state.weaponTimers.immolation = 0;
+        updateImmolationWeapon(state, 0.1);
+      }
+      const beforeFlare = state.grid.growth[i]!;
+      expect(beforeFlare).toBeCloseTo(0.9, 3); // the base ring barely reaches this cell, if at all
+
+      state.weaponTimers.immolation = 0;
+      updateImmolationWeapon(state, 0.1); // the 4th tick — Flare fires
+
+      expect(state.grid.growth[i]!).toBeLessThan(beforeFlare);
+    });
+
+    it('Ash sets suppressRegrowth on the burned cell', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.weapons.immolation = 1;
+      state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'ash', level: 2 }], gems: [] };
+      state.tower.x = 100;
+      state.tower.y = 100;
+      const i = 10 * state.grid.cols + 10;
+      state.grid.growth[i] = 0.9;
+
+      updateImmolationWeapon(state, 0.1);
+
+      expect(state.grid.regrowMult[i]).toBeCloseTo(0.45, 5); // ASH_MULT level 2
+      expect(state.grid.regrowTimer[i]).toBeCloseTo(2.0, 5); // ASH_SECONDS
+    });
   });
 });

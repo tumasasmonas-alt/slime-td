@@ -55,34 +55,41 @@ describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', ()
   it('offers an extension for a weapon even with no free socket — it banks instead', () => {
     const state = freshState();
     state.weapons.bolt = 0; // socketCount(0) = 1
-    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 1 }], gems: [] }; // socket full
+    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] }; // socket full
 
     const pool = buildWeaponSidePool(state);
     expect(pool.some((c) => c.kind === 'extension' && c.weaponKey === 'bolt')).toBe(true);
   });
 
+  // Phase 6B-1 (docs/plans/phase-6b-incumbent-extensions.md S8 Q4): four
+  // extensions ship per weapon now, not one placeholder — maxing ONE
+  // (heavySlug) retires only that candidate, not the weapon's other
+  // three, so the assertion has to name the specific kind rather than
+  // "any extension for this weapon."
   it("a maxed extension (level 3) is never offered again — the owner's rule", () => {
     const state = freshState();
     state.weapons.bolt = 24; // plenty of sockets
-    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 3 }], gems: [] };
+    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 3 }], gems: [] };
 
     const pool = buildWeaponSidePool(state);
-    expect(pool.some((c) => c.kind === 'extension' && c.weaponKey === 'bolt')).toBe(false);
+    expect(pool.some((c) => c.kind === 'extension' && c.weaponKey === 'bolt' && c.extKind === 'heavySlug')).toBe(false);
+    // The weapon's other three candidates are unaffected.
+    expect(pool.some((c) => c.kind === 'extension' && c.weaponKey === 'bolt' && c.extKind === 'twinBarrel')).toBe(true);
   });
 
   it('a maxed extension sitting unplaced in inventory is also never offered again', () => {
     const state = freshState();
     state.weapons.bolt = 1;
-    state.extensionInventory = [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 3 }];
+    state.extensionInventory = [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 3 }];
 
     const pool = buildWeaponSidePool(state);
-    expect(pool.some((c) => c.kind === 'extension' && c.weaponKey === 'bolt')).toBe(false);
+    expect(pool.some((c) => c.kind === 'extension' && c.weaponKey === 'bolt' && c.extKind === 'heavySlug')).toBe(false);
   });
 
   it('offers the extension at its next level, not always level 1, when socketed', () => {
     const state = freshState();
     state.weapons.bolt = 24;
-    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 1 }], gems: [] };
+    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] };
 
     const pool = buildWeaponSidePool(state);
     const ext = pool.find((c) => c.kind === 'extension' && c.weaponKey === 'bolt');
@@ -96,7 +103,7 @@ describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', ()
   it('offers the extension at its next level when it is sitting unplaced in inventory too', () => {
     const state = freshState();
     state.weapons.bolt = 1;
-    state.extensionInventory = [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 1 }];
+    state.extensionInventory = [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }];
 
     const pool = buildWeaponSidePool(state);
     const ext = pool.find((c) => c.kind === 'extension' && c.weaponKey === 'bolt');
@@ -248,7 +255,7 @@ describe('Phase 6A-3 — the pool never goes dead on socket exhaustion (the play
   it('still offers an extension card with zero free sockets', () => {
     const state = freshState();
     state.weapons.bolt = 0; // socketCount(0) = 1
-    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 1 }], gems: [] };
+    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] };
     expect(buildWeaponSidePool(state).some((c) => c.kind === 'extension' && c.weaponKey === 'bolt')).toBe(true);
   });
 
@@ -286,12 +293,12 @@ describe('Phase 6A-3 — the pool never goes dead on socket exhaustion (the play
   // rather than trusted by construction.
   it('S3a: at most one (weaponKey, kind) extension instance exists after any sequence of rolls', () => {
     const state = freshState();
-    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 1 });
-    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 2 });
-    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 3 });
+    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'heavySlug', nextLevel: 1 });
+    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'heavySlug', nextLevel: 2 });
+    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'heavySlug', nextLevel: 3 });
 
-    const bankedCount = state.extensionInventory.filter((e) => e.weaponKey === 'bolt' && e.kind === 'placeholder').length;
-    const socketedCount = state.weaponSockets.bolt?.extensions.filter((e) => e.kind === 'placeholder').length ?? 0;
+    const bankedCount = state.extensionInventory.filter((e) => e.weaponKey === 'bolt' && e.kind === 'heavySlug').length;
+    const socketedCount = state.weaponSockets.bolt?.extensions.filter((e) => e.kind === 'heavySlug').length ?? 0;
     expect(bankedCount + socketedCount).toBe(1);
     expect(state.extensionInventory[0]!.level).toBe(3);
   });
@@ -303,16 +310,16 @@ describe('applyCardChoice', () => {
   // "open the placement UI immediately" behaviour lives instead.
   it('extension: first pick creates a banked instance in extensionInventory, not a socket entry', () => {
     const state = freshState();
-    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 1 });
+    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'heavySlug', nextLevel: 1 });
     expect(state.extensionInventory).toHaveLength(1);
-    expect(state.extensionInventory[0]).toMatchObject({ weaponKey: 'bolt', kind: 'placeholder', level: 1 });
+    expect(state.extensionInventory[0]).toMatchObject({ weaponKey: 'bolt', kind: 'heavySlug', level: 1 });
     expect(state.weaponSockets.bolt).toBeUndefined();
   });
 
   it('extension: a repeat pick levels the same banked instance instead of duplicating it', () => {
     const state = freshState();
-    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 1 });
-    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 2 });
+    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'heavySlug', nextLevel: 1 });
+    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'heavySlug', nextLevel: 2 });
     expect(state.extensionInventory).toHaveLength(1);
     expect(state.extensionInventory[0]!.level).toBe(2);
   });
@@ -322,8 +329,8 @@ describe('applyCardChoice', () => {
   // in place, on the weapon — not bank a second, redundant instance.
   it('extension: a repeat pick levels an already-socketed instance in place, on the weapon', () => {
     const state = freshState();
-    state.weaponSockets.bolt = { extensions: [{ id: 99, weaponKey: 'bolt', kind: 'placeholder', level: 1 }], gems: [] };
-    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'placeholder', nextLevel: 2 });
+    state.weaponSockets.bolt = { extensions: [{ id: 99, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] };
+    applyCardChoice(state, { kind: 'extension', weaponKey: 'bolt', extKind: 'heavySlug', nextLevel: 2 });
     expect(state.weaponSockets.bolt!.extensions).toHaveLength(1);
     expect(state.weaponSockets.bolt!.extensions[0]!.level).toBe(2);
     expect(state.extensionInventory).toHaveLength(0);

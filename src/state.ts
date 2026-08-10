@@ -1,5 +1,6 @@
 import { CORE_SOCKET_COUNT, type CoreGemKey } from './tuning/coreGems';
 import { EVENT_INITIAL_DELAY } from './tuning/events';
+import type { ExtensionKey } from './tuning/extensions';
 import { xpToNext } from './tuning/xp';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './tuning/world';
 import type { GemKey, PassiveKey, WeaponKey } from './types';
@@ -43,6 +44,14 @@ export interface Grid {
   matBucket: Int8Array;
   maxRange: number;
   perimeter: number;
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S4): regrowth
+  // suppression — Frost Nova's Rime and Immolation Ring's Ash. Separate
+  // from `frozen` on purpose: `frozen` is binary and total (growth
+  // stops), suppression is partial and graded (regrowMult < 1). Read and
+  // decayed in the same growth-pass loop that already decays `frozen`, so
+  // no new per-frame iteration is added.
+  regrowMult: Float32Array;
+  regrowTimer: Float32Array;
 }
 
 export interface SlimeLayer {
@@ -112,6 +121,11 @@ interface ProjectileBase {
   overflow?: boolean;
   kickback?: number;
   priming?: number;
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S3): Bunker
+  // Buster (Missile) — the same individual-field pattern as the RESOLVE
+  // fields above, for the same reason (no type-only import cycle with
+  // grid/clear.ts).
+  armorScaled?: number;
 
   // Phase 6A-2: Homing's steering target for a non-missile projectile —
   // missile already has its own required `targetPoint` (below); this is
@@ -119,6 +133,12 @@ interface ProjectileBase {
   // socketed. Captured once at spawn (the point the weapon was aiming at
   // when it fired), not re-acquired mid-flight.
   homingTarget?: { x: number; y: number };
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Bolt's
+  // Tracking Rounds — unlike Homing (steers at one target captured at
+  // spawn), this re-runs nearestFrontierPoint every tick and turns toward
+  // it at a fixed rate (deg/s), so it "re-acquires" rather than locking on.
+  reacquireRate?: number;
 }
 
 export interface BoltProjectile extends ProjectileBase {
@@ -130,6 +150,20 @@ export interface ChainProjectile extends ProjectileBase {
   hopsLeft: number;
   visited: Set<number>;
   legStart: { x: number; y: number };
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Chain's
+  // four extensions, all per-projectile fields consumed inside
+  // systems/projectiles.ts's existing `chain` branch. `hopGrowth`
+  // (Static Buildup) replaces CHAIN_DAMAGE_DECAY's shrink with a grow when
+  // present; `finalHopMult` (Backlash) multiplies only the last hop;
+  // `densityBias` (Conductive) weights findNextChainHop's grid-cluster
+  // choice toward denser cells; `splitArcPower`/`splitArcUsed` (Split Arc)
+  // spawn one branch at the 2nd hop, using systems/projectiles.ts's
+  // return-children shape (spawnForks) rather than mutating the live array.
+  hopGrowth?: number;
+  finalHopMult?: number;
+  densityBias?: number;
+  splitArcPower?: number;
+  splitArcUsed?: boolean;
 }
 
 export interface MissileProjectile extends ProjectileBase {
@@ -137,6 +171,16 @@ export interface MissileProjectile extends ProjectileBase {
   speed: number;
   splashRadius: number;
   targetPoint: { x: number; y: number };
+  // Phase 6B-2: Proximity Fuse detonates early once within this distance
+  // of a coagulant (checked alongside the existing reach/wall/coagulant
+  // triggers); Cluster Warhead spawns this many submunitions on detonation.
+  proximityFuseDist?: number;
+  clusterCount?: number;
+  // Salvo — a bonus missile spawns immediately but stays inert at the
+  // tower (no movement, no detonation checks) until state.time reaches
+  // this value, giving "sequenced over 0.4s" without a second timer
+  // mechanism. 0 for a normal shot (armed instantly).
+  armAt: number;
 }
 
 export type Projectile = BoltProjectile | ChainProjectile | MissileProjectile;
@@ -208,6 +252,17 @@ export interface CausticCloud {
   overflow?: boolean;
   kickback?: number;
   priming?: number;
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Corrosive —
+  // applied on every damage tick, same as the RESOLVE fields above.
+  // Lingering Spores — outward drift speed (px/s), away from wherever the
+  // cloud was dropped, distinct from Homing's toward-the-threat drift
+  // above; the two never combine meaningfully so nothing gates one on the
+  // other's absence.
+  armorShred?: number;
+  driftOutward?: number;
+  originX?: number;
+  originY?: number;
 }
 
 export interface Particle {
@@ -365,19 +420,23 @@ export interface GemInstance {
 // extensions leave the card pool permanently, no repeat offer) — and,
 // per S3a, a re-roll of an already-owned extension levels THIS instance
 // in place, wherever it currently lives, rather than creating a second
-// one. Only PLACEHOLDER_EXTENSION_KIND exists until Phase 6B.
+// one. Phase 6B-1: narrowed from a placeholder `string` to the real
+// ExtensionKey union now that Phase 6B populates one — same move 6A-1
+// made to GemInstance.kind.
 export interface ExtensionInstance {
   id: number;
   weaponKey: WeaponKey;
-  kind: string;
+  kind: ExtensionKey;
   level: 1 | 2 | 3;
 }
 
-// Extensions and gems share one socket pool per weapon (arsenal plan S5:
-// "specialise this weapon, or generalise it?" is meant to be a live
-// question every time a socket opens) — occupiedSlots() in
-// systems/sockets.ts is what enforces the combined count against
-// socketCount(pointsInvested).
+// Two independent lines per weapon (docs/plans/phase-6b-incumbent-
+// extensions.md S2) — extensions and gems used to share one combined
+// count (arsenal plan S5); the owner reversed that 2026-08-10, restoring
+// Decision 32's original "per-weapon extension slots, universal support
+// gems." tuning/sockets.ts's gemSocketCount()/extensionSlotCount() open
+// each line independently off the same points-invested number;
+// systems/sockets.ts's freeGemSlots()/freeExtensionSlots() enforce them.
 export interface WeaponSockets {
   extensions: ExtensionInstance[];
   gems: GemInstance[];
@@ -442,6 +501,20 @@ export interface Coagulant {
   // Written unconditionally in grid/clear.ts on every hit (cheap, one
   // field), read only by weapons carrying the Priming gem.
   lastHitAt: number;
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S2): Frost's
+  // Shatter Core — state.time past which the chill has lapsed. 0 means
+  // "never chilled." Read (not written) unconditionally in grid/clear.ts's
+  // coagulant loop, alongside `armor` below; both default to their
+  // "no effect" value so every existing coagulant-creation site (Wave 1
+  // through 4C-2) needs no change.
+  chilledUntil: number;
+  // Phase 6B-2 S3: Poison's Corrosive — fraction of `armor` currently
+  // stripped (0..1) and the state.time it lapses. COAGULANT_ARMOR_FLOOR
+  // still applies on top (arsenal plan S12.3) — this reduces armor, it
+  // never removes the floor.
+  armorDebuff: number;
+  armorDebuffUntil: number;
 }
 
 export interface GameState {
@@ -455,7 +528,8 @@ export interface GameState {
   // Enhancement points invested per weapon (arsenal plan S6: one +/-
   // per weapon, no cap, no diminishing returns — Decision 40 unchanged).
   // A present key means equipped; value is points spent, which drives
-  // both damage/cooldown formulas directly and socketCount() (S2).
+  // both damage/cooldown formulas directly and, since 6B-1, both
+  // gemSocketCount() and extensionSlotCount() independently (S2).
   weapons: Partial<Record<WeaponKey, number>>;
   passives: Partial<Record<PassiveKey, number>>;
   // Points banked from level-ups, not yet spent (docs/plans/phase-5b-framework.md
@@ -518,6 +592,30 @@ export interface GameState {
   simAcc: number;
   announceTimer: number;
   contactPressure: number;
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S6): shot
+  // counters for Bolt's Overcharge (every 5th shot) and Immolation's Flare
+  // (every 4th tick) — one shared shape, keyed by weapon, since both are
+  // "count this weapon's own emissions" with no cross-weapon meaning.
+  weaponShots: Partial<Record<WeaponKey, number>>;
+  // Blades' Serration — a per-blade-slot consecutive-hit streak, the same
+  // Record<number, number> shape bladeNextHit already uses (blade count
+  // varies with level/Multishot, and Counter-Rotation's second ring uses
+  // a disjoint slot-index range, so a sparse map is the right shape, not
+  // a fixed array).
+  bladeStreak: Record<number, number>;
+  // Blades' Whirl — per-blade-slot state.time until a landed hit's radius
+  // flare expires, same Record<number, number> shape bladeNextHit already
+  // uses for the same reason (blade count is not fixed).
+  bladeWhirlUntil: Record<number, number>;
+  // Blades' Bladestorm — state.time of the most recent coagulant death
+  // from any source, per Decision-consistent reasoning: attributing a
+  // kill to a specific weapon needs the clearAt return channel the
+  // BACKLOG already defers (docs/BACKLOG.md, Fork/Chaining/Bounce/
+  // Ricochet's own disclosed gap), so "the field just broke somewhere" is
+  // the reading this extension uses instead. -Infinity so an empty run
+  // never falsely reads as "a coagulant just died."
+  lastCoagulantDeathAt: number;
 
   // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10a): the HUD's
   // overall-DPS readout, replacing the deleted global DMG/SPD passives
@@ -617,6 +715,10 @@ export function freshState(): GameState {
     contactPressure: 0,
     dpsAccum: 0,
     dps: 0,
+    weaponShots: {},
+    bladeStreak: {},
+    bladeWhirlUntil: {},
+    lastCoagulantDeathAt: -Infinity,
 
     pendingEmissions: [],
     pendingLevelUps: 0,

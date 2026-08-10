@@ -219,6 +219,9 @@ export function attemptFormation(state: GameState, sx: number, sy: number): Coag
     parts,
     startMass: mass,
     lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
   };
   state.coagulants.push(coagulant);
   return coagulant;

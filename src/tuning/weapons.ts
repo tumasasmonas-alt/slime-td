@@ -5,7 +5,6 @@ import { towerCenteredRadius, type TowerCenteredReach } from './weaponGeometry';
 export interface WeaponDef {
   readonly name: string;
   readonly icon: string;
-  readonly maxLevel: number;
   readonly desc: (lvl: number) => string;
   // Phase 5C (docs/plans/phase-5c-inventory-ui.md S4): a terser readout
   // for the inventory screen's weapon rows — "45 pwr · 0.42s" rather than
@@ -114,24 +113,26 @@ export function missileCooldown(lvl: number): number {
 }
 
 // Phase 5A (Decision 70): promoted from the `ward` passive's inline
-// formula, preserved exactly at the time — deliberately NOT multiplied by
-// WEAPON_DAMAGE_SCALE, matching Ward Pulse's exact prior behaviour, since
-// it never received the Phase 4C-1 damage pass while classed as a
-// passive. **Still true**: the +50% WEAPON_DAMAGE_SCALE gap is the one
-// open Immolation balance item, deferred to Phase 6B
-// (docs/plans/phase-6-roadmap.md).
+// formula. Originally preserved WITHOUT WEAPON_DAMAGE_SCALE, matching Ward
+// Pulse's exact prior behaviour, since it never received the Phase 4C-1
+// damage pass while classed as a passive.
 //
-// **No longer true as of 6A-1**: this weapon used to be flagged as never
-// responding to Overclock/Amplifier, because those were GLOBAL passives
-// it was deliberately excluded from. Both are deleted in 6A-1, replaced
-// by per-weapon socketed gems — a different, universal mechanism every
-// weapon participates in identically (weapons/immolation.ts now builds
-// on cooldownReady() and reads weaponMods() like every other weapon).
-// That closes 2 of the 3 balance gaps as a structural consequence of the
-// architecture change, not a tuning decision; only the flat +50% above
-// remains open. See docs/BACKLOG.md.
+// Phase 6B-1 (docs/plans/phase-6b-incumbent-extensions.md S7): fixed —
+// the owner's call (roadmap S5 Q3, "fix all three"), the last of
+// Immolation's three balance gaps to close. The prior lack of the +50%
+// pass was a classification accident (Ward Pulse misfiled as a passive
+// when the 4C-1 pass shipped), not a design position, so inheriting it
+// forever would have meant defending something nobody chose.
+//
+// The other two gaps closed for free in 6A-1: this weapon used to be
+// flagged as never responding to Overclock/Amplifier, because those were
+// GLOBAL passives it was deliberately excluded from. Both are deleted in
+// 6A-1, replaced by per-weapon socketed gems — a different, universal
+// mechanism every weapon participates in identically
+// (weapons/immolation.ts builds on cooldownReady() and reads
+// weaponMods() like every other weapon).
 export function immolationDamage(lvl: number): number {
-  return 10 * lvl;
+  return 10 * lvl * WEAPON_DAMAGE_SCALE;
 }
 
 // Fixed, level-independent — matches Ward Pulse's WARD_TICK exactly.
@@ -169,7 +170,6 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
   bolt: {
     name: 'Bolt Turret',
     icon: '⚡',
-    maxLevel: 8,
     desc: (lvl) => `Fires at the nearest wall of infection. Lv${lvl}: ${boltDamage(lvl).toFixed(0)} pwr`,
     stats: (lvl, mods = IDENTITY_MODS) => `${(boltDamage(lvl) * mods.damage).toFixed(0)} pwr · ${(boltCooldown(lvl) / mods.rate).toFixed(2)}s`,
     coagulantMult: 1,
@@ -178,7 +178,6 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
   blades: {
     name: 'Orbiting Blades',
     icon: '🗡️',
-    maxLevel: 8,
     desc: (lvl) => `Spinning blades shred any tissue they touch. Lv${lvl}: ${bladeCount(lvl)} blade(s)`,
     stats: (lvl, mods = IDENTITY_MODS) => `${(bladeDamage(lvl) * mods.damage).toFixed(0)} pwr · ${bladeCount(lvl)} blade(s)`,
     coagulantMult: 1,
@@ -187,7 +186,6 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
   chain: {
     name: 'Chain Bolt',
     icon: '🔗',
-    maxLevel: 8,
     desc: (lvl) => `Strikes the wall, then arcs to ${chainCount(lvl)} nearby clusters.`,
     stats: (lvl, mods = IDENTITY_MODS) =>
       `${(chainDamage(lvl) * mods.damage).toFixed(0)} pwr · ${chainCount(lvl)} forks · ${(chainCooldown(lvl) / mods.rate).toFixed(2)}s`,
@@ -197,7 +195,6 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
   frost: {
     name: 'Frost Nova',
     icon: '❄️',
-    maxLevel: 8,
     desc: () => `Pulses outward, damaging tissue and freezing growth nearby.`,
     stats: (lvl, mods = IDENTITY_MODS) => `${(frostDamage(lvl) * mods.damage).toFixed(0)} pwr · ${(frostCooldown(lvl) / mods.rate).toFixed(2)}s`,
     coagulantMult: 1,
@@ -206,7 +203,6 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
   poison: {
     name: 'Caustic Cloud',
     icon: '☠️',
-    maxLevel: 8,
     desc: () => `Drops a lingering cloud that erodes tissue over time.`,
     stats: (lvl, mods = IDENTITY_MODS) => `${(poisonDamage(lvl) * mods.damage).toFixed(0)} pwr/s · ${(poisonCooldown(lvl) / mods.rate).toFixed(2)}s`,
     coagulantMult: 1,
@@ -215,19 +211,20 @@ export const WEAPON_DEFS: Partial<Record<WeaponKey, WeaponDef>> = {
   missile: {
     name: 'Homing Missile',
     icon: '🚀',
-    maxLevel: 8,
     desc: () => `Homes onto the nearest wall and explodes.`,
     stats: (lvl, mods = IDENTITY_MODS) => `${(missileDamage(lvl) * mods.damage).toFixed(0)} pwr · ${(missileCooldown(lvl) / mods.rate).toFixed(2)}s`,
     coagulantMult: 1,
     delivery: 'projectile',
   },
-  // Phase 5A (Decision 70): promoted from PASSIVE_DEFS.ward. maxLevel
-  // carried over unchanged (6); desc is now level-dependent like every
-  // other weapon here, unlike the passive's static string it replaces.
+  // Phase 5A (Decision 70): promoted from PASSIVE_DEFS.ward. desc is now
+  // level-dependent like every other weapon here, unlike the passive's
+  // static string it replaces. Phase 6B-1: the dead `maxLevel` field (this
+  // weapon's own was inconsistently 6 against every other weapon's 8) is
+  // deleted from WeaponDef entirely — arsenal plan S6 retired weapon-level
+  // caps outright and nothing had read it since 5B.
   immolation: {
     name: 'Immolation Ring',
     icon: '🔥',
-    maxLevel: 6,
     desc: (lvl) => `Periodically purges a ring around the core. Lv${lvl}: ${immolationDamage(lvl).toFixed(0)} pwr`,
     stats: (lvl, mods = IDENTITY_MODS) => `${(immolationDamage(lvl) * mods.damage).toFixed(0)} pwr · ${(IMMOLATION_TICK / mods.rate).toFixed(1)}s`,
     coagulantMult: 1,

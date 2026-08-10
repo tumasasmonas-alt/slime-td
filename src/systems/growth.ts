@@ -50,6 +50,22 @@ export function applyAmbientGrowth(
         if (newFrozen === 0) dirty.add(i);
         continue;
       }
+
+      // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S4): Frost's
+      // Rime and Immolation's Ash — regrowth suppression, decayed in the
+      // same pass frozen already is so no second per-cell loop is added.
+      // The timer is checked first and the whole branch short-circuits
+      // when it's expired (the common case — suppressed cells are a small
+      // fraction of the field), so the extra cost is one array read per
+      // cell rather than a second full pass.
+      let regrowMult = 1;
+      const regrowTimer = grid.regrowTimer[i]!;
+      if (regrowTimer > 0) {
+        const newTimer = Math.max(0, regrowTimer - dt);
+        grid.regrowTimer[i] = newTimer;
+        regrowMult = grid.regrowMult[i]!;
+      }
+
       const wx = cx * grid.cellSize + grid.cellSize / 2;
       const d = dist(wx, wyBase, tower.x, tower.y);
 
@@ -95,7 +111,7 @@ export function applyAmbientGrowth(
       // its slower rate, and "slower, to a higher ceiling" (§7) collapses
       // into "identical speed," which is measurably what happened before
       // this shape.
-      const effRate = rate * regrowthRateMult(maturity);
+      const effRate = rate * regrowthRateMult(maturity) * regrowMult;
       const newDens = Math.min(ceiling, dens + effRate * dt * (1 - dens));
       if (newDens !== dens) {
         grid.growth[i] = newDens;

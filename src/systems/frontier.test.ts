@@ -20,6 +20,9 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     parts: [],
     startMass: 50,
     lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
     ...overrides,
   };
 }
@@ -38,6 +41,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 200,
     perimeter: 60,
     ...overrides,

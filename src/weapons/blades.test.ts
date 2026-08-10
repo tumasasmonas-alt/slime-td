@@ -21,6 +21,9 @@ function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
     parts: [],
     startMass: 50,
     lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
     ...overrides,
   };
 }
@@ -39,6 +42,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 20,
     ...overrides,
@@ -151,5 +156,185 @@ describe('updateBladesWeapon', () => {
         expect(d).toBeGreaterThan(state.grid.perimeter);
       }
     }
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7, S1): Blades'
+  // four extensions.
+  describe('extensions', () => {
+    it('Counter-Rotation adds a second ring OUTWARD at 1.25x radius (never inward — S1)', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 300;
+      state.tower.y = 300;
+      state.weapons.blades = 3;
+      state.weaponSockets.blades = { extensions: [{ id: 1, weaponKey: 'blades', kind: 'counterRotation', level: 1 }], gems: [] };
+
+      updateBladesWeapon(state, 0.016);
+
+      const mainRadius = bladeRadius(3, state.grid.perimeter);
+      const outerRadius = mainRadius * 1.25;
+      const outerOrbitals = state.orbitals.filter((o) => Math.hypot(o.x - state.tower.x, o.y - state.tower.y) > mainRadius + 1);
+      expect(outerOrbitals.length).toBeGreaterThan(0);
+      for (const o of outerOrbitals) {
+        const d = Math.hypot(o.x - state.tower.x, o.y - state.tower.y);
+        expect(d).toBeCloseTo(outerRadius, 3);
+        expect(d).toBeGreaterThan(state.grid.perimeter); // never sweeps the safe zone
+      }
+    });
+
+    it('Serration ramps damage on consecutive hits by the same blade slot', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.grid.threshold.fill(0);
+      state.grid.growth.fill(1); // full density everywhere — every hit lands and removeAmt is resistance-limited, not supply-limited
+      state.tower.x = 300;
+      state.tower.y = 300;
+      state.weapons.blades = 1;
+      state.weaponSockets.blades = { extensions: [{ id: 1, weaponKey: 'blades', kind: 'serration', level: 3 }], gems: [] };
+
+      const removedPerHit: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        const before = state.grid.growth.reduce((a, b) => a + b, 0);
+        updateBladesWeapon(state, 0.016);
+        state.time += 0.25; // past HIT_COOLDOWN, so the next call lands another hit on the same slot
+        const after = state.grid.growth.reduce((a, b) => a + b, 0);
+        removedPerHit.push(before - after);
+      }
+
+      expect(removedPerHit[2]!).toBeGreaterThan(removedPerHit[0]!);
+    });
+
+    it('Bladestorm speeds up orbit for a window after any coagulant dies', () => {
+      const withStorm = freshState();
+      withStorm.grid = makeTestGrid();
+      withStorm.tower.x = 300;
+      withStorm.tower.y = 300;
+      withStorm.weapons.blades = 1;
+      withStorm.weaponSockets.blades = { extensions: [{ id: 1, weaponKey: 'blades', kind: 'bladestorm', level: 3 }], gems: [] };
+      withStorm.time = 5;
+      withStorm.lastCoagulantDeathAt = 4.9; // well inside the 2s window
+
+      const withoutStorm = freshState();
+      withoutStorm.grid = makeTestGrid();
+      withoutStorm.tower.x = 300;
+      withoutStorm.tower.y = 300;
+      withoutStorm.weapons.blades = 1;
+      withoutStorm.time = 5;
+      withoutStorm.lastCoagulantDeathAt = -Infinity;
+
+      updateBladesWeapon(withStorm, 0.016);
+      updateBladesWeapon(withoutStorm, 0.016);
+
+      // Same angle formula, different spin speed — the stormed blade
+      // should be at a different orbital angle than the un-stormed one at
+      // the same instant, since its spin term is scaled up.
+      const angleOf = (o: { x: number; y: number }, t: { x: number; y: number }) => Math.atan2(o.y - t.y, o.x - t.x);
+      const stormAngle = angleOf(withStorm.orbitals[0]!, withStorm.tower);
+      const plainAngle = angleOf(withoutStorm.orbitals[0]!, withoutStorm.tower);
+      expect(stormAngle).not.toBeCloseTo(plainAngle, 3);
+    });
+
+    it('Whirl sets a per-slot flare window after a landed hit', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.grid.threshold.fill(0);
+      state.grid.growth.fill(1);
+      state.tower.x = 300;
+      state.tower.y = 300;
+      state.weapons.blades = 1;
+      state.weaponSockets.blades = { extensions: [{ id: 1, weaponKey: 'blades', kind: 'whirl', level: 3 }], gems: [] };
+      state.time = 0;
+
+      updateBladesWeapon(state, 0.016);
+
+      expect(state.bladeWhirlUntil[0]).toBeCloseTo(0.3, 5); // WHIRL_DURATION
+    });
+
+    it('a hit landed inside an active Whirl flare clears a wider area than an un-flared hit', () => {
+      // A finer grid than the module default so radiusCells actually
+      // differs between the base (16px) and flared (16*1.45px) hit radii
+      // — the default 10px cellSize rounds both down to the same cell
+      // count, which would mask the effect entirely. Built directly
+      // rather than through makeTestGrid's dimension overrides — that
+      // helper's typed arrays are sized off its own hardcoded local
+      // `size`, not an override, so overriding cols/rows there silently
+      // leaves the arrays too small.
+      const fineGrid = (): Grid => {
+        const size = 10000;
+        return {
+          cols: 100,
+          rows: 100,
+          size,
+          cellSize: 2,
+          vein: new Float32Array(size),
+          threshold: new Float32Array(size),
+          growth: new Float32Array(size),
+          frozen: new Float32Array(size),
+          bucket: new Int8Array(size),
+          maturity: new Float32Array(size),
+          matBucket: new Int8Array(size),
+          regrowMult: new Float32Array(size),
+          regrowTimer: new Float32Array(size),
+          maxRange: 300,
+          perimeter: 20,
+        };
+      };
+
+      const withWhirl = freshState();
+      withWhirl.grid = fineGrid();
+      withWhirl.grid.threshold.fill(0);
+      withWhirl.grid.growth.fill(0.4); // moderate density — clearAt's own radius clamp isn't floored at its minimum
+      withWhirl.tower.x = 100;
+      withWhirl.tower.y = 100;
+      withWhirl.weapons.blades = 1;
+      withWhirl.weaponSockets.blades = { extensions: [{ id: 1, weaponKey: 'blades', kind: 'whirl', level: 3 }], gems: [] };
+
+      const plain = freshState();
+      plain.grid = fineGrid();
+      plain.grid.threshold.fill(0);
+      plain.grid.growth.fill(0.4);
+      plain.tower.x = 100;
+      plain.tower.y = 100;
+      plain.weapons.blades = 1;
+
+      updateBladesWeapon(withWhirl, 0.016); // lands, sets the flare
+      updateBladesWeapon(plain, 0.016);
+      withWhirl.time += 0.25;
+      plain.time += 0.25;
+
+      // Second hit's target centre — same angle formula weapons/blades.ts
+      // uses for a single un-formationed, un-homed blade: spin = time *
+      // SPIN_SPEED * velocity (velocity mods are identity here). Summed
+      // over a local window around it, not a single cell — the falloff
+      // is ~1 at the centre regardless of radius, so a wider hit shows up
+      // at the EDGE of the disc, not at its middle.
+      const SPIN_SPEED = 2.4;
+      const radius = bladeRadius(1, withWhirl.grid.perimeter);
+      const spin = withWhirl.time * SPIN_SPEED;
+      const bx = withWhirl.tower.x + Math.cos(spin) * radius;
+      const by = withWhirl.tower.y + Math.sin(spin) * radius;
+      const windowSum = (grid: typeof withWhirl.grid): number => {
+        let sum = 0;
+        const halfSpan = 15; // px — covers the plain radius (~13.6px) and the flared radius (~19.7px)
+        for (let dy = -halfSpan; dy <= halfSpan; dy += grid!.cellSize) {
+          for (let dx = -halfSpan; dx <= halfSpan; dx += grid!.cellSize) {
+            const cx = Math.floor((bx + dx) / grid!.cellSize);
+            const cy = Math.floor((by + dy) / grid!.cellSize);
+            if (cx < 0 || cx >= grid!.cols || cy < 0 || cy >= grid!.rows) continue;
+            sum += grid!.growth[cy * grid!.cols + cx]!;
+          }
+        }
+        return sum;
+      };
+
+      const beforeWhirl = windowSum(withWhirl.grid);
+      const beforePlain = windowSum(plain.grid);
+      updateBladesWeapon(withWhirl, 0.016); // the flared hit
+      updateBladesWeapon(plain, 0.016);
+      const removedWhirl = beforeWhirl - windowSum(withWhirl.grid);
+      const removedPlain = beforePlain - windowSum(plain.grid);
+
+      expect(removedWhirl).toBeGreaterThan(removedPlain);
+    });
   });
 });

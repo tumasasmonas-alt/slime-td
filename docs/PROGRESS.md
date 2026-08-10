@@ -48,12 +48,34 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-09 (Phase 6A shipped in full, the owner
-playtested it the same day, and a follow-up batch — Phase 6A-3 — fixed
-the three loop-breaking findings that playtest surfaced: the XP curve,
-the card pool going dead on socket exhaustion, and the socketing UI being
-unclear enough that the owner doubted it worked at all. Committed and
-pushed.)
+**Last updated:** 2026-08-10 (Phase 6B shipped in full — 6B-1 and 6B-2
+together, greenlit with full owner autonomy in one session: two
+independent socket lines replacing the shared extension/gem pool
+[reversing arsenal plan §5, restoring Decision 32], and all 28 real
+extensions across the seven incumbent weapons. Committed and pushed.)
+
+**Phase 6B, in short:** the owner asked for a plan, corrected two things
+in it during review (the socket model, the extension count), then
+greenlit both halves together. **6B-1** rebuilt the loadout screen's
+sockets into two independent lines per weapon — extensions on their own
+0/1/2-slot ladder (opening at 5/10 points invested), support gems
+unchanged (1→5 at 0/3/8/15/24) — and the real `EXTENSION_DEFS` catalogue,
+folded into `weaponMods()` so an extension's numeric effect shows up
+everywhere a gem's already did, with zero new call sites. **6B-2** is all
+28 extensions (four per weapon, not three — arsenal plan §12's "3 ship"
+call is superseded) plus four new mechanisms: coagulant chilling
+(Shatter Core), a coagulant armour debuff respecting
+`COAGULANT_ARMOR_FLOOR` (Corrosive/Bunker Buster), regrowth suppression
+(Rime/Ash), and the ring's second radius (Second Ring/Flare — and,
+caught while writing this batch, three "second ring" extensions had to
+go strictly *outward*, since every tower-centred radius floors at
+`perimeter` and an inward second ring sweeps space nothing has ever
+occupied). Two real implementation bugs were caught by the batch's own
+outcome tests before reaching the browser, not by a playtest — see
+Decision 80. Immolation Ring's last balance gap (`WEAPON_DAMAGE_SCALE`)
+closed, and its dead `maxLevel` field is gone. Decisions 77–80; full
+account `docs/plans/phase-6b-incumbent-extensions.md` and
+`docs/plans/phase-6b2-extension-content.md`.
 
 **Phases 3, 4, 5 and 6-0 are all built.** 3A–3D and 4A–4C are playtested
 and confirmed (see the 2026-08-07 entries below for verdicts). **Phase 5**
@@ -168,13 +190,13 @@ Decision 76 and `docs/plans/phase-6a3-loop-fixes.md`.
 
 | | |
 |---|---|
-| Tests | 513 passing (45 test files) — one known flake, see BACKLOG |
-| Source | 82 modules under `src/` (6A-3 touched ten existing files, added none) |
+| Tests | 589 passing (47 test files) — one known flake, see BACKLOG |
+| Source | 83 modules under `src/` (6B added `systems/extensions.ts`; touched every weapon module and `tuning/extensions.ts`'s real catalogue) |
 | Typecheck | clean |
 | Build | clean |
 | Branch | `main`, committed and pushed |
-| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A (6A-1/6A-2/6A-3) all complete.** Phase 6B (incumbent-weapon extensions, Immolation's remaining balance gap) is next. |
-| Blockers | **None.** Next is Phase 6B, per the re-planned nine-batch order — then the Phase 5 gate. |
+| Code state | **Phase 3 + Phase 4 + Phase 5 + Phase 6-0 + Phase 6A + Phase 6B all complete.** The Phase 5 gate is next. |
+| Blockers | **None.** Next is the Phase 5 gate — it needs both things a socket can hold to be real content, which 6B is what finishes. |
 
 **What works today:** the horde-economy loop from Phase 3/4, unchanged and
 still playtested — infection as a density field across a fixed perimeter,
@@ -188,22 +210,28 @@ Levelling up no longer hands out weapon-level cards at all: enhancement
 points bank automatically and are spent via a `+`/`−` in a pause +
 inventory screen, opening sockets on a fixed ladder as points go in.
 Five of the old flat passives now socket into three fixed core slots
-instead of stacking without limit. The card pool offers a placeholder
-extension that levels 1→3 (wherever the owned instance currently lives —
-socketed or banked — then leaves the pool for good), a core gem every
-second level-up, and — as of Phase 6A — real gems: 6 Amplifier gems (flat
-multipliers on damage/rate/area/duration/velocity) and 14 Behaviour gems
-(Pierce, Fork, Chaining, Bounce, Homing, Ricochet, Multishot, Formation,
-Echo, Barrage, Splash, Overflow, Kickback, Priming), every one of them
-legal and meaningfully different on every weapon archetype, plus a bundle
-card every 5 levels granting a themed 2–3 gem package in one pick. As of
-**Phase 6A-3**, every one of those three card kinds is offered regardless
-of free sockets or what's already owned — extensions, core gems and
-support gems all bank into their own inventory, visible in a three-section
-panel on the loadout screen, and placement is click-a-gem-then-click-a-
-socket with live legal/illegal highlighting. The pre-run weapon select
-(Phase 6-0) is still the only way any weapon is ever equipped — the card
-pool never offers one.
+instead of stacking without limit. The card pool offers a core gem every
+second level-up, real gems (6 Amplifier — flat multipliers on
+damage/rate/area/duration/velocity — and 14 Behaviour: Pierce, Fork,
+Chaining, Bounce, Homing, Ricochet, Multishot, Formation, Echo, Barrage,
+Splash, Overflow, Kickback, Priming, every one legal and meaningfully
+different on every weapon archetype), a bundle card every 5 levels
+granting a themed 2–3 gem package in one pick, and — as of **Phase
+6B** — **28 real per-weapon extensions**, four per weapon across all
+seven incumbents, each levelling 1→3 then leaving the pool for good.
+Every one of those four card kinds is offered regardless of free sockets
+or what's already owned — extensions, core gems and support gems all
+bank into their own inventory, visible in a three-section panel on the
+loadout screen.
+
+**As of Phase 6B, a weapon's sockets are two independent lines, not
+one shared pool** — an extension and a gem never compete for the same
+slot. The extension line opens at 5 points invested (1 slot) and 10 (2
+slots); the support-gem line is the original 1→5 ladder at 0/3/8/15/24.
+Placement is click-a-gem-or-extension-then-click-a-socket, with live
+legal/illegal highlighting scoped to whichever line the selected item
+can actually enter. The pre-run weapon select (Phase 6-0) is still the
+only way any weapon is ever equipped — the card pool never offers one.
 
 **What the playtest found (2026-08-05, pre-rework):** the game was too easy
 and structurally so, not numerically. **Player power scaled 17–21× across
@@ -282,36 +310,52 @@ owner-playtested end to end the way Phase 4 was.
    owner's playtest of 6A the same day, the six findings, and Phase 6A-3
    built to fix the three structural ones: the geometric XP curve, the
    socket/ownership-blind card pool (superseding arsenal plan §11), and
-   the three-section banked inventory with click-to-place. **Read this
-   one before starting Phase 6B** — it's the freshest context, and 6B's
-   extensions will bank through the exact machinery this session built.
-7. **`docs/DECISIONS.md` #23–#76** — the load-bearing calls in short form.
+   the three-section banked inventory with click-to-place.
+7. **`docs/sessions/2026-08-10-phase-6b-sockets-and-extensions.md`** —
+   Phase 6B: a real miscommunication caught mid-review (the owner's own
+   diagnosis — "we call a pool offered on level up and a pool of sockets
+   the same"), which surfaced that `phase-5-6-arsenal.md` §5 had
+   superseded Decision 32 without ever recording it. The owner reversed
+   §5, restoring two independent socket lines; corrected the extension
+   count from 3 to 4 per weapon; and two real bugs (Shatter Core's damage
+   bonus, Chill Field's duration) were caught by the batch's own tests
+   before reaching the browser. **Read this one before touching sockets
+   or extensions again** — it's the freshest context, and the vocabulary
+   fix it made ("card pool" vs. "sockets," never "socket pool") is easy
+   to drift back out of without the reasoning behind it.
+8. **`docs/DECISIONS.md` #23–#80** — the load-bearing calls in short form.
    23–37 are the design; 38–53 are the mechanism; 54–60 are the 3C
    playtest-and-fix round; 61–62 are Phase 3D; 63–65 are 4A; 66–67 are 4B;
    68–69 are 4C; 70 is Phase 5A (the weapon pipeline); 71 is Phase 5B (the
    enhancement/socket/card-pool economy); 72 is Phase 5C (the pause +
    inventory screen — **Phase 5 closes here**); 73 is Phase 6-0 (the
    pre-run weapon select); 74–75 are Phase 6A (the gem foundation and the
-   Behaviour class); 76 is Phase 6A-3 (the post-playtest loop fixes).
-   #47–76 are implementation-time findings, not from a design session —
-   see the notes at the top of each of those sections.
-8. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
+   Behaviour class); 76 is Phase 6A-3 (the post-playtest loop fixes);
+   77–80 are Phase 6B (two socket lines restoring Decision 32, four
+   extensions per weapon, the Immolation cleanups, the two bugs the
+   batch's own tests caught). #47–80 are implementation-time findings,
+   not from a design session — see the notes at the top of each section.
+9. **`docs/plans/phase-5-6-arsenal.md`**, **`docs/plans/phase-5b-framework.md`**,
    **`docs/plans/phase-5c-inventory-ui.md`** — the arsenal catalogue
    design and the shipped 5B/5C economy and screen, including the
    assist-credit finding (dropped) and the withdrawPoints bug 5C found
-   and fixed in 5B's plumbing.
-9. **`docs/plans/phase-6-roadmap.md`**,
-   **`docs/plans/phase-6a1-gem-foundation.md`**,
-   **`docs/plans/phase-6a2-behaviour-gems.md`**,
-   **`docs/plans/phase-6a3-loop-fixes.md`** — the nine-batch Phase 6
-   phasing, and all three shipped 6A batches with their as-built deltas.
-   6A-3's plan doc also carries its own revision note — the first draft
-   was too narrow and was rewritten before the build started.
-10. **`docs/BACKLOG.md`** *Now* section — Phase 6B (real extensions for the
-    seven incumbent weapons, plus Immolation Ring's remaining balance gap)
-    is the concrete next step. Phase 3/4's own follow-ups (event tuning,
-    the coagulant formation drain visual, more AoE weapons, spontaneous
-    coagulation, behemoth timing) are in *Ideas* and *Bugs*.
+   and fixed in 5B's plumbing. **§5 and §12's call 20 now carry
+   2026-08-10 correction notes** — read them in place rather than
+   trusting the original text; both are superseded (Decisions 77–78).
+10. **`docs/plans/phase-6-roadmap.md`**,
+    **`docs/plans/phase-6a1-gem-foundation.md`**,
+    **`docs/plans/phase-6a2-behaviour-gems.md`**,
+    **`docs/plans/phase-6a3-loop-fixes.md`**,
+    **`docs/plans/phase-6b-incumbent-extensions.md`**,
+    **`docs/plans/phase-6b2-extension-content.md`** — the nine-batch Phase
+    6 phasing, and every shipped 6A/6B batch with its as-built delta.
+    6A-3's and 6B's own plan docs both carry a revision note — in each
+    case the first draft was too narrow and was rewritten mid-conversation
+    before the build started.
+11. **`docs/BACKLOG.md`** *Now* section — the Phase 5 gate is the concrete
+    next step. Phase 3/4's own follow-ups (event tuning, the coagulant
+    formation drain visual, more AoE weapons, spontaneous coagulation,
+    behemoth timing) are in *Ideas* and *Bugs*.
 
 **Everything remaining on the pre-rework bug list is absorbed by later
 phases.** Don't fix any of it now; each sits inside a system being
@@ -390,7 +434,96 @@ src/
 
 *Newest first.*
 
-### 2026-08-09 (latest) — Post-6A playtest, then Phase 6A-3: the loop fixes. Decision 76.
+### 2026-08-10 (latest) — Phase 6B: two socket lines and 28 real extensions. Decisions 77–80.
+
+**Full account:** `docs/sessions/2026-08-10-phase-6b-sockets-and-extensions.md`
+(the socket-model miscommunication and its diagnosis, the extension-count
+correction, the split-then-unsplit negotiation), plus
+`docs/plans/phase-6b-incumbent-extensions.md` (the umbrella plan and
+6B-1) and `docs/plans/phase-6b2-extension-content.md` (6B-2), both
+carrying their as-built deltas at the top.
+
+**The review found two things before any code was written**: six of the
+28 candidate extensions duplicated a 6A gem almost exactly, and Frost
+Nova's freeze never touched coagulants at all — `grid.frozen` is a
+per-cell array the growth pass reads, but `Coagulant` had no chill field,
+so the weapon the design calls *"a setup weapon"* set nothing up against
+the actual threat.
+
+**The owner's review caught something the plan itself had missed.**
+Asked whether the loadout screen would change, the owner traced a real
+gap: `phase-5-6-arsenal.md` §5 (2026-08-08) had merged extension and
+gem sockets into one shared pool per weapon, which supersedes Decision
+32's original *"per-weapon extension slots, universal support gems"* —
+and that supersession was never recorded, contradicting revision 3's own
+*"No decision is superseded — zero"* claim. Raised per `CLAUDE.md`'s
+ground-truth protocol rather than resolved unilaterally. **The owner
+reversed §5**: two independent socket lines, the extension line on its
+own laddered proposal (0/1/2 slots at 0–4/5–9/10+ points invested),
+restoring Decision 32 (Decision 77). A capacity increase (5 sockets → 7
+at full investment) falls out of this and was confirmed intentional, not
+a balance risk.
+
+**A genuine miscommunication surfaced mid-conversation and was diagnosed
+by the owner directly**: *"we call a pool offered on level up and a pool
+of sockets the same."* Fixed by naming the distinction once in the plan
+itself — "card pool" for the level-up draw, "sockets" (never "socket
+pool") for what a weapon holds.
+
+**The extension count was corrected from 3 to 4 per weapon** — the
+catalogue's own tables (`phase-5-6-arsenal.md` §7) always listed four
+candidates; only §12's settled-calls summary said three would ship. All
+four now ship, superseding that call (Decision 78) — 28 extensions this
+batch, 72 across the full 18-weapon catalogue.
+
+**A split into 6B-1/6B-2 was proposed, declined, then requested anyway**
+one message later — two plan documents were written as asked, then the
+owner greenlit both together with full autonomy rather than gating them
+separately, so the build proceeded as one continuous pass despite the
+two documents.
+
+**Shipped:** the two socket lines and their UI rework
+(`ui/weaponRow.ts` split into per-line rendering, `ui/inventory.ts`'s
+highlight split into `{gems, extensions}`, the per-row picker gap
+closed — it only ever listed gems before, even after extensions became
+bankable in 6A-3); the real extension catalogue (`tuning/extensions.ts`,
+`systems/extensions.ts`, folded into `weaponMods()`); all 28 extensions
+across the seven incumbents, including four new mechanisms — coagulant
+chilling, a coagulant armour debuff respecting `COAGULANT_ARMOR_FLOOR`,
+regrowth suppression, and the ring's second radius (with three "second
+ring" extensions corrected to go strictly *outward*, since every
+tower-centred radius floors at `perimeter` and an inward second ring
+sweeps space nothing has ever occupied — caught while planning 6B-2,
+before any code was written). Immolation Ring's last balance gap
+(`WEAPON_DAMAGE_SCALE`) closed; its dead `maxLevel` field deleted.
+
+**Two real bugs, both caught by the batch's own outcome tests before
+reaching the browser** (Decision 80): Shatter Core's damage bonus was
+wired as the literal multiplier instead of a `+X%` fraction (matching
+every sibling field's convention), making a level-1 hit deal 70% *less*
+damage instead of 30% more; Chill Field took a `max()` against the base
+freeze duration, which the base always dominated, making the extension a
+silent no-op. Both fixed once each test's own expected value didn't
+match what the code produced.
+
+**Verified live** via the same debug-harness technique Decisions 75/76
+used — the Browser pane wasn't compositing frames this session either. A
+run with all seven weapons, each carrying two real extensions and two
+gems, ran 900+ simulated ticks with zero console errors; the loadout
+screen's DOM confirmed both socket lines render at their exact expected
+counts (`gemSocketCount(24)=5`, `extensionSlotCount(24)=2`), and the
+side panel showed real per-weapon extension names, icons and
+descriptions in place of the old placeholder. Debug bridge removed,
+production bundle hash matched exactly before and after.
+
+589/589 tests (up from 513 — 76 new), typecheck clean, build clean.
+**Committed and pushed.**
+
+**Planned** — **the Phase 5 gate** next: *"is enhancement a decision or
+a slider?"* — the first point at which both things a socket can hold are
+real content on every incumbent weapon. No blockers.
+
+### 2026-08-09 — Post-6A playtest, then Phase 6A-3: the loop fixes. Decision 76.
 
 **Full account:** `docs/sessions/2026-08-09-post-6a-playtest-and-6a3.md`
 (the playtest findings, the scope conversation that turned a click-target

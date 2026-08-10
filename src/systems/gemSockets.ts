@@ -4,7 +4,7 @@ import { gemSupportsDelivery } from '../tuning/gems';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import type { GemKey, WeaponKey } from '../types';
 import { applyCoreGemEffect, removeCoreGemEffect } from './passives';
-import { freeSlots } from './sockets';
+import { freeExtensionSlots, freeGemSlots } from './sockets';
 
 // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S6c): the socketing
 // system 5C left as a read-only affordance. Whether `kind` could be
@@ -26,7 +26,7 @@ export function gemLegalFor(state: GameState, weaponKey: WeaponKey, kind: GemKey
 // wrong archetype, already there) uniformly, so a caller can't
 // accidentally socket a gem it shouldn't.
 export function socketGem(state: GameState, weaponKey: WeaponKey, instance: GemInstance): boolean {
-  if (freeSlots(state, weaponKey) <= 0) return false;
+  if (freeGemSlots(state, weaponKey) <= 0) return false;
   if (!gemLegalFor(state, weaponKey, instance.kind)) return false;
   const sockets = (state.weaponSockets[weaponKey] ??= { extensions: [], gems: [] });
   sockets.gems.push(instance);
@@ -65,9 +65,11 @@ export function extensionLegalFor(state: GameState, weaponKey: WeaponKey, instan
 
 // Mirrors socketGem/unsocketGem exactly — an extension moving in or out
 // of a weapon's sockets is the same array-move operation gems already
-// use, just reading extensionInventory/extensionLegalFor instead.
+// use, just reading extensionInventory/extensionLegalFor and its own
+// line's capacity (freeExtensionSlots, not freeGemSlots — Phase 6B-1's
+// two independent lines) instead.
 export function socketExtension(state: GameState, weaponKey: WeaponKey, instance: ExtensionInstance): boolean {
-  if (freeSlots(state, weaponKey) <= 0) return false;
+  if (freeExtensionSlots(state, weaponKey) <= 0) return false;
   if (!extensionLegalFor(state, weaponKey, instance)) return false;
   const sockets = (state.weaponSockets[weaponKey] ??= { extensions: [], gems: [] });
   sockets.extensions.push(instance);

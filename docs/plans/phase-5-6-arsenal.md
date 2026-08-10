@@ -15,11 +15,19 @@ is measurement — point totals, pacing numbers — not design.
 it, all good."* The threat model this catalogue is authored against is
 confirmed in real play, not just through the debug harness.
 
-**No decision is superseded.** Revision 1 proposed overriding two clauses
-of Decision 40, revision 2 one, revision 3 none: the owner's single-+/-
-model restored its legibility clause and choosing no-cap/no-DR restored
-the rest. Socket-opening is a pure addition, so `CLAUDE.md`'s ground-truth
-override protocol was never invoked.
+**No decision is superseded — with one exception found later.** Revision
+1 proposed overriding two clauses of Decision 40, revision 2 one,
+revision 3 none: the owner's single-+/- model restored its legibility
+clause and choosing no-cap/no-DR restored the rest. Socket-opening is a
+pure addition, so `CLAUDE.md`'s ground-truth override protocol was never
+invoked for Decision 40. **§5 below is the exception, missed at the
+time**: merging extension and gem sockets into one shared pool per
+weapon *does* supersede a clause of Decision 32 (2026-08-05's
+"per-weapon extension slots, universal support gems"), and that
+supersession went unrecorded until Phase 6B-1's planning caught it
+2026-08-10. §5 itself now carries the correction, and Decision 32 has
+been reversed back to two independent lines — see that decision's own
+note.
 
 Written 2026-08-07 in response to the owner's brief:
 *"we should start with at least 15 weapons, all of them should have their
@@ -299,6 +307,18 @@ free reassignment at any time). The inventory screen must show this
 clearly before it happens.
 
 ### Extensions and gems share one socket pool
+
+> **⚠️ REVERSED 2026-08-10, Phase 6B-1 (Decision 77).** This section's
+> proposal — one shared line per weapon — is superseded. The owner
+> restored **two independent socket lines** (extensions on their own
+> ladder, gems unchanged), which is Decision 32's original design; this
+> section's merge was the thing that had drifted from it, not the other
+> way round, and the drift went unrecorded until Phase 6B-1's planning
+> caught it. Kept below rather than deleted: the argument it makes
+> (*specialise vs. generalise*, one UI instead of two) is the honest cost
+> of the reversal, not a mistake to erase. See `docs/plans/phase-6b-
+> incumbent-extensions.md` §2 for the reasoning that reversed it and the
+> exact two-line mechanism that replaced it.
 
 A weapon's sockets take **either** a weapon-specific extension **or** a
 universal support gem. §13 asked for *"more extensions than slots,
@@ -1261,7 +1281,7 @@ Socket-opening is a pure addition. The override protocol was never needed.
 | 17 | Same gem **across weapons yes, twice in one weapon no** | §5 |
 | 18 | Orbital trade ship stays **parked for Phase 6/7** | §11 |
 | 19 | Starting kit: **Bolt, Chain, Poison** | §12.4 |
-| 20 | **3 extensions per weapon** | §7 |
+| 20 | ~~3 extensions per weapon~~ **Superseded 2026-08-10**: all **4** designed candidates ship (Decision 78) | §7 |
 | 21 | Weapons have **no rarity or power tiers** | §12.5 |
 | 22 | **Core gems draw from a separate track** | §5, §11 |
 | 23 | **Four cards per level-up**, plus a **bundle card** every N levels | §11 |
@@ -1500,7 +1520,7 @@ rebalance Frost before 6C; the fix is the gem.
 | Idea | Why not |
 |---|---|
 | Bundles as the unit of *decking*, not just unlocking | Already rejected by the owner (Decision 41) — unforeseen mid-run combinations are the more interesting game |
-| Separate socket pools for extensions and gems | Two UIs, two rules, and it removes the *specialise vs. generalise* question that shared sockets ask for free |
+| Separate socket pools for extensions and gems | **Reversed 2026-08-10** (Decision 77) — the owner chose this after all, restoring Decision 32. The cost named here (two UIs, two rules, losing the free specialise-vs-generalise question) is the real, accepted cost of that reversal, not a mistake; see §5's own note. |
 | Per-attribute point allocation (revision 1's model) | The owner's single +/- is better: one control per weapon keeps the screen readable, restores Decision 40's legibility, and makes attribute *count* free — which is what lets Blades have four |
 | Six-plus attributes per weapon | Even descriptively, a wall of numbers stops communicating. Three, four where a count is core |
 | An arbitrary "one transformative gem per weapon" cap | Unnecessary — §9E's same-stage exclusion falls out of the pipeline and documents itself |

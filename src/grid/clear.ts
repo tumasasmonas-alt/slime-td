@@ -56,7 +56,33 @@ export interface ClearOptions {
   // per-cell "last hit" state (the exact cost that got assist credit
   // dropped in 5B).
   priming?: number;
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S2-S4): the
+  // extension-carried effects, following the same "new ClearOptions
+  // field, never a second damage path" rule 6A-2's RESOLVE fields set.
+  //
+  // Shatter Core (Frost): `chill` marks a hit coagulant as chilled for
+  // this many seconds; `shatter` is the damage multiplier a hit applies
+  // if the TARGET was already chilled coming in. Ordering rule: a hit
+  // that applies chill does not itself benefit from it — the chilled
+  // check reads state before this hit's own `chill` write, or Frost would
+  // silently double its own damage and Shatter Core would stop being a
+  // setup card.
+  chill?: number;
+  shatter?: number;
+  // Corrosive (Poison): strips this fraction of a hit coagulant's armour
+  // for a fixed window. Bunker Buster (Missile): scales damage up by this
+  // much per point of the target's (possibly-debuffed) armour — reads the
+  // same effective-armour value Corrosive writes, in the other direction.
+  armorShred?: number;
+  armorScaled?: number;
+  // Rime (Frost) / Ash (Immolation): suppress ambient regrowth in the hit
+  // radius — systems/growth.ts reads Grid.regrowMult/regrowTimer, written
+  // here as a radius effect exactly like freezeDuration above.
+  suppressRegrowth?: { mult: number; seconds: number };
 }
+
+const ARMOR_SHRED_WINDOW = 2.0;
 
 // "Not hit recently," for Priming — long enough that a weapon has to
 // genuinely spread its fire to keep triggering it, short enough that a
@@ -114,6 +140,10 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
         const wasFrozen = grid.frozen[i]! > 0;
         grid.frozen[i] = Math.max(grid.frozen[i]!, freezeDuration);
         if (!wasFrozen) state.dirty.add(i);
+      }
+      if (opts.suppressRegrowth) {
+        grid.regrowMult[i] = opts.suppressRegrowth.mult;
+        grid.regrowTimer[i] = Math.max(grid.regrowTimer[i]!, opts.suppressRegrowth.seconds);
       }
       const dens = grid.growth[i]!;
       if (dens <= 0.001) continue;
@@ -174,14 +204,46 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     const overlap = coagulantOverlapArea(c, x, y, radiusPx);
     if (overlap <= 0) continue;
     const cellsEquivalent = overlap / (grid.cellSize * grid.cellSize);
-    const effectivePower = Math.max(power - c.armor, power * COAGULANT_ARMOR_FLOOR);
+    // Corrosive: armour is read net of any active debuff before this
+    // hit's own effect is applied below — the floor (COAGULANT_ARMOR_FLOOR)
+    // still applies on top, so armour becomes answerable, never irrelevant
+    // (arsenal plan S12.3, the same rule that bounds Penetration).
+    const debuffActive = c.armorDebuffUntil > state.time;
+    const effectiveArmor = debuffActive ? c.armor * (1 - c.armorDebuff) : c.armor;
+    // Bunker Buster: reads the same effective-armour value in the other
+    // direction — more armour (even net of Corrosive's own reduction)
+    // means more bonus damage. Corrosive reduces what Bunker Buster scales
+    // on, so running both on one target is deliberately mediocre.
+    const armorScaledMult = opts.armorScaled ? 1 + effectiveArmor * opts.armorScaled : 1;
+    const effectivePower = Math.max(power - effectiveArmor, power * COAGULANT_ARMOR_FLOOR) * armorScaledMult;
     // Priming: a coagulant not hit in the last PRIMING_WINDOW seconds
     // takes the bonus on the hit that breaks the streak.
     const primed = opts.priming !== undefined && state.time - c.lastHitAt >= PRIMING_WINDOW;
     const primingMult = primed ? opts.priming! : 1;
+    // Shatter Core: read BEFORE this hit's own `chill` write below — a hit
+    // that applies chill must not benefit from it, or Frost would silently
+    // double its own damage on every hit. `opts.shatter` is a BONUS
+    // fraction (+30/45/60%, matching every other "+X%" value in the
+    // codebase, e.g. the Amplifier gem's delta), not the multiplier
+    // itself — using it directly as the multiplier would make Shatter
+    // Core a damage REDUCTION instead of a bonus.
+    const wasChilled = c.chilledUntil > state.time;
+    const shatterMult = wasChilled && opts.shatter ? 1 + opts.shatter : 1;
     const raw =
-      effectivePower * DAMAGE_COEFF * cellsEquivalent * COAGULANT_RESISTANCE * weaponMult * COAGULANT_DAMAGE_SCALE * primingMult;
+      effectivePower *
+      DAMAGE_COEFF *
+      cellsEquivalent *
+      COAGULANT_RESISTANCE *
+      weaponMult *
+      COAGULANT_DAMAGE_SCALE *
+      primingMult *
+      shatterMult;
     const removeAmt = clamp(raw, 0, c.mass);
+    if (opts.chill) c.chilledUntil = Math.max(c.chilledUntil, state.time + opts.chill);
+    if (opts.armorShred) {
+      c.armorDebuff = Math.max(debuffActive ? c.armorDebuff : 0, opts.armorShred);
+      c.armorDebuffUntil = state.time + ARMOR_SHRED_WINDOW;
+    }
     if (removeAmt <= 0) continue;
     c.lastHitAt = state.time;
     c.mass -= removeAmt;

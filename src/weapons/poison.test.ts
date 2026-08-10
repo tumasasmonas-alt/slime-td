@@ -18,6 +18,8 @@ function makeTestGrid(): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 200,
     perimeter: 20,
   };
@@ -72,5 +74,108 @@ describe('updatePoisonWeapon', () => {
     updatePoisonWeapon(state, 0.016);
 
     expect(state.clouds).toHaveLength(1);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Poison's
+  // four extensions.
+  describe('extensions', () => {
+    it('Corrosive sets armorShred on the dropped cloud', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.poison = 1;
+      state.weaponSockets.poison = { extensions: [{ id: 1, weaponKey: 'poison', kind: 'corrosive', level: 2 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updatePoisonWeapon(state, 0.016);
+
+      expect(state.clouds[0]!.armorShred).toBeCloseTo(0.45, 5);
+    });
+
+    it('Lingering Spores sets driftOutward and an origin on the cloud', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.poison = 1;
+      state.weaponSockets.poison = { extensions: [{ id: 1, weaponKey: 'poison', kind: 'lingeringSpores', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updatePoisonWeapon(state, 0.016);
+
+      const cloud = state.clouds[0]!;
+      expect(cloud.driftOutward).toBe(12);
+      expect(cloud.originX).toBe(cloud.x);
+      expect(cloud.originY).toBe(cloud.y);
+    });
+
+    it('Lingering Spores extends the cloud’s lifetime (mods channel)', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.poison = 1;
+      state.weaponSockets.poison = { extensions: [{ id: 1, weaponKey: 'poison', kind: 'lingeringSpores', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      const plain = freshState();
+      plain.grid = makeTestGrid();
+      plain.tower.x = 150;
+      plain.tower.y = 150;
+      plain.weapons.poison = 1;
+      revealCellEastOfTower(plain.grid, plain.tower.x, plain.tower.y);
+      computeFrontier(plain);
+
+      updatePoisonWeapon(state, 0.016);
+      updatePoisonWeapon(plain, 0.016);
+
+      expect(state.clouds[0]!.life).toBeGreaterThan(plain.clouds[0]!.life);
+    });
+
+    it('Twin Canister drops a second, smaller, longer-lived cloud', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.poison = 1;
+      state.weaponSockets.poison = { extensions: [{ id: 1, weaponKey: 'poison', kind: 'twinCanister', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updatePoisonWeapon(state, 0.016);
+
+      expect(state.clouds).toHaveLength(2);
+      const [first, second] = state.clouds;
+      expect(second!.radius).toBeLessThan(first!.radius);
+      expect(second!.life).toBeGreaterThan(first!.life);
+    });
+
+    it('Cloud Radius raises the cloud’s radius (mods channel)', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.poison = 1;
+      state.weaponSockets.poison = { extensions: [{ id: 1, weaponKey: 'poison', kind: 'cloudRadius', level: 3 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      const plain = freshState();
+      plain.grid = makeTestGrid();
+      plain.tower.x = 150;
+      plain.tower.y = 150;
+      plain.weapons.poison = 1;
+      revealCellEastOfTower(plain.grid, plain.tower.x, plain.tower.y);
+      computeFrontier(plain);
+
+      updatePoisonWeapon(state, 0.016);
+      updatePoisonWeapon(plain, 0.016);
+
+      expect(state.clouds[0]!.radius).toBeGreaterThan(plain.clouds[0]!.radius);
+    });
   });
 });

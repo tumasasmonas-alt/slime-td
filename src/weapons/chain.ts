@@ -1,4 +1,5 @@
 import type { GameState } from '../state';
+import { extensionLevel } from '../systems/extensions';
 import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
 import { weaponMods } from '../systems/weaponMods';
 import { chainCooldown, chainCount, chainDamage } from '../tuning/weapons';
@@ -6,6 +7,15 @@ import { cooldownReady, emissionAngles, frontierAcquire, runWeaponPipeline, type
 
 const CHAIN_SPEED = 760;
 const MULTISHOT_SPREAD = 0.3;
+
+// Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Chain's four
+// extensions, all per-projectile fields consumed inside
+// systems/projectiles.ts's existing `chain` branch — see state.ts's
+// ChainProjectile comment for what each field does.
+const STATIC_BUILDUP_GROWTH: readonly [number, number, number] = [1.15, 1.25, 1.35];
+const BACKLASH_MULT: readonly [number, number, number] = [2, 2.5, 3];
+const CONDUCTIVE_BIAS: readonly [number, number, number] = [1.5, 2, 2.5];
+const SPLIT_ARC_POWER: readonly [number, number, number] = [0.5, 0.65, 0.8];
 
 // Chain's own hopsLeft/visited/legStart machinery is its identity
 // (systems/projectiles.ts's `p.type === 'chain'` branch) — the generic
@@ -48,6 +58,12 @@ function fireChain(
 ): void {
   const t = state.tower;
   const speed = CHAIN_SPEED * mods.velocity;
+
+  const staticLvl = extensionLevel(state, 'chain', 'staticBuildup');
+  const backlashLvl = extensionLevel(state, 'chain', 'backlash');
+  const conductiveLvl = extensionLevel(state, 'chain', 'conductive');
+  const splitArcLvl = extensionLevel(state, 'chain', 'splitArc');
+
   state.projectiles.push({
     type: 'chain',
     x: t.x,
@@ -63,6 +79,10 @@ function fireChain(
     legStart: { x: t.x, y: t.y },
     src: 'chain',
     impactAreaMult: mods.area,
+    hopGrowth: staticLvl > 0 ? STATIC_BUILDUP_GROWTH[staticLvl - 1] : undefined,
+    finalHopMult: backlashLvl > 0 ? BACKLASH_MULT[backlashLvl - 1] : undefined,
+    densityBias: conductiveLvl > 0 ? CONDUCTIVE_BIAS[conductiveLvl - 1] : undefined,
+    splitArcPower: splitArcLvl > 0 ? SPLIT_ARC_POWER[splitArcLvl - 1] : undefined,
     ...opts,
   });
 }

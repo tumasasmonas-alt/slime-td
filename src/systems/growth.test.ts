@@ -19,6 +19,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 100,
     ...overrides,
@@ -288,5 +290,57 @@ describe('applyAmbientGrowth — maturity ceiling and rate (Phase 4A, Decision 2
     const virginGain = virgin.growth[0]! - 0.5;
     const matureGain = mature.growth[0]! - 0.5;
     expect(matureGain).toBeLessThan(virginGain);
+  });
+});
+
+// Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S4): regrowth
+// suppression — Frost's Rime and Immolation's Ash. Decayed in the same
+// loop `frozen` already is, checked first so the common (unsuppressed)
+// case pays only one array read.
+describe('applyAmbientGrowth — regrowth suppression (Phase 6B-2)', () => {
+  const FAST = 500; // same reasoning as the maturity describe block above — converge within a reasonable test loop
+
+  it('grows slower on a suppressed cell than an identical unsuppressed one', () => {
+    const suppressed = makeTestGrid();
+    suppressed.growth[0] = 0.3;
+    suppressed.regrowMult[0] = 0.3;
+    suppressed.regrowTimer[0] = 3;
+    const plain = makeTestGrid();
+    plain.growth[0] = 0.3;
+    const tower = makeTower();
+
+    applyAmbientGrowth(suppressed, tower, FAST, 0.18, new Set());
+    applyAmbientGrowth(plain, tower, FAST, 0.18, new Set());
+
+    const suppressedGain = suppressed.growth[0]! - 0.3;
+    const plainGain = plain.growth[0]! - 0.3;
+    expect(suppressedGain).toBeLessThan(plainGain);
+    expect(suppressedGain).toBeGreaterThan(0); // suppressed, not frozen — still grows, just slower
+  });
+
+  it('the timer decays alongside frozen’s own countdown', () => {
+    const grid = makeTestGrid();
+    grid.regrowMult[0] = 0.5;
+    grid.regrowTimer[0] = 0.2;
+    const tower = makeTower();
+
+    applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
+
+    expect(grid.regrowTimer[0]).toBeCloseTo(0.02, 5);
+  });
+
+  it('growth returns to the normal rate once the timer lapses', () => {
+    const wasSuppressed = makeTestGrid();
+    wasSuppressed.growth[0] = 0.3;
+    wasSuppressed.regrowMult[0] = 0.3;
+    wasSuppressed.regrowTimer[0] = 0; // already lapsed
+    const plain = makeTestGrid();
+    plain.growth[0] = 0.3;
+    const tower = makeTower();
+
+    applyAmbientGrowth(wasSuppressed, tower, FAST, 0.18, new Set());
+    applyAmbientGrowth(plain, tower, FAST, 0.18, new Set());
+
+    expect(wasSuppressed.growth[0]).toBeCloseTo(plain.growth[0]!, 5);
   });
 });

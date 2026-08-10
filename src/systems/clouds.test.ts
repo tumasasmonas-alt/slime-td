@@ -17,6 +17,8 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 20,
     ...overrides,
@@ -85,5 +87,55 @@ describe('updateClouds', () => {
 
     expect(() => updateClouds(state, 0.1)).not.toThrow();
     expect(state.clouds).toHaveLength(1);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Lingering
+  // Spores' outward drift, distinct from Homing's toward-the-threat drift.
+  describe('driftOutward (Lingering Spores)', () => {
+    it('drifts a cloud away from its own origin over time', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.clouds.push({
+        x: 300,
+        y: 300,
+        radius: 30,
+        life: 3.4,
+        maxLife: 3.4,
+        dmgPerSec: 10,
+        color: '#8aff4d',
+        tickTimer: 5,
+        bubbleSeeds: [],
+        driftOutward: 20,
+        originX: 300,
+        originY: 300,
+      });
+
+      updateClouds(state, 0.5);
+
+      const c = state.clouds[0]!;
+      const distFromOrigin = Math.hypot(c.x - 300, c.y - 300);
+      expect(distFromOrigin).toBeGreaterThan(0);
+    });
+
+    it('does not drift a cloud with no driftOutward set (no regression)', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.clouds.push({
+        x: 300,
+        y: 300,
+        radius: 30,
+        life: 3.4,
+        maxLife: 3.4,
+        dmgPerSec: 10,
+        color: '#8aff4d',
+        tickTimer: 5,
+        bubbleSeeds: [],
+      });
+
+      updateClouds(state, 0.5);
+
+      expect(state.clouds[0]!.x).toBe(300);
+      expect(state.clouds[0]!.y).toBe(300);
+    });
   });
 });

@@ -18,6 +18,8 @@ function makeTestGrid(): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 200,
     perimeter: 20,
   };
@@ -76,5 +78,82 @@ describe('updateMissileWeapon', () => {
     updateMissileWeapon(state, 0.016);
 
     expect(state.projectiles).toHaveLength(1);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Missile's
+  // four extensions. Proximity Fuse and Cluster Warhead's own detonation
+  // behaviour is exercised in systems/projectiles.test.ts, against the
+  // fields checked here.
+  describe('extensions', () => {
+    it('Bunker Buster sets armorScaled on the spawned missile', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.missile = 1;
+      state.weaponSockets.missile = { extensions: [{ id: 1, weaponKey: 'missile', kind: 'bunkerBuster', level: 2 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateMissileWeapon(state, 0.016);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'missile') throw new Error('expected a missile');
+      expect(p.armorScaled).toBeCloseTo(0.12, 5);
+    });
+
+    it('Proximity Fuse sets proximityFuseDist on the spawned missile', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.missile = 1;
+      state.weaponSockets.missile = { extensions: [{ id: 1, weaponKey: 'missile', kind: 'proximityFuse', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateMissileWeapon(state, 0.016);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'missile') throw new Error('expected a missile');
+      expect(p.proximityFuseDist).toBe(35);
+    });
+
+    it('Cluster Warhead sets clusterCount on the spawned missile', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.missile = 1;
+      state.weaponSockets.missile = { extensions: [{ id: 1, weaponKey: 'missile', kind: 'clusterWarhead', level: 3 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateMissileWeapon(state, 0.016);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'missile') throw new Error('expected a missile');
+      expect(p.clusterCount).toBe(5);
+    });
+
+    it('Salvo fires extra missiles, sequenced with a later armAt', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.missile = 1;
+      state.weaponSockets.missile = { extensions: [{ id: 1, weaponKey: 'missile', kind: 'salvo', level: 3 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateMissileWeapon(state, 0.016);
+
+      // Level 3 = +2 missiles (SALVO_BONUS), on top of the normal one.
+      expect(state.projectiles).toHaveLength(3);
+      const armTimes = state.projectiles.map((p) => (p.type === 'missile' ? p.armAt : -1)).sort((a, b) => a - b);
+      expect(armTimes[0]).toBe(0); // the original shot, armed immediately
+      expect(armTimes[1]).toBeGreaterThan(0);
+      expect(armTimes[2]).toBeGreaterThan(armTimes[1]!);
+    });
   });
 });

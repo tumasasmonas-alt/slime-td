@@ -478,8 +478,24 @@
         color: var(--muted);
         margin-top: 6px;
       }
+      /* Phase 6B-1 (docs/plans/phase-6b-incumbent-extensions.md S2): two
+         independent socket lines per weapon — extensions and support gems
+         no longer share one row of dots, restoring Decision 32. */
+      .weapon-row-socket-line {
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .weapon-row-line-label {
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        width: 24px;
+        flex-shrink: 0;
+      }
       .weapon-row-sockets {
-        margin-top: 6px;
         display: flex;
         gap: 5px;
       }

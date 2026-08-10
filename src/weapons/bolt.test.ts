@@ -18,6 +18,8 @@ function makeTestGrid(): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 200,
     perimeter: 20,
   };
@@ -182,5 +184,89 @@ describe('updateBoltWeapon', () => {
     updateBoltWeapon(state, 0.016);
 
     expect(state.projectiles[0]!.pierce).toBeGreaterThan(0);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Bolt's
+  // four extensions.
+  describe('extensions', () => {
+    it('Heavy Slug raises damage and lowers fire rate (mods channel — no bolt-specific code)', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.bolt = 6;
+      state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      const plain = freshState();
+      plain.grid = makeTestGrid();
+      plain.tower.x = 150;
+      plain.tower.y = 150;
+      plain.weapons.bolt = 6;
+      revealCellEastOfTower(plain.grid, plain.tower.x, plain.tower.y);
+      computeFrontier(plain);
+
+      updateBoltWeapon(state, 0.016);
+      updateBoltWeapon(plain, 0.016);
+
+      expect(state.projectiles[0]!.dmg).toBeGreaterThan(plain.projectiles[0]!.dmg);
+      expect(state.weaponTimers.bolt).toBeGreaterThan(plain.weaponTimers.bolt); // slower fire rate
+    });
+
+    it('Twin Barrel fires a second bolt from an offset origin', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.bolt = 6;
+      state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'twinBarrel', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateBoltWeapon(state, 0.016);
+
+      expect(state.projectiles).toHaveLength(2);
+      const dist = Math.hypot(state.projectiles[1]!.x - state.projectiles[0]!.x, state.projectiles[1]!.y - state.projectiles[0]!.y);
+      expect(dist).toBeGreaterThan(0); // a genuinely different origin, not the same bolt twice
+    });
+
+    it('Overcharge boosts every 5th shot', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.bolt = 6;
+      state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'overcharge', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      let normalDmg = 0;
+      let boostedDmg = 0;
+      for (let shot = 1; shot <= 5; shot++) {
+        state.weaponTimers.bolt = 0;
+        updateBoltWeapon(state, 0.016);
+        const p = state.projectiles[state.projectiles.length - 1]!;
+        if (shot < 5) normalDmg = p.dmg;
+        else boostedDmg = p.dmg;
+      }
+
+      expect(boostedDmg).toBeGreaterThan(normalDmg);
+    });
+
+    it('Tracking Rounds sets a reacquire rate on the projectile', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.bolt = 6;
+      state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'trackingRounds', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateBoltWeapon(state, 0.016);
+
+      expect(state.projectiles[0]!.reacquireRate).toBeGreaterThan(0);
+    });
   });
 });

@@ -18,6 +18,8 @@ function makeTestGrid(): Grid {
     bucket: new Int8Array(size),
     maturity: new Float32Array(size),
     matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
     maxRange: 200,
     perimeter: 20,
   };
@@ -76,5 +78,81 @@ describe('updateChainWeapon', () => {
     updateChainWeapon(state, 0.016);
 
     expect(state.projectiles).toHaveLength(1);
+  });
+
+  // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S7): Chain's
+  // four extensions bake in as per-projectile fields at spawn — the
+  // behaviour they drive (decay direction, the final-hop bonus, hop
+  // selection weighting, the branch) is exercised in
+  // systems/projectiles.test.ts, against the same fields.
+  describe('extensions', () => {
+    it('Static Buildup sets hopGrowth on the spawned projectile', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.chain = 3;
+      state.weaponSockets.chain = { extensions: [{ id: 1, weaponKey: 'chain', kind: 'staticBuildup', level: 2 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateChainWeapon(state, 0.016);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'chain') throw new Error('expected a chain projectile');
+      expect(p.hopGrowth).toBeCloseTo(1.25, 5);
+    });
+
+    it('Backlash sets finalHopMult on the spawned projectile', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.chain = 3;
+      state.weaponSockets.chain = { extensions: [{ id: 1, weaponKey: 'chain', kind: 'backlash', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateChainWeapon(state, 0.016);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'chain') throw new Error('expected a chain projectile');
+      expect(p.finalHopMult).toBe(2);
+    });
+
+    it('Conductive sets densityBias on the spawned projectile', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.chain = 3;
+      state.weaponSockets.chain = { extensions: [{ id: 1, weaponKey: 'chain', kind: 'conductive', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateChainWeapon(state, 0.016);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'chain') throw new Error('expected a chain projectile');
+      expect(p.densityBias).toBe(1.5);
+    });
+
+    it('Split Arc sets splitArcPower on the spawned projectile, unset without it', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 150;
+      state.tower.y = 150;
+      state.weapons.chain = 3;
+      state.weaponSockets.chain = { extensions: [{ id: 1, weaponKey: 'chain', kind: 'splitArc', level: 1 }], gems: [] };
+      revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+      computeFrontier(state);
+
+      updateChainWeapon(state, 0.016);
+
+      const p = state.projectiles[0]!;
+      if (p.type !== 'chain') throw new Error('expected a chain projectile');
+      expect(p.splitArcPower).toBeCloseTo(0.5, 5);
+      expect(p.splitArcUsed).toBeUndefined();
+    });
   });
 });

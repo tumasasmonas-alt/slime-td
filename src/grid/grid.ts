@@ -31,6 +31,12 @@ export function buildGrid(): Grid {
     matBucket: new Int8Array(size),
     maxRange: WORLD_MAX_RANGE,
     perimeter: PERIMETER,
+    // Phase 6B-2: regrowMult defaults to 0 (Float32Array's own default),
+    // deliberately never read unless regrowTimer > 0 — systems/growth.ts
+    // treats an expired/never-set timer as "no suppression" (mult 1)
+    // rather than requiring this array to be pre-filled with 1s.
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
   };
 }
 

@@ -555,6 +555,19 @@ axis of card-pool dilution disappears.
 **Deliberately more extensions than slots**, so the choice is contested —
 that is what makes the inventory screen earn its existence.
 
+> **Superseded 2026-08-08, restored 2026-08-10.** The arsenal design pass
+> (`docs/plans/phase-5-6-arsenal.md` §5) merged extension slots and
+> support-gem sockets into one shared pool per weapon, arguing it made
+> "specialise vs. generalise" a live question every socket opens. That
+> supersession was never recorded here — a real gap, caught during
+> Phase 6B-1's planning when the owner asked "will the loadout screen
+> change?" and the shared-pool model turned out to contradict what this
+> decision actually says. **The owner reversed §5 on 2026-08-10**
+> (Decision 77): extensions and gems are back to two independent socket
+> lines, restoring this decision's original text without further
+> edit. §5's argument is recorded as reversed, not deleted — the trade it
+> named (one UI, one rule) is still the honest cost of the reversal.
+
 **The pre-run deck defines the card pool.** This is the main defence
 against the real risk of a 20-weapon arsenal: naively pooled, level-ups
 stop being choices and become lottery draws. It also makes
@@ -2229,7 +2242,135 @@ directions), typecheck clean, build clean. **Committed and pushed.**
 
 ---
 
-## Documented prototype bugs
+## Phase 6B — the incumbents' real extensions, and two socket lines
+
+> Decisions 77–80 came out of the 2026-08-10 session. The owner asked for
+> a plan, corrected two things in it during review — the socket model and
+> the extension count — then greenlit both halves (6B-1: the socket
+> rework and framework; 6B-2: the 28 extensions and four new mechanisms)
+> with full autonomy. Full account: `docs/plans/phase-6b-incumbent-
+> extensions.md` (6B-1, the umbrella) and `docs/plans/phase-6b2-
+> extension-content.md` (6B-2).
+
+**77. Extensions and support gems get two independent socket lines,
+reversing arsenal plan §5, restoring Decision 32.** 📋
+*2026-08-10.* §5 (2026-08-08) merged them into one shared pool per
+weapon; the owner reversed that after a scope conversation, asking
+"will the loadout screen change?" and diagnosing the review's own
+confusion as *"a miscommunication... we call a pool offered on level up
+and a pool of sockets the same."* Two rules fall out:
+
+- The **gem line** is unchanged: `gemSocketCount()`, 1→5 sockets at
+  0/3/8/15/24 points invested.
+- The **extension line** is new: `extensionSlotCount()`, 0→1→2 slots at
+  0–4 / 5–9 / 10+ points invested — the owner's own sub-proposal,
+  chosen over a flat 2-from-zero (which would let an uninvested weapon
+  field 2 extensions + 1 gem, undercutting "points buy depth") and over
+  1-from-zero-plus-a-second-at-8 (loses the single clean rule).
+
+**The capacity increase (5 sockets → 7 at full investment) is
+intentional, not a side effect** — confirmed explicitly by the owner
+rather than flagged as a balance risk for the gate.
+
+`systems/sockets.ts`'s `occupiedSlots()`/`freeSlots()` (one combined
+count) are replaced, not widened, by `freeGemSlots()`/
+`freeExtensionSlots()` — each line evicts independently on withdrawal,
+which also deletes the arbitrary "gems evict before extensions" tiebreak
+the old combined-pool code needed and documented as arbitrary.
+
+**78. Four extensions ship per weapon, not three — supersedes arsenal
+plan §12's call 20.** 📋
+*2026-08-10.* §7's own tables always listed four *candidate* extensions
+per weapon, with the intent that a batch would pick three and keep the
+fourth as a designed spare if one proved weak in play. With two socket
+lines now making the contest permanent (Decision 77) rather than
+disappearing above 8 points invested, the owner shipped all four:
+*"Four — ship all designed candidates."* 28 extensions across the seven
+incumbents (72 once the full 18-weapon catalogue ships). Cost: the
+designed-spare safety net is gone (nothing left on the page if one plays
+badly), and six extensions that duplicate a 6A gem all ship rather than
+being quietly dropped as the spare — survivable specifically *because*
+Decision 77 means an extension no longer competes with its gem twin for
+the same slot.
+
+**Heavy Slug (Bolt) ships with a genuine downside** — the catalogue's own
+"slower, much bigger hits," +45/70/100% damage traded against −25/30/35%
+fire rate. The first content in either the gem or extension catalogue
+that takes something away, deliberately: *"everything shipped so far is
+pure gain... exactly the shape that makes enhancement read as a slider
+rather than a decision."* Evidence for the Phase 5 gate, not a balance
+afterthought.
+
+**79. Immolation Ring's `WEAPON_DAMAGE_SCALE` gap closes; `WeaponDef.maxLevel`
+is deleted.** 📋
+*2026-08-10.* The last of Immolation's three balance gaps (open since
+Decision 70's promotion from Ward Pulse) — `immolationDamage()` now
+carries the same +50% Phase 4C-1 pass every other weapon's damage
+function has. Confirms the reasoning Decision 70 and 75 already
+recorded: the gap was a classification accident (Ward Pulse misfiled as
+a passive when the 4C-1 pass shipped), not a design position.
+`WeaponDef.maxLevel` — dead since arsenal plan §6 retired weapon-level
+caps and 5B removed the last reader — is deleted from the interface and
+all seven defs, closing the BACKLOG entry that also flagged Immolation's
+own value as inconsistent (6 against everyone else's 8).
+
+**80. Shatter Core's damage bonus is a fraction, not the multiplier —
+and Second Ring/Counter-Rotation/Chill Field all read outward.** 📋
+*2026-08-10, both found while writing this batch's own tests.*
+
+The extension catalogue's `shatter` field was implemented as the literal
+multiplier (`opts.shatter` applied directly), while every extension's
+own **value** (0.3/0.45/0.6, "+30/45/60% damage") was authored as a
+*bonus fraction*, matching every other "+X%" value in the codebase (the
+Amplifier gem's `delta`, for instance). Applied directly, a level-1
+Shatter Core hit for `×0.3` — a 70% damage **reduction**, the opposite of
+what the card claims. Caught by the extension's own outcome test
+(`grid/clear.test.ts`) before it reached the browser; fixed to
+`1 + opts.shatter`, matching every sibling field's convention.
+
+Separately: three extensions describe a "second" instance of something a
+weapon already has — Immolation's Second Ring, Blades' Counter-Rotation,
+Frost's Chill Field. Every tower-centred radius floors at `perimeter`
+(`CLAUDE.md`'s own sharp-edge list, prototype bug #5 below) — so a
+second ring placed *inward*, the plan's own first-draft reading, sits
+inside the perimeter and sweeps space nothing has ever occupied: a card
+that sockets fine, describes itself correctly, and does nothing. Fixed
+before any code was written, once §1 of `docs/plans/phase-6b2-extension-
+content.md` traced the geometry — all three now go strictly outward
+(1.4×, 1.25×, and the nova's own un-fractioned radius respectively),
+which reads better against each card's own name besides being the only
+version that actually works.
+
+**Shipped:** the two socket lines and their UI (`ui/weaponRow.ts` split
+into per-line rendering and per-line pickers, `ui/inventory.ts`'s
+placing-mode highlight split into `{gems, extensions}`); the real
+extension catalogue (`tuning/extensions.ts`, `systems/extensions.ts`,
+folded into `weaponMods()`); all 28 extensions across the seven
+incumbents, including four genuinely new mechanisms — coagulant
+chilling (Shatter Core), a coagulant armour debuff respecting
+`COAGULANT_ARMOR_FLOOR` (Corrosive/Bunker Buster, arsenal plan §12.3's
+rule extended to a new mechanism), regrowth suppression as a `Grid`-level
+`regrowMult`/`regrowTimer` pair decayed in the same pass `frozen` already
+is (Rime/Ash), and the ring's second radius (Second Ring/Flare, with
+`render/immolationRing.ts` reading the same radius constant as the
+weapon rather than computing its own, avoiding the desync risk 6A-2
+already declined to take once). 589/589 tests (up from 513 — 76 new),
+typecheck clean, build clean.
+
+**Verified live** via the same debug-harness technique Decision 75/76
+used (the Browser pane was not compositing frames this session either —
+`document.visibilityState === 'hidden'`): a run equipped with all seven
+weapons, every one carrying two real extensions plus two gems, ran 900+
+simulated ticks with zero console errors; the loadout screen's DOM was
+read directly and confirmed both socket lines render correctly (an
+extension-line dot showing "Heavy Slug Lv3" beside a gem-line dot showing
+"Amplifier," 3 further gem sockets open at 24 points invested, exactly
+matching `gemSocketCount(24)=5` and `extensionSlotCount(24)=2`); the
+side panel's Extensions section showed real per-weapon names, icons and
+descriptions in place of the old placeholder. The debug bridge was
+removed and the production bundle hash matched exactly before and after.
+
+**Committed and pushed.**
 
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.

@@ -109,7 +109,7 @@ describe('extensionLegalFor', () => {
   it('is true for an instance rolled for this weapon, on an equipped weapon with room', () => {
     const state = freshState();
     state.weapons.bolt = 1;
-    const instance = { id: 1, weaponKey: 'bolt' as const, kind: 'placeholder', level: 1 as const };
+    const instance = { id: 1, weaponKey: 'bolt' as const, kind: 'heavySlug' as const, level: 1 as const };
     expect(extensionLegalFor(state, 'bolt', instance)).toBe(true);
   });
 
@@ -117,21 +117,21 @@ describe('extensionLegalFor', () => {
     const state = freshState();
     state.weapons.bolt = 1;
     state.weapons.chain = 1;
-    const instance = { id: 1, weaponKey: 'chain' as const, kind: 'placeholder', level: 1 as const };
+    const instance = { id: 1, weaponKey: 'chain' as const, kind: 'heavySlug' as const, level: 1 as const };
     expect(extensionLegalFor(state, 'bolt', instance)).toBe(false);
   });
 
   it('is false for an unequipped weapon', () => {
     const state = freshState();
-    const instance = { id: 1, weaponKey: 'bolt' as const, kind: 'placeholder', level: 1 as const };
+    const instance = { id: 1, weaponKey: 'bolt' as const, kind: 'heavySlug' as const, level: 1 as const };
     expect(extensionLegalFor(state, 'bolt', instance)).toBe(false);
   });
 
   it('is false once this weapon already has an extension of the same kind socketed', () => {
     const state = freshState();
     state.weapons.bolt = 1;
-    state.weaponSockets.bolt = { extensions: [{ id: 2, weaponKey: 'bolt', kind: 'placeholder', level: 1 }], gems: [] };
-    const instance = { id: 1, weaponKey: 'bolt' as const, kind: 'placeholder', level: 1 as const };
+    state.weaponSockets.bolt = { extensions: [{ id: 2, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] };
+    const instance = { id: 1, weaponKey: 'bolt' as const, kind: 'heavySlug' as const, level: 1 as const };
     expect(extensionLegalFor(state, 'bolt', instance)).toBe(false);
   });
 });
@@ -139,28 +139,36 @@ describe('extensionLegalFor', () => {
 describe('socketExtension', () => {
   it('moves an instance from inventory into the weapon’s sockets', () => {
     const state = freshState();
-    state.weapons.bolt = 1;
-    state.extensionInventory = [{ id: 7, weaponKey: 'bolt', kind: 'placeholder', level: 1 }];
+    state.weapons.bolt = 5; // extensionSlotCount(5) = 1
+    state.extensionInventory = [{ id: 7, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }];
     const ok = socketExtension(state, 'bolt', state.extensionInventory[0]!);
     expect(ok).toBe(true);
-    expect(state.weaponSockets.bolt?.extensions).toEqual([{ id: 7, weaponKey: 'bolt', kind: 'placeholder', level: 1 }]);
+    expect(state.weaponSockets.bolt?.extensions).toEqual([{ id: 7, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }]);
     expect(state.extensionInventory).toHaveLength(0);
   });
 
   it('refuses and leaves inventory untouched when there is no free socket', () => {
     const state = freshState();
-    state.weapons.bolt = 0;
-    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'placeholder', level: 1 }], gems: [] };
-    state.extensionInventory = [{ id: 7, weaponKey: 'bolt', kind: 'other', level: 1 }];
+    state.weapons.bolt = 5; // extensionSlotCount(5) = 1, already occupied below
+    state.weaponSockets.bolt = { extensions: [{ id: 1, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }], gems: [] };
+    state.extensionInventory = [{ id: 7, weaponKey: 'bolt', kind: 'twinBarrel', level: 1 }];
     const ok = socketExtension(state, 'bolt', state.extensionInventory[0]!);
     expect(ok).toBe(false);
     expect(state.extensionInventory).toHaveLength(1);
   });
 
+  it('refuses below the first extension threshold even with an otherwise-legal instance', () => {
+    const state = freshState();
+    state.weapons.bolt = 4; // extensionSlotCount(4) = 0
+    state.extensionInventory = [{ id: 7, weaponKey: 'bolt', kind: 'heavySlug', level: 1 }];
+    expect(socketExtension(state, 'bolt', state.extensionInventory[0]!)).toBe(false);
+    expect(state.extensionInventory).toHaveLength(1);
+  });
+
   it('refuses an instance bound to a different weapon', () => {
     const state = freshState();
-    state.weapons.bolt = 1;
-    state.extensionInventory = [{ id: 7, weaponKey: 'chain', kind: 'placeholder', level: 1 }];
+    state.weapons.bolt = 5; // has room — the refusal below is the weaponKey mismatch, not capacity
+    state.extensionInventory = [{ id: 7, weaponKey: 'chain', kind: 'heavySlug', level: 1 }];
     expect(socketExtension(state, 'bolt', state.extensionInventory[0]!)).toBe(false);
   });
 });
@@ -169,11 +177,11 @@ describe('unsocketExtension', () => {
   it('returns an extension from a weapon’s sockets to inventory — never destroyed', () => {
     const state = freshState();
     state.weapons.bolt = 1;
-    state.weaponSockets.bolt = { extensions: [{ id: 7, weaponKey: 'bolt', kind: 'placeholder', level: 2 }], gems: [] };
+    state.weaponSockets.bolt = { extensions: [{ id: 7, weaponKey: 'bolt', kind: 'heavySlug', level: 2 }], gems: [] };
     const ok = unsocketExtension(state, 'bolt', 7);
     expect(ok).toBe(true);
     expect(state.weaponSockets.bolt?.extensions).toHaveLength(0);
-    expect(state.extensionInventory).toEqual([{ id: 7, weaponKey: 'bolt', kind: 'placeholder', level: 2 }]);
+    expect(state.extensionInventory).toEqual([{ id: 7, weaponKey: 'bolt', kind: 'heavySlug', level: 2 }]);
   });
 
   it('returns false for an extension id not present', () => {
