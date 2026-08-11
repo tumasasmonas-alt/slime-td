@@ -2686,6 +2686,43 @@ did not materialise.
 
 ---
 
+**88. Phase 6D-0 (the balance-shape pass) shipped tuning-only, no
+playtest gate before 6D-1/6D-2.**
+📋 *2026-08-11.*
+
+Built per `docs/plans/phase-6d0-balance-shape.md`: unbounded ambient/event
+escalation (`LATE_GROWTH_PER_MINUTE` on `ambientInfectionMult`, an
+asymptotic 3s floor on `eventSpawnInterval` replacing the old hard stop),
+a ~10% softer opening (`AMBIENT_BASE`/`CREEP_RAMP`), the aura reach fix
+(Blades/Frost/Immolation's `TowerCenteredReach` terms raised sharply, plus
+Blades' `HIT_RADIUS` and level-1 blade count), the Chain Bolt/Fission
+nerfs and Shockwave buff, and armour raised to 35 with a **bounded**
+time-scaling term (+35 over 15 minutes, capped at 70 total) rather than
+the unbounded shape the difficulty curve otherwise uses — see the
+degeneracy argument in `phase-6d0-balance-shape.md` §6 and its as-built
+delta §10 for the exact bound (holds for Lance at level >=3, not for a
+weapon left at level 1 all run).
+
+**The plan's own §8 called for a playtest between 6D-0 and 6D-1** — *"its
+result changes what the others should be."* **That did not happen.** The
+project owner explicitly instructed all three 6D sub-batches (6D-0, 6D-1,
+6D-2) built and shipped in sequence within one session, typecheck and
+`vitest run` only, no live/browser verification — overriding the plan's
+own gate. This is a deliberate, explicit owner call, not an oversight, but
+it means 6D-1 and 6D-2's designs (particularly the aura-targeting-gem
+readings in 6D-1, which assume the aura reach fix actually lands them
+somewhere meaningful) were **built against 6D-0's numbers unverified by
+play**. If a real playtest later shows 6D-0's tuning needs to move, 6D-1's
+aura-specific gem readings are the most likely thing to need a second look
+alongside it.
+
+Test fallout from the reach/damage changes (four pre-existing tests in
+`weapons/blades.test.ts` and `weapons/immolation.test.ts` hardcoded
+numbers that moved) is recorded in the plan's own as-built delta, not
+repeated here.
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

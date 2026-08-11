@@ -106,16 +106,21 @@ describe('updateBladesWeapon', () => {
     state.grid = makeTestGrid();
     state.tower.x = 300;
     state.tower.y = 300;
+    // 6D-0 (docs/plans/phase-6d0-balance-shape.md S4): bladeCount(1) is
+    // now 2, not 1 — level-1 count was raised as part of the aura fix, so
+    // this weapon fills slots 0 AND 1 at level 1. Slot 2 stays untouched,
+    // which is what actually demonstrates "its own cooldown, not shared."
     state.weapons.blades = 1;
     state.time = 5;
-    // Reveal the whole grid so the blade's cell (wherever it lands at
-    // t=5) is guaranteed to trigger a hit.
+    // Reveal the whole grid so both blades' cells (wherever they land at
+    // t=5) are guaranteed to trigger a hit.
     state.grid.threshold.fill(0);
     state.grid.growth.fill(0.5);
 
     updateBladesWeapon(state, 0.016);
     expect(state.bladeNextHit[0]).toBeCloseTo(5.22, 5);
-    expect(state.bladeNextHit[1]).toBeUndefined();
+    expect(state.bladeNextHit[1]).toBeCloseTo(5.22, 5);
+    expect(state.bladeNextHit[2]).toBeUndefined();
   });
 
   it('damages a coagulant sitting in already-cleared space, not just revealed grid cells', () => {
@@ -252,18 +257,24 @@ describe('updateBladesWeapon', () => {
 
     it('a hit landed inside an active Whirl flare clears a wider area than an un-flared hit', () => {
       // A finer grid than the module default so radiusCells actually
-      // differs between the base (16px) and flared (16*1.45px) hit radii
+      // differs between the base (26px) and flared (26*1.45px) hit radii
       // — the default 10px cellSize rounds both down to the same cell
       // count, which would mask the effect entirely. Built directly
       // rather than through makeTestGrid's dimension overrides — that
       // helper's typed arrays are sized off its own hardcoded local
       // `size`, not an override, so overriding cols/rows there silently
       // leaves the arrays too small.
+      //
+      // 6D-0 (docs/plans/phase-6d0-balance-shape.md S4) raised
+      // BLADE_REACH's base from 64 to 165 — sized at 300x300 cells (600px
+      // of arena) so a level-1 orbit radius of 165px has runway in every
+      // direction from a centred tower, not just the quadrant it happened
+      // to sample before.
       const fineGrid = (): Grid => {
-        const size = 10000;
+        const size = 90000;
         return {
-          cols: 100,
-          rows: 100,
+          cols: 300,
+          rows: 300,
           size,
           cellSize: 2,
           vein: new Float32Array(size),
@@ -275,7 +286,7 @@ describe('updateBladesWeapon', () => {
           matBucket: new Int8Array(size),
           regrowMult: new Float32Array(size),
           regrowTimer: new Float32Array(size),
-          maxRange: 300,
+          maxRange: 700,
           perimeter: 20,
         };
       };
@@ -284,8 +295,8 @@ describe('updateBladesWeapon', () => {
       withWhirl.grid = fineGrid();
       withWhirl.grid.threshold.fill(0);
       withWhirl.grid.growth.fill(0.4); // moderate density — clearAt's own radius clamp isn't floored at its minimum
-      withWhirl.tower.x = 100;
-      withWhirl.tower.y = 100;
+      withWhirl.tower.x = 300;
+      withWhirl.tower.y = 300;
       withWhirl.weapons.blades = 1;
       withWhirl.weaponSockets.blades = { extensions: [{ id: 1, weaponKey: 'blades', kind: 'whirl', level: 3 }], gems: [] };
 
@@ -293,8 +304,8 @@ describe('updateBladesWeapon', () => {
       plain.grid = fineGrid();
       plain.grid.threshold.fill(0);
       plain.grid.growth.fill(0.4);
-      plain.tower.x = 100;
-      plain.tower.y = 100;
+      plain.tower.x = 300;
+      plain.tower.y = 300;
       plain.weapons.blades = 1;
 
       updateBladesWeapon(withWhirl, 0.016); // lands, sets the flare
@@ -315,7 +326,7 @@ describe('updateBladesWeapon', () => {
       const by = withWhirl.tower.y + Math.sin(spin) * radius;
       const windowSum = (grid: typeof withWhirl.grid): number => {
         let sum = 0;
-        const halfSpan = 15; // px — covers the plain radius (~13.6px) and the flared radius (~19.7px)
+        const halfSpan = 40; // px — covers the plain radius (~22.1px) and the flared radius (~32px)
         for (let dy = -halfSpan; dy <= halfSpan; dy += grid!.cellSize) {
           for (let dx = -halfSpan; dx <= halfSpan; dx += grid!.cellSize) {
             const cx = Math.floor((bx + dx) / grid!.cellSize);

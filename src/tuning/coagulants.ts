@@ -130,10 +130,43 @@ export function coagulantKindFrom(
 // tuning posture for this phase: penetration, the designed counter, is
 // Phase 5, so armor lands alongside a +50% weapon damage pass
 // (WEAPON_DAMAGE_SCALE, tuning/weapons.ts) rather than at full strength.
-export const ARMOR_AT_FULL_MATURITY = 20;
+//
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S6): raised 20→35 — a flat
+// cap this low was inconsequential against level-8 hits of 44-313.
+export const ARMOR_AT_FULL_MATURITY = 35;
 
-export function coagulantArmor(maturity: number): number {
-  return clamp(maturity, 0, 1) * ARMOR_AT_FULL_MATURITY;
+// 6D-0: armour now also scales with elapsed run time, so it joins the
+// escalation the owner asked for rather than capping the instant a
+// coagulant reaches full maturity — but BOUNDED, not unbounded like
+// ambient/event escalation. effectivePower = max(power - armor,
+// power * COAGULANT_ARMOR_FLOOR) in grid/clear.ts means an unbounded
+// armour term drives *every* weapon onto that 15% floor: weapon damage
+// stops distinguishing anything and Penetration (6D-2) stops working,
+// since it subtracts from a value already past the floor. On the pre-fix
+// numbers, Lance reached the floor around 25 minutes and Chain's forks
+// around 8. Raised with the owner rather than applied silently (CLAUDE.md's
+// ground-truth protocol); the call was to bound it here and let S2's
+// ambient/event escalation carry the unbounded half of the difficulty
+// curve, since neither has this floor's degeneracy.
+//
+// The cap is sized so Lance — the highest per-hit weapon in the roster —
+// keeps at least half its damage against max armour (70) once levelled
+// past ~3 (power >= 140, so power - 70 >= power * 0.5): level-8 power is
+// ~313.5, comfortably clear. This does NOT cover a Lance left at level 1
+// for the whole run — an unlevelled weapon against a fully-time-scaled
+// coagulant is a real edge case the bound doesn't promise anything about,
+// same as it wouldn't under the old flat armour. The design assumption is
+// the ordinary one: a socketed weapon gets levelled as the run goes on.
+// First-draft, expected to move at Phase 8 like every number in this file.
+export const ARMOR_TIME_CAP = 35;
+// Seconds to reach ARMOR_TIME_CAP — 15 minutes, so armour is still rising
+// well past the point ambient/event escalation stop plateauing (6D-0 S2).
+const ARMOR_TIME_RAMP_SECONDS = 900;
+
+export function coagulantArmor(maturity: number, elapsedSeconds = 0): number {
+  const base = clamp(maturity, 0, 1) * ARMOR_AT_FULL_MATURITY;
+  const timeBonus = ARMOR_TIME_CAP * clamp(elapsedSeconds / ARMOR_TIME_RAMP_SECONDS, 0, 1);
+  return base + timeBonus;
 }
 
 // Blastoma fractures once its mass drops to this fraction of its starting

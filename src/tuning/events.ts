@@ -37,12 +37,28 @@ export const VEIN_WEIGHT = 0.6;
 // pass. Ramp time is untouched, so the relative escalation shape over a
 // run is preserved; only the absolute cadence at both ends moved.
 const EVENT_INTERVAL_BASE = 18;
-const EVENT_INTERVAL_FLOOR = 7;
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S2): this used to be a hard
+// floor reached at EVENT_INTERVAL_RAMP_TIME — one more axis that plateaus
+// while player power doesn't. Renamed MID rather than FLOOR: it's now the
+// value the lerp reaches at the ramp's end, not where cadence stops.
+const EVENT_INTERVAL_MID = 7;
+// The real floor now — asymptotic, protects the simulation (MAX_CONCURRENT_EVENTS,
+// per-event cost) rather than expressing "as hard as it gets."
+const EVENT_INTERVAL_HARD_FLOOR = 3;
 const EVENT_INTERVAL_RAMP_TIME = 420;
+// Controls how quickly the late-game decay closes the gap from MID to
+// HARD_FLOOR — first-draft, sized so the approach is visible but gradual
+// rather than snapping to the floor right after the ramp ends.
+const EVENT_INTERVAL_LATE_DECAY = 300;
 
 export function eventSpawnInterval(elapsedSeconds: number): number {
-  const t = clamp(elapsedSeconds / EVENT_INTERVAL_RAMP_TIME, 0, 1);
-  return lerp(EVENT_INTERVAL_BASE, EVENT_INTERVAL_FLOOR, t);
+  if (elapsedSeconds <= EVENT_INTERVAL_RAMP_TIME) {
+    const t = clamp(elapsedSeconds / EVENT_INTERVAL_RAMP_TIME, 0, 1);
+    return lerp(EVENT_INTERVAL_BASE, EVENT_INTERVAL_MID, t);
+  }
+  const late = elapsedSeconds - EVENT_INTERVAL_RAMP_TIME;
+  const decay = Math.exp(-late / EVENT_INTERVAL_LATE_DECAY);
+  return EVENT_INTERVAL_HARD_FLOOR + (EVENT_INTERVAL_MID - EVENT_INTERVAL_HARD_FLOOR) * decay;
 }
 
 // Vein geometry — a jagged branching polyline built once at telegraph

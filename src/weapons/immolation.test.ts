@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid } from '../state';
 import { freshState } from '../state';
+import { immolationRadius } from '../tuning/weapons';
 import { updateImmolationWeapon } from './immolation';
 
 function makeTestGrid(): Grid {
@@ -21,6 +22,32 @@ function makeTestGrid(): Grid {
     regrowTimer: new Float32Array(size),
     maxRange: 300,
     perimeter: 20,
+  };
+}
+
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S4) raised IMMOLATION_REACH's
+// base from 66 to 190, well past what makeTestGrid's 200x200px arena can
+// hold around a centred tower. The Second Ring and Flare extension tests
+// below need real runway past the (now much larger) base ring, so they get
+// their own bigger grid rather than makeTestGrid's.
+function makeBigTestGrid(): Grid {
+  const size = 10000;
+  return {
+    cols: 100,
+    rows: 100,
+    size,
+    cellSize: 10,
+    vein: new Float32Array(size),
+    threshold: new Float32Array(size),
+    growth: new Float32Array(size),
+    frozen: new Float32Array(size),
+    bucket: new Int8Array(size),
+    maturity: new Float32Array(size),
+    matBucket: new Int8Array(size),
+    regrowMult: new Float32Array(size),
+    regrowTimer: new Float32Array(size),
+    maxRange: 600,
+    perimeter: 50, // small relative to IMMOLATION_REACH.base so the base term wins
   };
 }
 
@@ -169,13 +196,13 @@ describe('updateImmolationWeapon', () => {
 
     it('Second Ring adds a second, OUTWARD purge at 1.4x radius', () => {
       const state = freshState();
-      state.grid = makeTestGrid();
+      state.grid = makeBigTestGrid();
       state.weapons.immolation = 1;
       state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'secondRing', level: 1 }], gems: [] };
-      state.tower.x = 100;
-      state.tower.y = 100;
+      state.tower.x = 250;
+      state.tower.y = 250;
       // A cell well outside the base ring but inside 1.4x it.
-      const baseRadius = 66 + (0) * 6; // IMMOLATION_REACH base at level 1 (perimeter=20 doesn't dominate: margin+perimeter=30 < 66)
+      const baseRadius = immolationRadius(1, state.grid.perimeter);
       const cx = Math.floor((state.tower.x + baseRadius * 1.2) / state.grid.cellSize);
       const cy = Math.floor(state.tower.y / state.grid.cellSize);
       const i = cy * state.grid.cols + cx;
@@ -188,13 +215,14 @@ describe('updateImmolationWeapon', () => {
 
     it('Flare fires an extra pulse every 4th tick', () => {
       const state = freshState();
-      state.grid = makeTestGrid();
+      state.grid = makeBigTestGrid();
       state.weapons.immolation = 1;
       state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'flare', level: 3 }], gems: [] };
-      state.tower.x = 100;
-      state.tower.y = 100;
+      state.tower.x = 250;
+      state.tower.y = 250;
       // Well outside the base ring but inside its 1.8x Flare radius.
-      const cx = Math.floor((state.tower.x + 66 * 1.5) / state.grid.cellSize);
+      const baseRadius = immolationRadius(1, state.grid.perimeter);
+      const cx = Math.floor((state.tower.x + baseRadius * 1.5) / state.grid.cellSize);
       const cy = Math.floor(state.tower.y / state.grid.cellSize);
       const i = cy * state.grid.cols + cx;
       state.grid.growth[i] = 0.9;

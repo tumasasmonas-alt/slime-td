@@ -53,20 +53,29 @@ export function boltCooldown(lvl: number): number {
   return Math.max(0.16, 0.55 - (lvl - 1) * 0.045);
 }
 
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S4): level-1 count raised
+// 1→2 — Blades' `perLevel` reach term never once cleared the perimeter
+// floor at any level, so it was the one aura effectively below Bolt on
+// throughput; this and HIT_RADIUS (weapons/blades.ts) are its damage-side
+// half of the fix, alongside the reach-side half in BLADE_REACH below.
 export function bladeCount(lvl: number): number {
-  return Math.min(1 + Math.floor((lvl - 1) / 2), 5);
+  return Math.min(2 + Math.floor((lvl - 1) / 2), 6);
 }
 
 export function bladeDamage(lvl: number): number {
   return (7 + (lvl - 1) * 3.2) * WEAPON_DAMAGE_SCALE;
 }
 
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S5): nerfed — Chain Bolt was
+// the field's outlier at 496 DPS at level 8, ~2x the rest of the roster.
+// Both levers cut ~40% together rather than one lever cut in full, so
+// neither the fork fantasy (count) nor the damage identity is gutted.
 export function chainCount(lvl: number): number {
-  return Math.min(1 + Math.floor((lvl - 1) / 1.6), 6);
+  return Math.min(1 + Math.floor((lvl - 1) / 1.6), 5);
 }
 
 export function chainDamage(lvl: number): number {
-  return (11 + (lvl - 1) * 4) * WEAPON_DAMAGE_SCALE;
+  return (9 + (lvl - 1) * 3) * WEAPON_DAMAGE_SCALE;
 }
 
 export function chainCooldown(lvl: number): number {
@@ -77,7 +86,8 @@ export function frostDamage(lvl: number): number {
   return (9 + (lvl - 1) * 3.4) * WEAPON_DAMAGE_SCALE;
 }
 
-const FROST_REACH: TowerCenteredReach = { margin: 20, base: 115, perLevel: 12 };
+// 6D-0: see IMMOLATION_REACH's note — same aura-vacuum fix.
+const FROST_REACH: TowerCenteredReach = { margin: 20, base: 210, perLevel: 20 };
 
 // Radius, anchored to the safe radius as a floor (docs/DECISIONS.md #16) — see bladeRadius() above for why that matters.
 export function frostRadius(lvl: number, perimeter: number): number {
@@ -140,7 +150,15 @@ export function immolationDamage(lvl: number): number {
 // like every other cooldown-timer weapon (6A-1) — see the note above.
 export const IMMOLATION_TICK = 1.1;
 
-const IMMOLATION_REACH: TowerCenteredReach = { margin: 10, base: 66, perLevel: 6 };
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S4): reach raised sharply —
+// the aura weapons (Blades, Frost, Immolation) were parked at 100-115px,
+// inside the annulus where ambient growth is nearly zero
+// (systems/growth.ts's outside ramp is ~0.056-0.096 there vs 0.49 at
+// 400px). They were never underpowered — clearAt applies power per cell,
+// so Immolation and Frost already out-clear the projectiles per shot —
+// they were aimed at vacuum. No damage change here; this is the `max()`'s
+// *other* term, which TowerCenteredReach exists to let move.
+const IMMOLATION_REACH: TowerCenteredReach = { margin: 10, base: 190, perLevel: 18 };
 
 // Radius, anchored to the safe radius as a floor (docs/DECISIONS.md #16) —
 // same pattern as bladeRadius/frostRadius, carried over unchanged from
@@ -152,7 +170,14 @@ export function immolationRadius(lvl: number, perimeter: number): number {
 // Prototype formula was `62 + Math.min(24, lvl*2)` — linear across the
 // whole 1-8 level range the cap never actually engages (8*2=16 < 24), so
 // it's expressed directly as the equivalent base+perLevel form here.
-const BLADE_REACH: TowerCenteredReach = { margin: 15, base: 64, perLevel: 2 };
+//
+// 6D-0: see IMMOLATION_REACH's note — same aura-vacuum fix. Blades is the
+// one aura genuinely below Bolt on throughput (0.7x) even before this fix,
+// because its `perLevel: 2` never once cleared the perimeter floor at any
+// level (105px at level 1, 8, and 12 alike) — so it also gets the two
+// weapons/blades.ts edits (HIT_RADIUS, level-1 blade count) this comment
+// doesn't cover.
+const BLADE_REACH: TowerCenteredReach = { margin: 15, base: 165, perLevel: 14 };
 
 // Orbit radius, anchored to the safe radius as a floor (Confirmed
 // docs/DECISIONS.md #16) rather than the prototype's flat
@@ -166,8 +191,13 @@ export function bladeRadius(lvl: number, perimeter: number): number {
 // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S2.4): first-draft
 // numbers, like every other weapon's curves here — balance is not
 // gradeable until Phase 8 (CLAUDE.md).
+//
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S5): raised — Shockwave is
+// excluded from the aura reach fix (it already travels outward from the
+// floor), and its weakness is the swept band being too thin. Paired with
+// SHOCKWAVE_SPEED's cut below, which thickens the band per tick.
 export function shockwaveDamage(lvl: number): number {
-  return (12 + (lvl - 1) * 4.5) * WEAPON_DAMAGE_SCALE;
+  return (17 + (lvl - 1) * 6) * WEAPON_DAMAGE_SCALE;
 }
 
 export function shockwaveCooldown(lvl: number): number {
@@ -194,7 +224,10 @@ export function shockwaveStartRadius(perimeter: number): number {
   return SHOCKWAVE_REACH.margin + perimeter;
 }
 
-export const SHOCKWAVE_SPEED = 260; // px/s, the ring's own travel speed
+// 6D-0: slowed (260→210) alongside shockwaveDamage's raise — a slower
+// ring thickens the swept band per tick, the actual lever for this
+// weapon's weakness (band thickness, not raw damage).
+export const SHOCKWAVE_SPEED = 210; // px/s, the ring's own travel speed
 
 // Phase 6C-1 (S4.2): per-submunition damage, deliberately low — the
 // weapon's output is the COUNT (fissionCount below), the same principle
@@ -205,8 +238,12 @@ export function fissionDamage(lvl: number): number {
 
 // Fourth attribute — one of the four weapons in arsenal S6 that earns
 // one, because a count is core to this weapon's identity.
+//
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S5): cap cut 9→7 — Fission's
+// raw DPS is mid-pack, but its outlier is *area* (nine independent blast
+// discs), so the count is the honest lever rather than fissionDamage.
 export function fissionCount(lvl: number): number {
-  return Math.min(3 + Math.floor((lvl - 1) / 1.5), 9);
+  return Math.min(3 + Math.floor((lvl - 1) / 1.5), 7);
 }
 
 export function fissionBlastRadius(lvl: number): number {

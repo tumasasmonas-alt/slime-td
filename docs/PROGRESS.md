@@ -48,10 +48,15 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-10, evening (**the Phase 5 gate ran and
-passed** — Decision 87 — and **Phase 6D was fully planned as four
-sub-batches, all greenlit**. No code shipped this session; the tree is
-clean and the next machine starts on **6D-0**, the balance pass.)
+**Last updated:** 2026-08-11 (**Phase 6D-0 shipped** — Decision 88: the
+balance-shape tuning pass. Unbounded ambient/event escalation, the aura
+reach fix for Blades/Frost/Immolation, Chain Bolt/Fission nerfs, Shockwave
+buff, and bounded time-scaled armour. Tuning-only, no new gems. **Built at
+the owner's explicit instruction alongside 6D-1 and 6D-2 in the same
+session, typecheck + `vitest run` only — no live playtest**, which departs
+from the plan's own §8 ("playtest before 6D-1, its result changes what the
+others should be"). See Decision 88 for the full reasoning and what that
+risks.)
 
 **Phase 6D grew from "add 19 gems" into a balance-and-honesty pass**,
 because reading the tuning constants against shipped code found four
@@ -517,7 +522,67 @@ src/
 
 *Newest first.*
 
-### 2026-08-10 (latest, evening) — Phase 6D planned in full: four sub-batches, all greenlit. No code.
+### 2026-08-11 — Phase 6D-0 shipped: the balance-shape tuning pass (Decision 88)
+
+**Full account:** `docs/plans/phase-6d0-balance-shape.md` (build + §10
+as-built delta). Umbrella/findings: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
+
+**⚠️ Departure from the plan: no playtest before 6D-1.** The plan's own
+§8 says *"playtest before 6D-1 — this batch is the one whose result
+changes what the others should be."* The project owner explicitly
+instructed all of 6D-0/6D-1/6D-2 built and shipped in sequence within one
+session, verified by `tsc --noEmit` + `vitest run` only, no live/browser
+testing. This is a deliberate owner call, recorded rather than silently
+skipped — see Decision 88 for what it risks (6D-1's aura-specific gem
+readings assume 6D-0's reach fix actually lands them somewhere real).
+
+**What shipped, tuning-only, no new gems or mechanisms:**
+
+1. **Unbounded late-game escalation.** `ambientInfectionMult` now
+   multiplies the existing breakpoint table by `LATE_GROWTH_PER_MINUTE
+   ^ (t/60)` (≈1.05/min) instead of plateauing at t=560s.
+   `eventSpawnInterval` keeps shrinking past its old t=420s floor toward
+   an asymptotic 3s hard floor instead of stopping at 7s.
+2. **The opening ~10% softer** — `AMBIENT_BASE` 0.02→0.018, `CREEP_RAMP`
+   0.035→0.032.
+3. **The aura fix (the main event).** Blades/Frost/Immolation were parked
+   at 100–115px, inside the annulus ambient growth barely reaches — reach
+   terms raised sharply (Immolation base 66→190, Frost 115→210, Blades
+   64→165) with no damage change, since `clearAt` already made
+   Immolation/Frost out-clear the projectiles per shot. Blades also got
+   `HIT_RADIUS` 16→26 and level-1 blade count 1→2 — it was the one aura
+   genuinely below Bolt on throughput even after the reach fix, because
+   its `perLevel` term never once cleared the perimeter floor at any
+   level.
+4. **Weapon spread** — Chain Bolt nerfed on both levers (damage and fork
+   cap), Fission's blast count cap cut 9→7, Shockwave's speed slowed
+   (thickens its swept band) and damage raised.
+5. **Armour raised to 35, time-scaled but bounded** (+35 over 15 minutes,
+   capped at 70 total) — unbounded would drive every weapon onto the 15%
+   `COAGULANT_ARMOR_FLOOR`, erasing weapon identity and breaking
+   Penetration (6D-2). `coagulantArmor()` gained a second parameter
+   (`elapsedSeconds`), and `systems/formation.ts` now passes `state.time`.
+
+**Test fallout from the reach/damage changes:** four pre-existing tests in
+`weapons/blades.test.ts` and `weapons/immolation.test.ts` hardcoded old
+numbers (bladeCount(1)=1, HIT_RADIUS=16, IMMOLATION_REACH.base=66) and
+needed both updated assertions and, for two Immolation extension tests,
+a bigger test grid — the new 190px base reach no longer fit in their old
+200×200px arena. Full list in the plan's §10.
+
+**New tests:** `tuning/growth.test.ts` and `tuning/events.test.ts` (new
+files, pinning the unbounded-curve outcome per Decision 20), an
+aura-engagement block in `systems/growth.test.ts` (checks the real
+`applyAmbientGrowth` ramp at each aura's actual level-1 radius, not a
+hardcoded number), an armour-bound block in `systems/formation.test.ts`
+(guards the degeneracy argument — holds for Lance at level ≥3, explicitly
+does not promise anything for a weapon left at level 1 all run), and a
+`bladeRadius` level-response regression guard. **652 tests pass, `tsc
+--noEmit` clean.**
+
+**Next: 6D-1 (Targeting gems), immediately, same session.**
+
+### 2026-08-10 (evening) — Phase 6D planned in full: four sub-batches, all greenlit. No code.
 
 **Full account:** `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
 **The builds:** `docs/plans/phase-6d0-balance-shape.md`,

@@ -10,7 +10,11 @@ import { WEAPON_DEFS, bladeCount, bladeDamage, bladeRadius } from '../tuning/wea
 import { runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const SPIN_SPEED = 2.4;
-const HIT_RADIUS = 16;
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S4): raised 16→26 — Blades
+// is the one aura genuinely below Bolt on throughput even after the reach
+// fix in tuning/weapons.ts, because its hit disc was the tightest in the
+// roster.
+const HIT_RADIUS = 26;
 const HIT_COOLDOWN = 0.22;
 const VISUAL_RADIUS = 10;
 // Phase 5B-6: moved off render/orbitals.ts's old hardcoded constants,

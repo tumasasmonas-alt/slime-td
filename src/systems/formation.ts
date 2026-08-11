@@ -207,7 +207,7 @@ export function attemptFormation(state: GameState, sx: number, sy: number): Coag
     x: sx,
     y: sy,
     mass,
-    armor: coagulantArmor(meanMaturity),
+    armor: coagulantArmor(meanMaturity, state.time),
     kind,
     radius: boundingRadiusFor(parts, baseRadius),
     speed: coagulantSpeed(mass),

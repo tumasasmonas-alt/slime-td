@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid, Tower } from '../state';
+import { CREEP_RAMP } from '../tuning/growth';
 import { MATURITY_MAX, growthCeiling } from '../tuning/maturity';
+import { bladeRadius, frostRadius, immolationRadius } from '../tuning/weapons';
 import { applyAmbientGrowth } from './growth';
 
 // Synthetic small grid, matching the fixture pattern used in grid.test.ts —
@@ -342,5 +344,94 @@ describe('applyAmbientGrowth — regrowth suppression (Phase 6B-2)', () => {
     applyAmbientGrowth(plain, tower, FAST, 0.18, new Set());
 
     expect(wasSuppressed.growth[0]).toBeCloseTo(plain.growth[0]!, 5);
+  });
+});
+
+// Phase 6D-0 (docs/plans/phase-6d0-balance-shape.md S4, S7 tests 2-3): the
+// aura weapons (Blades, Frost, Immolation) were parked at 100-115px, the
+// one annulus the design guarantees is nearly empty — ambient growth's
+// outside ramp is `((d - perimeter) / outerSpan)^0.6`, floored at
+// CREEP_RAMP, so a radius barely past the perimeter sits right at that
+// floor. This is the guard that would have caught the original bug:
+// expressed against applyAmbientGrowth itself (the real ramp), not a
+// hardcoded radius, so a later retune of PERIMETER or outerSpan can't
+// silently re-park the aura weapons in vacuum.
+describe('aura engagement — reach clears the vacuum annulus (Phase 6D-0)', () => {
+  function makeArenaGrid(overrides: Partial<Grid> = {}): Grid {
+    const size = 6400;
+    return {
+      cols: 80,
+      rows: 80,
+      size,
+      cellSize: 10,
+      vein: new Float32Array(size),
+      threshold: new Float32Array(size),
+      growth: new Float32Array(size),
+      frozen: new Float32Array(size),
+      bucket: new Int8Array(size),
+      maturity: new Float32Array(size),
+      matBucket: new Int8Array(size),
+      regrowMult: new Float32Array(size),
+      regrowTimer: new Float32Array(size),
+      maxRange: 300,
+      perimeter: 100,
+      ...overrides,
+    };
+  }
+
+  function cellAtRadius(grid: Grid, tower: Tower, radius: number): number {
+    const cx = Math.round((tower.x + radius) / grid.cellSize);
+    const cy = Math.round(tower.y / grid.cellSize);
+    return cy * grid.cols + cx;
+  }
+
+  const AURAS: readonly { name: string; radius: (perimeter: number) => number }[] = [
+    { name: 'Blades', radius: (perimeter) => bladeRadius(1, perimeter) },
+    { name: 'Frost', radius: (perimeter) => frostRadius(1, perimeter) },
+    { name: 'Immolation', radius: (perimeter) => immolationRadius(1, perimeter) },
+  ];
+
+  for (const aura of AURAS) {
+    it(`${aura.name}'s level-1 radius sits where the ambient ramp exceeds the CREEP_RAMP floor, not right at it`, () => {
+      const grid = makeArenaGrid();
+      const tower: Tower = { x: 400, y: 400, radius: 22, hp: 100, maxHp: 100, level: 1, xp: 0, xpToNext: 10, shake: 0 };
+      const radius = aura.radius(grid.perimeter);
+      const i = cellAtRadius(grid, tower, radius);
+
+      // A single tick's growth increment is directly proportional to the
+      // local rate — comparing it to CREEP_RAMP's own increment isolates
+      // the ramp shape from AMBIENT_BASE/infectionMult, which apply
+      // identically everywhere.
+      applyAmbientGrowth(grid, tower, 1, 0.18, new Set());
+      const auraGain = grid.growth[i]!;
+
+      const floorGrid = makeArenaGrid();
+      const floorI = cellAtRadius(floorGrid, tower, grid.perimeter + 1); // right at the line — the old vacuum zone
+      applyAmbientGrowth(floorGrid, tower, 1, 0.18, new Set());
+      const floorGain = floorGrid.growth[floorI]!;
+
+      expect(auraGain).toBeGreaterThan(floorGain * 1.5);
+    });
+
+    it(`${aura.name} actually reveals ground within the first 90 seconds — not the "does nothing at first" failure 6C-2 fixed once`, () => {
+      const grid = makeArenaGrid();
+      const tower: Tower = { x: 400, y: 400, radius: 22, hp: 100, maxHp: 100, level: 1, xp: 0, xpToNext: 10, shake: 0 };
+      const radius = aura.radius(grid.perimeter);
+      const i = cellAtRadius(grid, tower, radius);
+      grid.threshold[i] = 0.12; // a representative mid-range reveal threshold (grid.ts's real range is ~0.045-0.94)
+
+      const dt = 0.18;
+      const ticks = Math.round(90 / dt);
+      for (let k = 0; k < ticks; k++) {
+        applyAmbientGrowth(grid, tower, 1, dt, new Set());
+      }
+
+      expect(grid.growth[i]).toBeGreaterThan(grid.threshold[i]!);
+    });
+  }
+
+  it('CREEP_RAMP itself is still the floor value used at the boundary (sanity check on the constant, not a mechanism pin)', () => {
+    expect(CREEP_RAMP).toBeGreaterThan(0);
+    expect(CREEP_RAMP).toBeLessThan(1);
   });
 });

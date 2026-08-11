@@ -180,4 +180,44 @@ here is expected to move:
 
 ## 10. As-built delta
 
-*To be filled in when this ships.*
+**Shipped 2026-08-11.** Built as planned, with two adjustments made while
+writing the tests:
+
+- **§6's armour bound.** The plan didn't pin exact numbers for
+  `ARMOR_TIME_CAP`/`ARMOR_TIME_RAMP_SECONDS`. Shipped as `+35` over 900s
+  (15 min), so `ARMOR_AT_FULL_MATURITY + ARMOR_TIME_CAP = 70`. That keeps
+  Lance — the roster's highest per-hit weapon — at or above 50% effective
+  damage against max armour **once levelled past ~3** (power >= 140, twice
+  the armour cap). It does **not** cover a Lance left at level 1 for a
+  whole run against late-game armour — the same edge case a flat-armour
+  model wouldn't have promised anything about either. Recorded here rather
+  than silently narrowing the bound, since the original write-up implied
+  the guarantee held at every level.
+- **`coagulantArmor`'s signature** gained a second parameter
+  (`elapsedSeconds`, default 0) rather than a config object, so every
+  existing call site except `systems/formation.ts`'s (which now passes
+  `state.time`) kept compiling unchanged.
+
+**Test fallout, not part of the plan's own scope but required to keep the
+suite green:** four pre-existing tests hardcoded numbers that moved —
+`weapons/blades.test.ts` (bladeCount(1) was 1, is now 2, so the "own
+cooldown per slot" test's slot-1-is-undefined assertion no longer held;
+the Whirl-flare area test's fixed grid was too small to contain the new
+165px base orbit radius) and `weapons/immolation.test.ts` (Second Ring and
+Flare's extension tests were built around a 200x200px arena that the new
+190px base reach no longer fits in). Fixed by updating the assertions to
+the new numbers and, for the two immolation extension tests, giving them
+a bigger grid rather than shrinking the reach back down to fit the test.
+
+**Tests added:** `tuning/growth.test.ts` and `tuning/events.test.ts` (new
+files — neither curve had a standalone test before); an aura-engagement
+describe block in `systems/growth.test.ts`; an armour-bound describe block
+in `systems/formation.test.ts`; a `bladeRadius` level-response regression
+guard in `tuning/weapons.test.ts`. 652 tests pass; `tsc --noEmit` clean.
+
+**Not done this session, per the owner's instruction:** no live/browser
+playtest. §8's "playtest before 6D-1" step is deferred — 6D-1 and 6D-2
+were built in the same session regardless, so the playtest gate this
+batch was meant to sit behind did not run before they started. Recorded
+as a real gap, not silently skipped — see the session's `docs/PROGRESS.md`
+entry.

@@ -4,7 +4,9 @@ import { freshState } from '../state';
 import { cellBucket, gIdx, worldToCell } from '../grid/grid';
 import {
   ARMOR_AT_FULL_MATURITY,
+  ARMOR_TIME_CAP,
   BLASTOMA_SPLIT_FRACTION,
+  COAGULANT_ARMOR_FLOOR,
   CORRIDOR_DENSITY_THRESHOLD,
   FORMATION_MIN_DISTANCE,
   FORMATION_RADIUS_CAP,
@@ -21,6 +23,7 @@ import {
   coagulantRadius,
   coagulantSpeed,
 } from '../tuning/coagulants';
+import { lanceDamage } from '../tuning/weapons';
 import { attemptFormation } from './formation';
 
 // Large enough to hold FORMATION_RADIUS_CAP (180px) comfortably at this
@@ -621,6 +624,51 @@ describe('coagulantArmor (Phase 4C-1, Decision 68)', () => {
 
   it('clamps out-of-range maturity rather than exceeding ARMOR_AT_FULL_MATURITY', () => {
     expect(coagulantArmor(5)).toBeCloseTo(ARMOR_AT_FULL_MATURITY, 5);
+  });
+});
+
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S6): armour now also scales
+// with elapsed run time, deliberately bounded — unbounded would drive
+// every weapon's effectivePower onto the COAGULANT_ARMOR_FLOOR, per
+// grid/clear.ts: effectivePower = max(power - armor, power * FLOOR). This
+// is the guard for that whole argument, expressed against Lance — the
+// highest per-hit weapon in the roster — rather than a hardcoded armour
+// number, so a later retune of either side can't silently reopen the
+// degeneracy.
+describe('coagulantArmor — time scaling is bounded (Phase 6D-0)', () => {
+  it('rises with elapsed time at fixed maturity', () => {
+    expect(coagulantArmor(1, 600)).toBeGreaterThan(coagulantArmor(1, 0));
+  });
+
+  it('never exceeds ARMOR_AT_FULL_MATURITY + ARMOR_TIME_CAP, at any elapsed time', () => {
+    for (const t of [0, 600, 1800, 7200, 36000]) {
+      expect(coagulantArmor(1, t)).toBeLessThanOrEqual(ARMOR_AT_FULL_MATURITY + ARMOR_TIME_CAP + 1e-9);
+    }
+  });
+
+  it("a levelled Lance (>=3) — the roster's highest per-hit weapon — keeps at least half its damage against max armour at any time the curve can produce", () => {
+    // Mirrors grid/clear.ts's effectivePower formula exactly, so this
+    // fails the moment either side of the bound (armour's cap, or a
+    // future Lance damage buff) reopens the degeneracy. Scoped to level
+    // >=3, where Lance's own power (>=140) first clears 2x the armour cap
+    // (70) — a Lance left at level 1 all run is a real edge case the
+    // bound doesn't cover, same as a flat-armour model wouldn't have
+    // either (tuning/coagulants.ts's ARMOR_TIME_CAP comment).
+    for (const lvl of [3, 4, 8]) {
+      const power = lanceDamage(lvl);
+      for (const t of [0, 600, 1800, 7200, 36000]) {
+        const armor = coagulantArmor(1, t); // maturity 1 — worst case
+        const effectivePower = Math.max(power - armor, power * COAGULANT_ARMOR_FLOOR);
+        expect(effectivePower).toBeGreaterThanOrEqual(power * 0.5 - 1e-9);
+      }
+    }
+  });
+
+  it('at t=0, even a level-1 Lance keeps at least half its damage — the bound holds from the very start of a run', () => {
+    const power = lanceDamage(1);
+    const armor = coagulantArmor(1, 0);
+    const effectivePower = Math.max(power - armor, power * COAGULANT_ARMOR_FLOOR);
+    expect(effectivePower).toBeGreaterThanOrEqual(power * 0.5 - 1e-9);
   });
 });
 

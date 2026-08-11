@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDENTITY_MODS } from './gems';
-import { WEAPON_DEFS } from './weapons';
+import { WEAPON_DEFS, bladeRadius } from './weapons';
 
 // Phase 6A-1: stats() used to be pure lvl -> string, so a socketed gem's
 // effect was invisible on the inventory screen's live readout — exactly
@@ -26,6 +26,19 @@ describe('WeaponDef.stats — responds to live weaponMods', () => {
     for (const key of ['bolt', 'chain', 'frost', 'poison', 'missile', 'immolation'] as const) {
       const def = WEAPON_DEFS[key]!;
       expect(def.stats(1, fasterRate)).not.toBe(def.stats(1, IDENTITY_MODS));
+    }
+  });
+});
+
+// 6D-0 (docs/plans/phase-6d0-balance-shape.md S4, S7 test 5): a regression
+// guard for the dead `perLevel` term this batch fixed — pre-fix, Blades'
+// radius was identical at level 1, 8, and 12 alike, because `base` alone
+// always exceeded the perimeter floor and `perLevel` never once closed
+// the gap. This pins that reach now actually responds to level.
+describe('bladeRadius — responds to level (Phase 6D-0)', () => {
+  it('grows from level 1 to level 8, for any reasonable perimeter', () => {
+    for (const perimeter of [90, 100, 130]) {
+      expect(bladeRadius(8, perimeter)).toBeGreaterThan(bladeRadius(1, perimeter));
     }
   });
 });
