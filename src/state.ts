@@ -385,6 +385,13 @@ export interface NovaFx {
   life: number;
   maxLife: number;
   color: string;
+  // Radar Sweep (Immolation Flare, post-6D-3 playtest, 2026-08-11): a
+  // wedge flash instead of a full ring, matching the same-named
+  // `ClearOptions.sector` field (grid/clear.ts) the hit itself used —
+  // absent means the plain full-circle flash every other pulse weapon
+  // draws, unchanged.
+  angle?: number;
+  halfWidth?: number;
 }
 
 // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S2.1): a

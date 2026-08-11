@@ -48,27 +48,38 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-11 (**Post-6D-3 playtest balance pass** —
-Decisions 93–94. The owner's first live playtest of the day's batches
-found the 6D-0 aura reach fix had overshot on damage (Immolation
-especially, its Flare extension worst of all — "clears almost entire
-screen") and that the level-up draw offered Targeting/Conditional gems
-before a fresh run had anything for them to condition on ("kept getting
-Conditional gems which didn't help"). Fixed: Immolation/Shockwave damage
-cut, Flare cut on three levers at once (radius/power/frequency), armour
-raised 70→90 combined cap (with `formation.test.ts`'s Lance invariant
-recomputed for the new cap, not just loosened), and Targeting/Conditional
-gems now ramp from a 0.15 floor to full draw parity by tower level 10
-(`systems/cards.ts`'s new `lateGemDrawChance`). **Blades and Frost were
-not playtested and are deliberately untouched** — see the entry below for
-what's still unverified. **896 tests pass, `tsc --noEmit` clean**, plus a
-browser smoke test (game loads, no console errors — not a full playtest).
+**Last updated:** 2026-08-11 (**Post-6D-3 playtest balance pass, plus a
+same-session design follow-up** — Decisions 93–95. The owner's first live
+playtest of the day's batches found the 6D-0 aura reach fix had overshot
+on damage (Immolation especially, its Flare extension worst of all —
+"clears almost entire screen") and that the level-up draw offered
+Targeting/Conditional gems before a fresh run had anything for them to
+condition on ("kept getting Conditional gems which didn't help"). Fixed:
+Immolation/Shockwave damage cut, armour raised 70→90 combined cap (with
+`formation.test.ts`'s Lance invariant recomputed for the new cap, not
+just loosened), and Targeting/Conditional gems now ramp from a 0.15 floor
+to full draw parity by tower level 10 (`systems/cards.ts`'s new
+`lateGemDrawChance`). **Then, on the owner's own follow-up read that no
+amount of cutting a full-circle pulse's magnitude fixes a full-circle
+pulse**, Flare was redesigned rather than just re-tuned: renamed Radar
+Sweep, now a rotating wedge instead of a ring, via a new general
+`ClearOptions.sector` angular mask in `grid/clear.ts` (three call sites —
+disc, annulus/capsule, coagulant loop — not just the one Immolation
+needs) and a matching wedge visual in `render/novaFx.ts` rather than
+reusing the old full-ring flash for a hit that no longer covers the whole
+ring. **Blades and Frost were not playtested and are deliberately
+untouched** — see the entry below for what's still unverified. **902
+tests pass, `tsc --noEmit` clean**, plus two browser smoke tests (game
+loads, no console errors — neither is a full playtest).
 
 **▶ MACHINE HANDOFF — pick up here.** No code work is queued — this was
 a direct response to playtest feedback, not a plan step. **A fuller
-playtest is the next real step**, watching specifically: did the
-Immolation/Shockwave cuts land right or overshoot the other way, do
-Blades/Frost need the same treatment, does the armour raise deny
+playtest is the next real step**, watching specifically: does Radar
+Sweep actually read as a sweep in play (nobody has watched it fire in a
+real run yet), did the Immolation/Shockwave damage cuts land right or
+overshoot the other way, do Blades/Frost need the same treatment (either
+the plain cut, or Radar Sweep's shape fix if either has a similarly
+"instant, full-coverage" extension), does the armour raise deny
 weak/unlevelled weapons too hard, does the gem-ramp's shape (0.15 floor,
 level-10 end) feel right. Full list: `docs/BACKLOG.md`'s top entry. Once
 that's in, 6D-3 Steps 4–5 (below) are still the next *build* item.
@@ -587,6 +598,70 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-11 — Flare redesigned into Radar Sweep: a wedge, not a ring (Decision 95)
+
+**Full account:** Decision 95 has the complete reasoning.
+
+**Trigger:** immediately after the balance pass below (same session), the
+owner's own follow-up on Immolation's Flare extension: "that extra big
+pulse clears all the screen. maybe we can turn that extension into
+swiping cone like a radar?" — a recognition that Decision 93's magnitude
+cut (radius/power/frequency, all reduced) couldn't fully fix a full-
+circle pulse, because a full circle nukes everything in range at once
+**no matter how far its numbers are cut**. The fix needed was to the
+shape, not the size.
+
+**Scope check before building:** asked the owner to choose between three
+sweep fidelities — (1) keep the existing periodic pulse but mask it to a
+rotating wedge each firing (cheap: reuses every mechanism the weapon
+already has), (2) a true continuous always-on rotating beam (a real new
+feature: persistent entity, new render, continuous per-tick state), or
+(3) a periodic pulse that animates as a short-lived rotating sweep before
+fading (a middle ground). **The owner picked (1)** — cheapest, still
+periodic and cooldown-gated like the rest of the weapon.
+
+**What shipped:**
+- `grid/clear.ts`: a new general `ClearOptions.sector: { angle,
+  halfWidth }` — an angular mask independent of `shape` (the existing
+  annulus/capsule generalization), wired into all three places a hit can
+  land (the disc path, the annulus/capsule path, and the coagulant loop)
+  rather than just the one Flare needs, so the field means the same thing
+  everywhere it's declared — the exact "reaches the entity, not the
+  consumer" trap Decision 91 named, avoided up front this time.
+- `weapons/immolation.ts`: Flare renamed **Radar Sweep**, now fires a
+  70°-wide wedge (its own step size too, so consecutive firings tile the
+  circle with no gaps or overlap) at the same radius/power Decision 93
+  already set — those weren't revisited, since the wedge is now doing the
+  "don't nuke everything" work the magnitude cut used to carry alone. The
+  sweep angle is derived from the weapon's existing tick counter
+  (`sweepStep = ticks / RADAR_EVERY - 1`), no new per-weapon state.
+- `tuning/extensions.ts`: the `ExtensionKey` itself renamed `flare` →
+  `radarSweep` (not just display copy) — a key still called `flare`
+  driving a "Radar Sweep" mechanic would be exactly the stale-name-vs-
+  behaviour drift this project keeps catching in gem copy. Contained to
+  3 files; no save-compatibility concern for a project with no shipped
+  saves.
+- `render/novaFx.ts`: `NovaFx` gained optional `angle`/`halfWidth` fields;
+  when present, the flash draws a pie-slice wedge instead of a full ring
+  — reusing the old ring flash for a hit that only covers a slice of it
+  would be the same visual-lies-about-mechanics problem, in pixels.
+
+**Verification:** typecheck clean, `902 tests pass` (up from 896) —
+3 new weapon-level tests proving the wedge actually excludes what's
+outside it and advances on its next firing (a property a full-circle
+pulse structurally could never have had), plus 4 new direct tests on
+`clearAt`'s `sector` option itself in `grid/clear.test.ts` (grid cell,
+coagulant, and the absent-sector passthrough). One real bug caught before
+either test file was even touched: the first implementation had the
+sweep starting at step 1 instead of step 0 (`ticks` itself starts at 1,
+not 0), which the first test run caught immediately. Plus a browser smoke
+test (game loads, no console errors) — **not** a full playtest; nobody
+has watched Radar Sweep actually fire in a real run yet.
+
+**Planned:** same playtest ask as the balance pass below, now also
+covering whether Radar Sweep reads as a real sweep and whether its 70°
+wedge/step feel right. `docs/BACKLOG.md`'s top entry has the full list.
 
 ### 2026-08-11 — Post-6D-3 playtest balance pass (Decisions 93–94)
 

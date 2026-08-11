@@ -48,7 +48,13 @@ export type ExtensionKey =
   // Immolation Ring
   | 'backdraft'
   | 'secondRing'
-  | 'flare'
+  // Post-6D-3 playtest (2026-08-11, owner): renamed from 'flare' — the
+  // extension itself was redesigned from a periodic near-full-power ring
+  // (found "way too op, clears almost entire screen") into a rotating
+  // wedge, and a key still called `flare` describing a "radar sweep"
+  // mechanic would read as a lie the moment anyone opened this file.
+  // weapons/immolation.ts has the full mechanic.
+  | 'radarSweep'
   | 'ash'
   // Shockwave (Phase 6C-1, docs/plans/phase-6c1-shockwave-fission.md S5).
   // 'secondWave' is deliberately distinct from Immolation's shipped
@@ -263,11 +269,15 @@ export const EXTENSION_DEFS: Readonly<Record<ExtensionKey, ExtensionDef>> = {
     icon: '⭕',
     desc: (lvl) => `A second concentric ring at 1.4× radius, at ${[60, 75, 90][lvl - 1]}% power.`,
   },
-  flare: {
+  // Post-6D-3 playtest (2026-08-11, owner): redesigned from a periodic
+  // full-circle pulse (found "way too op, clears almost entire screen")
+  // into a rotating wedge — a radar sweep, the owner's own suggestion.
+  // Renamed from 'flare' to match; weapons/immolation.ts has the mechanic.
+  radarSweep: {
     weaponKey: 'immolation',
-    name: 'Flare',
-    icon: '✨',
-    desc: (lvl) => `Every 5th tick, an outward pulse at 1.3× radius and ${[45, 55, 65][lvl - 1]}% power.`,
+    name: 'Radar Sweep',
+    icon: '📡',
+    desc: (lvl) => `Every 5th tick, a 70° wedge at 1.3× radius and ${[45, 55, 65][lvl - 1]}% power sweeps around the ring, advancing 70° each time.`,
   },
   ash: {
     weaponKey: 'immolation',

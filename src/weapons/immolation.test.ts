@@ -51,8 +51,8 @@ function makeTestGrid(): Grid {
 
 // 6D-0 (docs/plans/phase-6d0-balance-shape.md S4) raised IMMOLATION_REACH's
 // base from 66 to 190, well past what makeTestGrid's 200x200px arena can
-// hold around a centred tower. The Second Ring and Flare extension tests
-// below need real runway past the (now much larger) base ring, so they get
+// hold around a centred tower. The Second Ring and Radar Sweep extension
+// tests below need real runway past the (now much larger) base ring, so they get
 // their own bigger grid rather than makeTestGrid's.
 function makeBigTestGrid(): Grid {
   const size = 10000;
@@ -187,9 +187,9 @@ describe('updateImmolationWeapon', () => {
   });
 
   // Phase 6B-2 (docs/plans/phase-6b2-extension-content.md S5): Immolation's
-  // four extensions. Second Ring and Flare both go OUTWARD (S1's rule —
-  // every tower-centred radius floors at `perimeter`, so an inward second
-  // ring sweeps the safe zone and hits nothing).
+  // four extensions. Second Ring and Radar Sweep both go OUTWARD (S1's
+  // rule — every tower-centred radius floors at `perimeter`, so an inward
+  // second ring sweeps the safe zone and hits nothing).
   describe('extensions', () => {
     it('Backdraft scales damage up with the density currently crossing the ring', () => {
       const dense = freshState();
@@ -237,38 +237,100 @@ describe('updateImmolationWeapon', () => {
       expect(state.grid.growth[i]).toBeLessThan(0.9);
     });
 
-    it('Flare fires an extra pulse every 5th tick', () => {
-      const state = freshState();
-      state.grid = makeBigTestGrid();
-      state.weapons.immolation = 1;
-      state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'flare', level: 3 }], gems: [] };
-      state.tower.x = 250;
-      state.tower.y = 250;
-      // Well outside the base ring but inside its 1.3x Flare radius.
-      // (Post-6D-3 playtest, 2026-08-11: Flare's radius mult was cut
-      // 1.8x→1.3x — weapons/immolation.ts has the full reasoning.) Note
-      // clearAt's own density-based radius scaling (grid/clear.ts's
-      // `clamp(1.25 - baseDensity, 0.4, 1.25)`, baseDensity sampled at
-      // the tower's own cell — 0 here) stretches the BASE ring's actual
-      // reach to 1.25x its nominal radius, not 1.0x — 1.4x leaves a clear
-      // margin on both sides of that, unlike a placement closer to 1.25x.
-      const baseRadius = immolationRadius(1, state.grid.perimeter);
-      const cx = Math.floor((state.tower.x + baseRadius * 1.4) / state.grid.cellSize);
-      const cy = Math.floor(state.tower.y / state.grid.cellSize);
-      const i = cy * state.grid.cols + cx;
-      state.grid.growth[i] = 0.9;
+    // Radar Sweep (post-6D-3 playtest, 2026-08-11): redesigned from
+    // 'Flare', a full-circle pulse the owner found "way too op, clears
+    // almost entire screen." Now a periodic WEDGE that advances around
+    // the ring each time it fires — these three tests cover exactly the
+    // property a full-circle pulse couldn't have: something outside the
+    // current wedge is untouched, and the wedge actually moves on the
+    // next firing rather than repeating.
+    describe('Radar Sweep — wedge, not a ring', () => {
+      // All three tests place cells at BASE_RADIUS_MULT (1.4x nominal
+      // radius) — same margin reasoning as the Second Ring test above:
+      // well outside the base ring's actual reach (clearAt's own
+      // density-based widening stretches it to 1.25x, not 1.0x — see
+      // grid/clear.ts's `clamp(1.25 - baseDensity, 0.4, 1.25)`) but
+      // inside Radar Sweep's own 1.3x radius once further widened the
+      // same way.
+      const BASE_RADIUS_MULT = 1.4;
+      const WEDGE_STEP_RAD = (70 * Math.PI) / 180; // matches RADAR_WEDGE_RAD in weapons/immolation.ts
 
-      for (let tick = 1; tick <= 4; tick++) {
-        state.weaponTimers.immolation = 0;
-        updateImmolationWeapon(state, 0.1);
+      function cellAtAngle(state: ReturnType<typeof freshState>, angleRad: number): number {
+        const baseRadius = immolationRadius(1, state.grid!.perimeter);
+        const r = baseRadius * BASE_RADIUS_MULT;
+        const cx = Math.floor((state.tower.x + Math.cos(angleRad) * r) / state.grid!.cellSize);
+        const cy = Math.floor((state.tower.y + Math.sin(angleRad) * r) / state.grid!.cellSize);
+        return cy * state.grid!.cols + cx;
       }
-      const beforeFlare = state.grid.growth[i]!;
-      expect(beforeFlare).toBeCloseTo(0.9, 3); // the base ring barely reaches this cell, if at all
 
-      state.weaponTimers.immolation = 0;
-      updateImmolationWeapon(state, 0.1); // the 5th tick — Flare fires
+      it('fires a wedge every 5th tick that hits a cell in its path (the first wedge is centred on angle 0)', () => {
+        const state = freshState();
+        state.grid = makeBigTestGrid();
+        state.weapons.immolation = 1;
+        state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'radarSweep', level: 3 }], gems: [] };
+        state.tower.x = 250;
+        state.tower.y = 250;
+        const i = cellAtAngle(state, 0); // directly +X — inside the first wedge, [-35°, 35°]
+        state.grid.growth[i] = 0.9;
 
-      expect(state.grid.growth[i]!).toBeLessThan(beforeFlare);
+        for (let tick = 1; tick <= 4; tick++) {
+          state.weaponTimers.immolation = 0;
+          updateImmolationWeapon(state, 0.1);
+        }
+        const beforeSweep = state.grid.growth[i]!;
+        expect(beforeSweep).toBeCloseTo(0.9, 3); // the base ring barely reaches this cell, if at all
+
+        state.weaponTimers.immolation = 0;
+        updateImmolationWeapon(state, 0.1); // the 5th tick — Radar Sweep fires, wedge centred on angle 0
+
+        expect(state.grid.growth[i]!).toBeLessThan(beforeSweep);
+      });
+
+      it('does NOT hit a cell outside the current wedge — the one property a full-circle pulse could never have', () => {
+        const state = freshState();
+        state.grid = makeBigTestGrid();
+        state.weapons.immolation = 1;
+        state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'radarSweep', level: 3 }], gems: [] };
+        state.tower.x = 250;
+        state.tower.y = 250;
+        const i = cellAtAngle(state, Math.PI); // directly -X — the opposite side, well outside [-35°, 35°]
+        state.grid.growth[i] = 0.9;
+
+        for (let tick = 1; tick <= 5; tick++) {
+          state.weaponTimers.immolation = 0;
+          updateImmolationWeapon(state, 0.1); // includes the 5th tick, wedge centred on angle 0
+        }
+
+        expect(state.grid.growth[i]).toBeCloseTo(0.9, 3);
+      });
+
+      it('advances the wedge on its next firing — the second wedge hits a cell the first one missed, and vice versa', () => {
+        const state = freshState();
+        state.grid = makeBigTestGrid();
+        state.weapons.immolation = 1;
+        state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'radarSweep', level: 3 }], gems: [] };
+        state.tower.x = 250;
+        state.tower.y = 250;
+        const firstWedgeCell = cellAtAngle(state, 0); // hit by firing #1 (angle 0), missed by firing #2 (angle 70°, wedge [35°,105°])
+        const secondWedgeCell = cellAtAngle(state, WEDGE_STEP_RAD); // missed by firing #1, hit by firing #2
+        state.grid.growth[firstWedgeCell] = 0.9;
+        state.grid.growth[secondWedgeCell] = 0.9;
+
+        for (let tick = 1; tick <= 5; tick++) {
+          state.weaponTimers.immolation = 0;
+          updateImmolationWeapon(state, 0.1); // 5th tick: firing #1, wedge centred on angle 0
+        }
+        expect(state.grid.growth[firstWedgeCell]!).toBeLessThan(0.9);
+        expect(state.grid.growth[secondWedgeCell]!).toBeCloseTo(0.9, 3);
+
+        const afterFirstFiring = state.grid.growth[firstWedgeCell]!;
+        for (let tick = 1; tick <= 5; tick++) {
+          state.weaponTimers.immolation = 0;
+          updateImmolationWeapon(state, 0.1); // 10th tick: firing #2, wedge centred on angle 70°
+        }
+        expect(state.grid.growth[secondWedgeCell]!).toBeLessThan(0.9); // now hit
+        expect(state.grid.growth[firstWedgeCell]!).toBeCloseTo(afterFirstFiring, 3); // untouched by firing #2
+      });
     });
 
     it('Ash sets suppressRegrowth on the burned cell', () => {
@@ -324,7 +386,7 @@ describe('updateImmolationWeapon — Targeting gems (Phase 6D-1)', () => {
 // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
 // Chaining/Bounce/Ricochet on Immolation — used to be entirely dead on
 // this weapon (the whole reason this batch exists). Uses the big grid,
-// same reasoning as the Second Ring/Flare tests above — these gems'
+// same reasoning as the Second Ring/Radar Sweep tests above — these gems'
 // radii (up to 2x the already-large 6D-0 base reach) don't fit the
 // module's small default grid.
 describe('updateImmolationWeapon — Fork/Chaining/Bounce/Ricochet (Phase 6D-3)', () => {

@@ -29,35 +29,47 @@ This overrode `phase-6d0-balance-shape.md` §8's own "playtest before
 `docs/sessions/2026-08-11-phase-6d-batches.md` §1.
 
 **The first live playtest ran the same day and found two real problems,
-both now fixed (Decisions 93–94):**
+both now fixed (Decisions 93–94), plus a follow-up design fix for one of
+them (Decision 95):**
 1. **The aura reach fix (6D-0) overshot on damage.** Immolation cleared
    slime regardless of armour, Flare especially ("clears almost entire
    screen"), Shockwave a little. Damage cut on both (reach kept), armour
-   raised 70→90 combined cap. **Blades and Frost were not playtested and
-   were deliberately left untouched** — still an open question below.
+   raised 70→90 combined cap (Decision 93). **Then, on the owner's own
+   follow-up read** that a full-circle pulse can't help nuking everything
+   in range no matter how far its numbers are cut, Flare was redesigned
+   into Radar Sweep — a rotating wedge instead of a ring, via a new
+   `ClearOptions.sector` angular mask (Decision 95). **Blades and Frost
+   were not playtested and were deliberately left untouched** — still an
+   open question below.
 2. **The level-up draw offered Targeting/Conditional gems too early to
    mean anything** ("kept getting Conditional gems which didn't help").
    Both classes now ramp from a 0.15 floor to full parity by tower level
    10 (Decision 94) instead of being uniformly weighted from level 1.
 
 **Still unverified — what the next playtest should watch:**
-1. **Do the Immolation/Shockwave cuts land right, or did they overshoot
-   the other way?** No numeric target was measured, only the owner's
-   "too strong" read on the old numbers.
-2. **Do Blades and Frost need the same treatment?** Untested by the
-   owner's own account — don't assume yes or no without a play session
-   that actually uses them.
-3. **Does the armour raise make weak/unlevelled weapons feel *too* denied
+1. **Does Radar Sweep read as a real "sweep" in play**, and does its
+   wedge width/step (70°, tiling with no gaps or overlap) feel right?
+   Verified only by unit tests and a browser smoke test (game loads, no
+   console errors) — nobody has watched it fire in a real run yet.
+2. **Do the Immolation base-ring/Shockwave damage cuts land right, or did
+   they overshoot the other way?** No numeric target was measured, only
+   the owner's "too strong" read on the old numbers.
+3. **Do Blades and Frost need the same treatment** (either the plain
+   damage cut, or — if either has a similarly "instant, unavoidable,
+   full-coverage" extension — the same shape-not-magnitude fix Radar
+   Sweep got)? Untested by the owner's own account — don't assume yes or
+   no without a play session that actually uses them.
+4. **Does the armour raise make weak/unlevelled weapons feel *too* denied
    now**, especially the accepted level-1 Lance regression Decision 93
    named (`formation.test.ts`'s inverted invariant)?
-4. **Does the Targeting/Conditional ramp read as fair**, or does it still
+5. **Does the Targeting/Conditional ramp read as fair**, or does it still
    feel too rare early / not rare enough? The 0.15 floor and level-10 end
    point (`systems/cards.ts`'s `lateGemDrawChance`) are first-draft
    numbers, not measured.
-5. **Does the late game still flatten?** Untouched by this pass — if it
+6. **Does the late game still flatten?** Untouched by this pass — if it
    spikes instead, `LATE_GROWTH_PER_MINUTE` (1.05/min, `tuning/growth.ts`)
    is the lever.
-6. **Does any stack of Conditional gems trivialise the curve** once the
+7. **Does any stack of Conditional gems trivialise the curve** once the
    ramp actually lets players reach them mid-run? Nine multipliers
    compound; `phase-6d2-conditional-gems.md` §7 flagged this and it was
    never actually exercised in the first playtest.

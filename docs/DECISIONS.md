@@ -2973,6 +2973,67 @@ level-ups suspiciously narrow in an already-shortened 3-card draw
 
 ---
 
+**95. Immolation's Flare extension was redesigned from a periodic
+near-full-circle pulse into a rotating wedge (renamed Radar Sweep), and
+`clearAt` gained a general angular mask (`ClearOptions.sector`) to make
+it possible.**
+📋 *2026-08-11.*
+
+Decision 93 had already cut Flare's magnitude (radius/power/frequency)
+in response to the owner's "way too op, clears almost entire screen"
+finding, but a full-circle hit can't help nuking everything in range at
+once **no matter how far its numbers are cut** — the defect was the
+*shape*, not the magnitude, and no amount of tuning the same shape down
+fixes that. The owner's own suggestion, when asked to weigh a fully
+continuous always-on sweep (a new persistent rotating entity, new render
+work, real feature-sized cost) against a cheaper option: keep the
+existing periodic, cooldown-gated firing Immolation already uses
+everywhere else, but mask each firing to a narrow wedge instead of the
+full circle, and step the wedge's centre angle forward each time it
+fires. Chosen for cost, not fidelity — it reuses every mechanism the
+weapon already has (the `ticks` counter, the periodic `clearAt` call,
+`state.novaFx`) rather than adding a new entity or a continuous
+per-frame rotation.
+
+**The mechanism, `systems/cards.ts`-adjacent naming aside — `grid/
+clear.ts`'s new `ClearOptions.sector: { angle, halfWidth }`:** an
+orthogonal mask on top of whichever shape/radius a call already used,
+checked in the disc path, the annulus/capsule path, and the coagulant
+loop alike (three sites, not one, so the field means the same thing
+everywhere it's declared to apply — the exact "field reaches the entity
+but not `clearAt`" trap Decision 91 named, avoided by wiring it into
+every consumer up front rather than only the one the first caller
+happens to need). Absent means the full circle, unchanged, same as every
+other optional `ClearOptions` field.
+
+**Radar Sweep's own numbers** (`weapons/immolation.ts`): a 70°-wide wedge
+(chosen to equal its own step, so consecutive firings tile the circle
+with no gaps or overlap) at the same 1.3x radius and 45–65% power
+Decision 93 already set — those weren't revisited, since the wedge mask
+is now doing the "don't nuke everything" work the magnitude cut used to
+carry alone. The sweep angle is derived entirely from the weapon's
+existing `ticks` counter (`sweepStep = ticks / RADAR_EVERY - 1`, zero-
+indexed since `ticks` itself starts at 1) rather than new per-weapon
+state — one more tick counter to track would have been one more thing
+that could drift out of sync with Bounce's own reading of the same
+number.
+
+**Renamed `flare` → `radarSweep`** (the `ExtensionKey`, not just the
+display copy) — a key still called `flare` driving a mechanic titled
+"Radar Sweep" would read as exactly the kind of stale-name-vs-behaviour
+drift this project has repeatedly caught in gem/extension copy. Contained
+to three files (`tuning/extensions.ts`, `weapons/immolation.ts`, its test
+file); no save-compatibility concern exists for a solo in-development
+project with no shipped saves to migrate.
+
+**The visual (`render/novaFx.ts`) draws a pie-slice wedge, not a ring,
+when a `NovaFx` entity carries `angle`/`halfWidth`** — reusing a full-
+ring flash for a hit that only damaged a slice of it would be the same
+"the screen shows something the mechanic didn't do" problem the project
+keeps fixing in gem copy, just in pixels instead of text.
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

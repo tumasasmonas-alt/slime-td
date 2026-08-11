@@ -187,6 +187,19 @@ export interface ClearOptions {
   shape?:
     | { readonly kind: 'annulus'; readonly inner: number; readonly outer: number }
     | { readonly kind: 'capsule'; readonly toX: number; readonly toY: number };
+
+  // Radar Sweep (Immolation Flare, post-6D-3 playtest, 2026-08-11):
+  // restricts the hit to an angular wedge centred on `angle` (standard
+  // atan2 radians) and `halfWidth` radians wide on each side — an
+  // orthogonal mask on top of whichever shape/radius above already ran,
+  // not a fourth shape kind. Deliberately independent of `shape`: the
+  // only weapon using it today (Flare) is a plain disc, and folding this
+  // into the annulus/capsule generalization would couple two unrelated
+  // concerns (WHERE the hit reaches vs. HOW WIDE an angular slice of that
+  // area it damages) for no caller that needs both. Absent means the
+  // full circle, unchanged — same "absent = old behaviour" rule as every
+  // other optional field here.
+  sector?: { readonly angle: number; readonly halfWidth: number };
 }
 
 export type ClearShape = NonNullable<ClearOptions['shape']>;
@@ -304,6 +317,22 @@ function shapeBoundingBox(grid: Grid, x: number, y: number, shape: ClearShape, h
     minGy: Math.min(cy0, cy1) - pad,
     maxGy: Math.max(cy0, cy1) + pad,
   };
+}
+
+// Radar Sweep (Immolation Flare, post-6D-3 playtest, 2026-08-11): true
+// when the point at offset (dx, dy) from the hit's own centre falls
+// inside `sector`'s wedge — undefined sector always passes (the "no mask"
+// case every other optional field here also defaults to). (0, 0) — the
+// centre itself — always passes too, since a hit hasn't moved anywhere
+// yet to have an angle. The atan2(sin, cos) trick normalizes the raw
+// angle difference into (-pi, pi] regardless of how `sector.angle` was
+// computed (Immolation's own caller never wraps it), so this handles the
+// wraparound at +-pi for free rather than needing a modulo.
+function withinSector(sector: ClearOptions['sector'], dx: number, dy: number): boolean {
+  if (!sector) return true;
+  if (dx === 0 && dy === 0) return true;
+  const diff = Math.atan2(dy, dx) - sector.angle;
+  return Math.abs(Math.atan2(Math.sin(diff), Math.cos(diff))) <= sector.halfWidth;
 }
 
 // Phase 6C-1 (S3.2): the cheap bounding-circle reject ahead of the real
@@ -471,6 +500,7 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
         const ddy = oy * grid.cellSize;
         const d = Math.sqrt(ddx * ddx + ddy * ddy);
         if (d > radiusPx) continue;
+        if (!withinSector(opts.sector, ddx, ddy)) continue;
         const i = gy * grid.cols + gx;
         totalRemoved += applyCellDamage(grid, state, i, d, radiusPx, power, opts, ageFloor);
       }
@@ -493,6 +523,7 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
         const wy = gy * grid.cellSize + grid.cellSize / 2;
         const d = shape.kind === 'annulus' ? Math.abs(dist(wx, wy, x, y) - (shape.inner + shape.outer) / 2) : distToSegment(wx, wy, x, y, shape.toX, shape.toY);
         if (d > halfWidth) continue;
+        if (!withinSector(opts.sector, wx - x, wy - y)) continue;
         const i = gy * grid.cols + gx;
         totalRemoved += applyCellDamage(grid, state, i, d, halfWidth, power, opts, ageFloor);
       }
@@ -521,6 +552,7 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   for (const c of state.coagulants) {
     if (c.mass <= 0) continue;
     if (shapeCheapReject(shape, x, y, hitRadius, c)) continue; // cheap reject before the trig
+    if (!withinSector(opts.sector, c.x - x, c.y - y)) continue;
     const overlap = shapeCoagulantOverlap(shape, x, y, hitRadius, c);
     if (overlap <= 0) continue;
     const cellsEquivalent = overlap / (grid.cellSize * grid.cellSize);

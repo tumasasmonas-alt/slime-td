@@ -1469,4 +1469,66 @@ describe('clearAt', () => {
       expect(offLine.mass).toBe(200);
     });
   });
+
+  // Radar Sweep (Immolation, post-6D-3 playtest, 2026-08-11): `sector`
+  // masks a hit to an angular wedge, independent of `shape` — the only
+  // caller today (weapons/immolation.ts) uses it on the plain disc path,
+  // but grid/clear.ts wires it into the annulus/capsule branch and the
+  // coagulant loop too, so it's tested directly here rather than only
+  // through one weapon's specific numbers.
+  describe('sector — angular wedge masking (Phase 6D-3, Radar Sweep)', () => {
+    const CX = 100;
+    const CY = 100;
+
+    it('damages a cell inside the wedge', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      // Directly +X of the centre — angle 0.
+      const gx = CX / 10 + 5;
+      const gy = CY / 10;
+      state.grid.growth[gy * state.grid.cols + gx] = 0.9;
+
+      clearAt(state, CX, CY, 200, { radiusPx: 80, sector: { angle: 0, halfWidth: Math.PI / 4 } });
+
+      expect(state.grid.growth[gy * state.grid.cols + gx]!).toBeLessThan(0.9);
+    });
+
+    it('leaves a cell outside the wedge untouched, even well within radius', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      // Directly -X of the centre — angle pi, opposite the wedge below.
+      const gx = CX / 10 - 5;
+      const gy = CY / 10;
+      state.grid.growth[gy * state.grid.cols + gx] = 0.9;
+
+      clearAt(state, CX, CY, 200, { radiusPx: 80, sector: { angle: 0, halfWidth: Math.PI / 4 } });
+
+      expect(state.grid.growth[gy * state.grid.cols + gx]).toBeCloseTo(0.9, 5);
+    });
+
+    it('damages a coagulant inside the wedge but not one outside it, at the same radius', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const inWedge = makeCoagulant({ x: CX + 60, y: CY, mass: 200 }); // angle 0
+      const outsideWedge = makeCoagulant({ x: CX - 60, y: CY, mass: 200 }); // angle pi
+      state.coagulants = [inWedge, outsideWedge];
+
+      clearAt(state, CX, CY, 200, { radiusPx: 80, sector: { angle: 0, halfWidth: Math.PI / 4 } });
+
+      expect(inWedge.mass).toBeLessThan(200);
+      expect(outsideWedge.mass).toBe(200);
+    });
+
+    it('an absent sector damages the full circle — the old, unmasked behaviour', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const gx = CX / 10 - 5; // would be excluded by the wedge above, but no sector is given here
+      const gy = CY / 10;
+      state.grid.growth[gy * state.grid.cols + gx] = 0.9;
+
+      clearAt(state, CX, CY, 200, { radiusPx: 80 });
+
+      expect(state.grid.growth[gy * state.grid.cols + gx]!).toBeLessThan(0.9);
+    });
+  });
 });

@@ -31,22 +31,33 @@ const FLASH_LIFE = 0.35;
 // 1.4x radius (S1 — every tower-centred radius floors at `perimeter`, so
 // an inward second ring would sweep the safe zone and hit nothing) rather
 // than being folded into the main clearAt call, so its own power fraction
-// stays independently tunable. Flare is a periodic bonus pulse, using
-// Overcharge's own state.weaponShots counter (this weapon's own tick
-// count, not a second one). Backdraft samples how much mass is currently
-// crossing the ring before the main hit. Ash suppresses regrowth on
-// whatever the ring just burned.
+// stays independently tunable. Radar Sweep is a periodic wedge-shaped
+// bonus hit (redesigned post-6D-3 playtest from 'Flare', a full-circle
+// pulse — see its own comment below), using Overcharge's own
+// state.weaponShots counter (this weapon's own tick count, not a second
+// one). Backdraft samples how much mass is currently crossing the ring
+// before the main hit. Ash suppresses regrowth on whatever the ring just
+// burned.
 const SECOND_RING_MULT = 1.4;
 const SECOND_RING_POWER: readonly [number, number, number] = [0.6, 0.75, 0.9];
-// Post-6D-3 playtest (2026-08-11, owner): Flare was "way too op, clears
-// almost entire screen" — at the old 1.8x radius and up to 100% power, it
-// was a second nearly-full-power ring at almost double reach, every 4th
-// tick. Cut on all three levers together (radius, power, frequency)
-// rather than any one alone: 1.8x→1.3x, power ceiling 100%→65%, and every
-// 4th tick→every 5th. See tuning/extensions.ts's matching copy update.
-const FLARE_EVERY = 5;
-const FLARE_RADIUS_MULT = 1.3;
-const FLARE_POWER: readonly [number, number, number] = [0.45, 0.55, 0.65];
+// Radar Sweep (post-6D-3 playtest, 2026-08-11, owner's own suggestion) —
+// renamed and redesigned from 'Flare', a periodic near-full-circle pulse
+// found "way too op, clears almost entire screen" at 1.8x radius and up
+// to 100% power. A full-circle hit can't help but nuke everything in
+// range at once no matter how much its magnitude is cut — the fix isn't
+// a smaller number, it's not hitting the full circle. Every RADAR_EVERY
+// ticks, this fires a WEDGE instead of a ring: `grid/clear.ts`'s new
+// `ClearOptions.sector` masks the hit to a RADAR_WEDGE_RAD-wide arc, and
+// the wedge's centre angle advances by RADAR_WEDGE_RAD each firing —
+// tiling the circle with no gaps or overlap, so it reads as one steady
+// rotation sweeping around rather than several independent flashes.
+// Derived from `ticks` alone (no new per-weapon state needed): at the
+// moment this fires, `ticks` is always an exact multiple of RADAR_EVERY,
+// so `ticks / RADAR_EVERY` is the 0-indexed sweep step.
+const RADAR_EVERY = 5;
+const RADAR_RADIUS_MULT = 1.3;
+const RADAR_POWER: readonly [number, number, number] = [0.45, 0.55, 0.65];
+const RADAR_WEDGE_RAD = (70 * Math.PI) / 180; // 70° wide, matches its own step (tiles cleanly)
 const BACKDRAFT_SCALE: readonly [number, number, number] = [0.3, 0.45, 0.6];
 const ASH_MULT: readonly [number, number, number] = [0.6, 0.45, 0.3];
 const ASH_SECONDS = 2.0;
@@ -69,10 +80,11 @@ const RICOCHET_DELAY = 0.35;
 const RICOCHET_POWER_MULT = 0.5;
 // Bounce: alternates the ring's own radius between the normal size and
 // this multiplier, every tick — read off the same running tick counter
-// Flare already keeps (state.weaponShots.immolation), now incremented
-// unconditionally rather than only when Flare is socketed, so the two
-// gems/extensions read the same monotonic count without colliding
-// (different moduli of the same number, not two different counters).
+// Radar Sweep already keeps (state.weaponShots.immolation), now
+// incremented unconditionally rather than only when Radar Sweep is
+// socketed, so the two gems/extensions read the same monotonic count
+// without colliding (different moduli of the same number, not two
+// different counters).
 const BOUNCE_OUTER_MULT = 1.6;
 
 // Self-centered — no ACQUIRE stage, the target is always the tower.
@@ -119,9 +131,10 @@ export const immolationPipeline: WeaponPipeline = {
     const opts = resolveOpts(state, 'immolation');
 
     // Phase 6D-3: the running tick count, now incremented unconditionally
-    // (it used to increment only when Flare was socketed) so Bounce below
-    // can read the same monotonic count Flare does — different moduli of
-    // one number, not two counters that could collide.
+    // (it used to increment only when Radar Sweep — then 'Flare' — was
+    // socketed) so Bounce below can read the same monotonic count Radar
+    // Sweep does — different moduli of one number, not two counters that
+    // could collide.
     const ticks = (state.weaponShots.immolation ?? 0) + 1;
     state.weaponShots.immolation = ticks;
 
@@ -142,8 +155,8 @@ export const immolationPipeline: WeaponPipeline = {
 
     // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): same reading
     // as Frost's — Immolation has no ACQUIRE stage either. Scoped to the
-    // primary ring only, not Second Ring/Flare below (both are extension-
-    // layered bonus pulses, not the weapon's own base identity).
+    // primary ring only, not Second Ring/Radar Sweep below (both are
+    // extension-layered bonus hits, not the weapon's own base identity).
     const auraReading = auraTargetingReading(state, 'immolation', t.x, t.y, radius);
 
     clearAt(state, t.x, t.y, immolationDamage(lvl) * mods.damage * powerMult * backdraftMult, {
@@ -206,20 +219,29 @@ export const immolationPipeline: WeaponPipeline = {
       }
     }
 
-    // Flare: every FLARE_EVERY ticks, an extra outward pulse at
-    // FLARE_RADIUS_MULT — this weapon's own emission counter, the same
-    // Overcharge (Bolt) reads for its own every-5th-shot bonus, keyed by
-    // weapon so the two never collide.
-    const flareLvl = extensionLevel(state, 'immolation', 'flare');
-    if (flareLvl > 0) {
-      if (ticks % FLARE_EVERY === 0) {
-        const flareRadius = radius * FLARE_RADIUS_MULT;
-        clearAt(state, t.x, t.y, immolationDamage(lvl) * mods.damage * powerMult * FLARE_POWER[flareLvl - 1]!, {
-          radiusPx: flareRadius,
+    // Radar Sweep: every RADAR_EVERY ticks, a wedge — not a ring — fires
+    // at RADAR_RADIUS_MULT, its angle stepping RADAR_WEDGE_RAD further
+    // around each time. `ticks` is this weapon's own emission counter,
+    // the same one Overcharge (Bolt) reads for its own every-5th-shot
+    // bonus, keyed by weapon so the two never collide; at a firing tick
+    // it's always an exact multiple of RADAR_EVERY, so dividing gives the
+    // sweep step — minus 1 since `ticks` itself starts at 1, not 0, so the
+    // very first firing (ticks === RADAR_EVERY) is step 0, angle 0, rather
+    // than already one step around.
+    const radarLvl = extensionLevel(state, 'immolation', 'radarSweep');
+    if (radarLvl > 0) {
+      if (ticks % RADAR_EVERY === 0) {
+        const radarRadius = radius * RADAR_RADIUS_MULT;
+        const sweepStep = ticks / RADAR_EVERY - 1;
+        const angle = sweepStep * RADAR_WEDGE_RAD;
+        const halfWidth = RADAR_WEDGE_RAD / 2;
+        clearAt(state, t.x, t.y, immolationDamage(lvl) * mods.damage * powerMult * RADAR_POWER[radarLvl - 1]!, {
+          radiusPx: radarRadius,
           coagulantMult: WEAPON_DEFS.immolation?.coagulantMult ?? 1,
+          sector: { angle, halfWidth },
           ...opts,
         });
-        state.novaFx.push({ x: t.x, y: t.y, radius: flareRadius, life: FLASH_LIFE, maxLife: FLASH_LIFE, color: IMMOLATION_RING_COLOR });
+        state.novaFx.push({ x: t.x, y: t.y, radius: radarRadius, life: FLASH_LIFE, maxLife: FLASH_LIFE, color: IMMOLATION_RING_COLOR, angle, halfWidth });
       }
     }
   },
