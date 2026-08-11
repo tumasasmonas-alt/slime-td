@@ -2826,6 +2826,65 @@ actually forward it, not just that the spawning weapon file sets it.
 
 ---
 
+**92. Phase 6D-3 shipped Steps 1–3 only (`projectileFlags` wiring,
+`clearAt`'s `ClearResult` return, and real per-archetype Fork/Chaining/
+Bounce/Ricochet readings on all ten weapons) — Step 4 (the emission-
+multiplication rule, including new satellite/concentric-ring rendering)
+and Step 5 (gem copy, the plan's 6 named test categories, this record's
+own as-built delta) are deferred to a follow-up session.**
+📋 *2026-08-11.*
+
+Cut short by the same weekly-limit constraint that drove Decisions 88/89
+to skip the inter-batch playtest gate. Steps 1–3 were finished and fully
+tested (typecheck + `vitest run` only, per standing instruction for this
+batch) before the cutoff, so this is a clean stopping point rather than a
+half-applied change: Fork, Chaining, Bounce and Ricochet now have a real,
+weapon-appropriate reading on every weapon they're legal on, not just
+Bolt. Multishot/Formation's unconditional damage division (`blades.ts`,
+`frost.ts`) — the second defect `phase-6d3-gem-reality.md` §1 names — is
+**still unfixed**; it remains a precise zero on Blades and a downgrade on
+Frost until Step 4 lands. `tuning/gems.ts`'s copy is therefore **still
+wrong** for Multishot/Formation (Step 5 was never reached) but **now
+true** for Fork/Chaining/Bounce/Ricochet, an inconsistency worth knowing
+before reading that file.
+
+Two things worth recording from the Step 1–3 work itself:
+
+- **`lance.ts` was deferred out of Step 1 and given its own bespoke
+  Step 3 treatment instead of the plan's literal "four call sites, one
+  line each."** Lance's beam has no `Projectile` entity, so
+  `projectileFlags()` doesn't compose onto it the way it does for
+  Chain/Missile/Fission — the plan's own table already put Lance's Fork/
+  Chaining/Bounce/Ricochet readings in Step 3 (beam column), so this is a
+  scope correction, not a gap. Lance ended up with fully bespoke
+  readings: Fork fires the existing Twin-Lance beam helper twice at an
+  angle offset, Chaining/Bounce pick a second target near the beam's own
+  endpoint (highest-mass vs. nearest), Ricochet schedules an independent
+  extra pass rather than just relabeling the beam's existing native
+  linger.
+- **`systems/targeting.ts`'s `bestCoagulant()` cannot express "closest
+  excluding a specific coagulant."** Its loop seeds `best` from the
+  *first* candidate unconditionally (`if (!best || isBetter(c, best))
+  best = c`), so a comparator that tries to reject an already-known
+  coagulant only stops it from *winning* — it doesn't stop it from being
+  the seed, and once it's the seed a genuinely-closer second candidate
+  can still lose to it structurally. Found on Blades' Chaining reading
+  (it kept re-selecting the coagulant the blade was already hitting
+  directly instead of a second one 60px away) and fixed there with an
+  inline exclusion scan in `blades.ts` rather than changing
+  `bestCoagulant`'s signature — that function is shared with the Phase
+  6D-1 Targeting gems, and widening it was judged riskier than a local
+  fix for one caller. **If a future caller needs "nearest excluding X,"
+  don't reach for `bestCoagulant` — either scan inline or extend it with
+  an explicit exclusion parameter and re-verify every existing caller.**
+
+Full per-weapon detail (constants, exact readings, files touched):
+`phase-6d3-gem-reality.md`'s own as-built delta once Step 5 fills it in;
+until then, `git log` on `src/weapons/{immolation,lance,poison,frost,
+shockwave,blades}.ts` and their test files is the authoritative record.
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

@@ -3,7 +3,7 @@ import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { computeFrontier } from '../systems/frontier';
 import { frostRadius } from '../tuning/weapons';
-import { updateFrostWeapon } from './frost';
+import { frostPipeline, updateFrostWeapon } from './frost';
 
 function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
   return {
@@ -311,5 +311,110 @@ describe('updateFrostWeapon — Targeting gems (Phase 6D-1)', () => {
     updateFrostWeapon(withoutGem, 0.016);
 
     expect(500 - target1.mass).toBeGreaterThan(500 - target2.mass);
+  });
+});
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
+// Chaining/Bounce/Ricochet on Frost — used to be entirely dead on this
+// weapon. Calling frostPipeline.deliver directly for a deterministic
+// single pulse.
+describe('updateFrostWeapon — Fork/Chaining/Bounce/Ricochet (Phase 6D-3)', () => {
+  it('Fork adds a second, smaller pulse at the main pulse\'s rim', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'fork' }] };
+
+    frostPipeline.deliver(state, 1, null);
+
+    expect(state.novaFx).toHaveLength(2); // main pulse + Fork's rim pulse
+    expect(state.novaFx[1]!.radius).toBeLessThan(state.novaFx[0]!.radius);
+  });
+
+  it('with no gem, only the main pulse fires', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+
+    frostPipeline.deliver(state, 1, null);
+
+    expect(state.novaFx).toHaveLength(1);
+  });
+
+  it('Chaining fires a follow-up pulse on the farthest coagulant the main pulse actually touched', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+    const near = makeCoagulant({ x: 520, y: 500, mass: 200 });
+    const far = makeCoagulant({ x: 500, y: 650, mass: 200 }); // still within the pulse's own radius
+    state.coagulants = [near, far];
+
+    frostPipeline.deliver(state, 1, null);
+
+    expect(state.novaFx).toHaveLength(2);
+    const followUp = state.novaFx[1]!;
+    expect(Math.hypot(followUp.x - far.x, followUp.y - far.y)).toBeLessThan(5);
+  });
+
+  it('Chaining does nothing when the main pulse touches no coagulant — a bonus on a connecting hit, not a guaranteed emission', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+    // No coagulants, no revealed ground — the pulse hits nothing.
+
+    frostPipeline.deliver(state, 1, null);
+
+    expect(state.novaFx).toHaveLength(1); // just the main pulse
+  });
+
+  it('Bounce fires a second pulse offset from centre', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+
+    frostPipeline.deliver(state, 1, null);
+
+    expect(state.novaFx).toHaveLength(2);
+    const bounce = state.novaFx[1]!;
+    expect(Math.hypot(bounce.x - 500, bounce.y - 500)).toBeGreaterThan(0); // offset from the tower
+  });
+
+  it('Ricochet schedules a deferred re-fire', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+
+    frostPipeline.deliver(state, 1, null);
+
+    expect(state.pendingEmissions.filter((e) => e.weapon === 'frost')).toHaveLength(1);
+  });
+
+  it('the deferred re-fire itself (powerMult !== 1) never re-schedules Ricochet again', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 1;
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+
+    frostPipeline.deliver(state, 1, null, 0.5); // simulating a replay
+
+    expect(state.pendingEmissions.filter((e) => e.weapon === 'frost')).toHaveLength(0);
   });
 });

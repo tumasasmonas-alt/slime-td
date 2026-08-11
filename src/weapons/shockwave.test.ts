@@ -115,3 +115,93 @@ describe('updateShockwaveWeapon', () => {
     });
   });
 });
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
+// Chaining/Bounce/Ricochet on Shockwave — used to be entirely dead on
+// this weapon. Every one reuses Second Wave (extra delayed ring) or
+// Implosion (`inward: true`)'s own machinery — see weapons/shockwave.ts's
+// own comment for exactly how each differs.
+describe('updateShockwaveWeapon — Fork/Chaining/Bounce/Ricochet (Phase 6D-3)', () => {
+  it('with no gem, only the main outward ring fires', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.weapons.shockwave = 1;
+
+    updateShockwaveWeapon(state, 0.016);
+
+    expect(state.shockwaveRings).toHaveLength(1);
+  });
+
+  it('Fork adds a second outward ring, delayed and at reduced power', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.weapons.shockwave = 1;
+    state.weaponSockets.shockwave = { extensions: [], gems: [{ id: 1, kind: 'fork' }] };
+
+    updateShockwaveWeapon(state, 0.016);
+
+    expect(state.shockwaveRings).toHaveLength(2);
+    const [main, fork] = state.shockwaveRings;
+    expect(fork!.inward).toBeFalsy();
+    expect(fork!.bornAt).toBeGreaterThan(main!.bornAt);
+    expect(fork!.power).toBeLessThan(main!.power);
+  });
+
+  it('Chaining adds a delayed ring at double the max radius', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.weapons.shockwave = 1;
+    state.weaponSockets.shockwave = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+
+    updateShockwaveWeapon(state, 0.016);
+
+    expect(state.shockwaveRings).toHaveLength(2);
+    const [main, chained] = state.shockwaveRings;
+    expect(chained!.maxRadius).toBeCloseTo(main!.maxRadius * 2, 5);
+    expect(chained!.bornAt).toBeGreaterThan(main!.bornAt);
+  });
+
+  it('Bounce adds an inward ring travelling alongside the outward one, at the same bornAt', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.weapons.shockwave = 1;
+    state.weaponSockets.shockwave = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+
+    updateShockwaveWeapon(state, 0.016);
+
+    expect(state.shockwaveRings).toHaveLength(2);
+    const [main, bounce] = state.shockwaveRings;
+    expect(bounce!.inward).toBe(true);
+    expect(bounce!.bornAt).toBe(main!.bornAt); // simultaneous, not delayed
+  });
+
+  it('Ricochet adds an inward ring that starts only once the outward one would reach max radius', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.weapons.shockwave = 1;
+    state.weaponSockets.shockwave = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+
+    updateShockwaveWeapon(state, 0.016);
+
+    expect(state.shockwaveRings).toHaveLength(2);
+    const [main, ricochet] = state.shockwaveRings;
+    expect(ricochet!.inward).toBe(true);
+    expect(ricochet!.bornAt).toBeGreaterThan(main!.bornAt); // sequential — after, not alongside
+  });
+
+  it('Bounce and Ricochet both add an inward ring, but at different bornAt times — distinct readings, not duplicates', () => {
+    const withBounce = freshState();
+    withBounce.grid = makeTestGrid();
+    withBounce.weapons.shockwave = 1;
+    withBounce.weaponSockets.shockwave = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+    updateShockwaveWeapon(withBounce, 0.016);
+
+    const withRicochet = freshState();
+    withRicochet.grid = makeTestGrid();
+    withRicochet.weapons.shockwave = 1;
+    withRicochet.weaponSockets.shockwave = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+    updateShockwaveWeapon(withRicochet, 0.016);
+
+    expect(withRicochet.shockwaveRings[1]!.bornAt).toBeGreaterThan(withBounce.shockwaveRings[1]!.bornAt);
+  });
+});

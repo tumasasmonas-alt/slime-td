@@ -46,30 +46,35 @@ together, never one alone.
 4. **Does any stack of Conditional gems trivialise the curve?** Nine
    multipliers compound; `phase-6d2-conditional-gems.md` §7 flagged this.
 
-### ▶ Phase 6D-3 — the gem-reality fix. The one sub-batch still unbuilt.
+### ▶ Phase 6D-3 — the gem-reality fix. Steps 1–3 shipped, Steps 4–5 still open.
 
-`docs/plans/phase-6d3-gem-reality.md`. Largest of the four, touches
-`clearAt` hardest. Makes six already-shipped gems do what their cards
-claim (the entry below). Was outside the 2026-08-11 session's stated
-scope. **6D-0/6D-1/6D-2 are all shipped** — see the Done section.
+`docs/plans/phase-6d3-gem-reality.md`, §10 as-built delta, Decision 92.
+Fork/Chaining/Bounce/Ricochet now have real readings on every weapon
+they're legal on (Steps 1–3, shipped 2026-08-11). **Still open:** Step 4,
+the emission-multiplication rule rewrite (see the entry below — this is
+now the only unshipped defect from the original audit), and Step 5 (gem
+copy for Multishot/Formation, the plan's §7 test matrix, marking the
+as-built delta complete).
 
 **The roadmap's "cheap batch, 0 new renderers" estimate for 6D was
-wrong** — written before the audit. 6D-3 alone needs new rendering
+wrong** — written before the audit. Step 4 alone needs new rendering
 (satellite orbits, concentric rings). `phase-6-roadmap.md` §3's 6D row
 has been corrected.
 
-### 🔴 Six shipped gems don't do what they say — still open, 6D-3's job.
+### 🔴 Multishot/Formation divide damage unconditionally — still open, 6D-3 Step 4's job.
 
 Recorded here as a bug, not just a plan item, because it is a shipped
-defect: **Fork, Chaining, Bounce and Ricochet are wired into Bolt Turret
-alone** (only `weapons/bolt.ts` imports `projectileFlags()`), and
-**Multishot/Formation divide damage unconditionally** — a precise zero on
-Blades, a downgrade on Frost. The inventory copy describes effects that
-never happen. `tuning/gems.ts` discloses part of this as "projectile
-archetype only"; the reality is one weapon of ten.
+defect: `blades.ts`/`frost.ts` (and every other weapon reading
+`emissionPlan().count`) divide damage by the emission count even when the
+extra emissions can't overlap the same target — a precise **zero** on
+Blades (extra orbit slots literally can't hit anything the first blade
+didn't), a **downgrade** on Frost. `phase-6d3-gem-reality.md` §5 has the
+fix: divide only when extras can genuinely overlap (projectile/beam stay
+divided; orbital/ring become whole; pulse/cloud become partial).
 
-**Unchanged by the 2026-08-11 batches** — 6D-1 and 6D-2 added new gem
-classes, they did not touch the Behaviour class this bug lives in.
+**Fork/Chaining/Bounce/Ricochet's half of this same audit finding is now
+fixed** (6D-3 Steps 1–3, Decision 92) — this entry covers only the
+Multishot/Formation half, which is unchanged by that work.
 
 ### 🟡 A gem and its twin extension don't stack — the gem wins (Decision 90).
 

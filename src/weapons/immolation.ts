@@ -1,8 +1,9 @@
 import type { GameState } from '../state';
 import { clearAt } from '../grid/clear';
 import { IMMOLATION_RING_COLOR } from '../render/immolationRing';
+import { scheduleEmission } from '../systems/emissions';
 import { extensionLevel } from '../systems/extensions';
-import { resolveOpts } from '../systems/resolveOpts';
+import { hasBounceGem, hasChainingGem, hasForkGem, hasRicochetGem, resolveOpts } from '../systems/resolveOpts';
 import { auraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { IMMOLATION_TICK, WEAPON_DEFS, immolationDamage, immolationRadius } from '../tuning/weapons';
@@ -43,6 +44,30 @@ const FLARE_POWER: readonly [number, number, number] = [0.7, 0.85, 1.0];
 const BACKDRAFT_SCALE: readonly [number, number, number] = [0.3, 0.45, 0.6];
 const ASH_MULT: readonly [number, number, number] = [0.6, 0.45, 0.3];
 const ASH_SECONDS = 2.0;
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Immolation's ring
+// reading for Fork/Chaining/Bounce/Ricochet. Fork reuses Second Ring's
+// exact machinery (the plan's own note: "Fork IS Second Ring") — a
+// second concentric pulse, just at the gem's own multiplier instead of
+// the extension's. Chaining and Ricochet both reuse the deferred-
+// emission queue Echo/Barrage already established (systems/emissions.ts),
+// guarded by `powerMult === 1` the same way Lance's own linger guards
+// against re-scheduling itself — a re-invoked `deliver` always carries a
+// powerMult != 1, so it can never schedule a second round of itself.
+const FORK_RING_MULT = 1.5;
+const FORK_RING_POWER = 0.7;
+const CHAINING_DELAY = 0.6;
+const CHAINING_RADIUS_MULT = 2.0;
+const CHAINING_POWER_MULT = 0.6;
+const RICOCHET_DELAY = 0.35;
+const RICOCHET_POWER_MULT = 0.5;
+// Bounce: alternates the ring's own radius between the normal size and
+// this multiplier, every tick — read off the same running tick counter
+// Flare already keeps (state.weaponShots.immolation), now incremented
+// unconditionally rather than only when Flare is socketed, so the two
+// gems/extensions read the same monotonic count without colliding
+// (different moduli of the same number, not two different counters).
+const BOUNCE_OUTER_MULT = 1.6;
 
 // Self-centered — no ACQUIRE stage, the target is always the tower.
 // Phase 6A-1: now built on the shared cooldownReady() helper like every
@@ -85,8 +110,25 @@ export const immolationPipeline: WeaponPipeline = {
     if (!grid) return;
     const t = state.tower;
     const mods = weaponMods(state, 'immolation');
-    const radius = immolationRadius(lvl, grid.perimeter) * mods.area;
     const opts = resolveOpts(state, 'immolation');
+
+    // Phase 6D-3: the running tick count, now incremented unconditionally
+    // (it used to increment only when Flare was socketed) so Bounce below
+    // can read the same monotonic count Flare does — different moduli of
+    // one number, not two counters that could collide.
+    const ticks = (state.weaponShots.immolation ?? 0) + 1;
+    state.weaponShots.immolation = ticks;
+
+    // Bounce: alternates the ring's OWN radius between the normal size
+    // and BOUNCE_OUTER_MULT every tick.
+    const bounceActive = hasBounceGem(state, 'immolation') && ticks % 2 === 0;
+    const baseRadius = immolationRadius(lvl, grid.perimeter) * mods.area;
+    // Chaining: the deferred re-fire (scheduled below) carries this ring
+    // out to CHAINING_RADIUS_MULT instead of its normal size — detected
+    // by `powerMult !== 1`, which is only ever true for a re-invoked
+    // deliver (Echo/Barrage/this weapon's own scheduled replay).
+    const chainingReplay = hasChainingGem(state, 'immolation') && powerMult !== 1;
+    const radius = chainingReplay ? baseRadius * CHAINING_RADIUS_MULT : bounceActive ? baseRadius * BOUNCE_OUTER_MULT : baseRadius;
 
     const backdraftLvl = extensionLevel(state, 'immolation', 'backdraft');
     const backdraftMult = backdraftLvl > 0 ? 1 + BACKDRAFT_SCALE[backdraftLvl - 1]! * sampleRingDensity(grid, t.x, t.y, radius) : 1;
@@ -124,14 +166,46 @@ export const immolationPipeline: WeaponPipeline = {
       state.novaFx.push({ x: t.x, y: t.y, radius: outerRadius, life: FLASH_LIFE, maxLife: FLASH_LIFE, color: IMMOLATION_RING_COLOR });
     }
 
+    // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Fork — the
+    // plan's own note, "Fork IS Second Ring's machinery," just at the
+    // gem's own multiplier rather than the extension's, and additive with
+    // Second Ring if both happen to be present (no reason for one to
+    // exclude the other).
+    if (hasForkGem(state, 'immolation')) {
+      const forkRadius = radius * FORK_RING_MULT;
+      clearAt(state, t.x, t.y, immolationDamage(lvl) * mods.damage * powerMult * FORK_RING_POWER, {
+        radiusPx: forkRadius,
+        coagulantMult: WEAPON_DEFS.immolation?.coagulantMult ?? 1,
+        suppressRegrowth: ashLvl > 0 ? { mult: ASH_MULT[ashLvl - 1]!, seconds: ASH_SECONDS } : undefined,
+        ...opts,
+      });
+      state.novaFx.push({ x: t.x, y: t.y, radius: forkRadius, life: FLASH_LIFE, maxLife: FLASH_LIFE, color: IMMOLATION_RING_COLOR });
+    }
+
+    // Chaining/Ricochet: both reuse the deferred-emission queue Echo/
+    // Barrage already established, guarded by `powerMult === 1` the same
+    // way Lance's own linger guards against re-scheduling itself — only
+    // an ORIGINAL fire schedules a follow-up; the follow-up itself never
+    // does, so this terminates by construction rather than by a visited
+    // set. Ricochet's reading ("a second tick at reduced power shortly
+    // after") is textually close to Echo's own — a known soft overlap,
+    // accepted rather than invented away, the same call the project
+    // already made for Momentum vs Blades' Serration (6D-2).
+    if (powerMult === 1) {
+      if (hasChainingGem(state, 'immolation')) {
+        scheduleEmission(state, 'immolation', CHAINING_DELAY, lvl, null, CHAINING_POWER_MULT);
+      }
+      if (hasRicochetGem(state, 'immolation')) {
+        scheduleEmission(state, 'immolation', RICOCHET_DELAY, lvl, null, RICOCHET_POWER_MULT);
+      }
+    }
+
     // Flare: every FLARE_EVERY ticks, an extra outward pulse at
     // FLARE_RADIUS_MULT — this weapon's own emission counter, the same
     // Overcharge (Bolt) reads for its own every-5th-shot bonus, keyed by
     // weapon so the two never collide.
     const flareLvl = extensionLevel(state, 'immolation', 'flare');
     if (flareLvl > 0) {
-      const ticks = (state.weaponShots.immolation ?? 0) + 1;
-      state.weaponShots.immolation = ticks;
       if (ticks % FLARE_EVERY === 0) {
         const flareRadius = radius * FLARE_RADIUS_MULT;
         clearAt(state, t.x, t.y, immolationDamage(lvl) * mods.damage * powerMult * FLARE_POWER[flareLvl - 1]!, {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Grid } from '../state';
 import { freshState } from '../state';
 import { computeFrontier } from '../systems/frontier';
-import { updatePoisonWeapon } from './poison';
+import { poisonPipeline, updatePoisonWeapon } from './poison';
 
 function makeTestGrid(): Grid {
   const size = 900;
@@ -228,5 +228,125 @@ describe('updatePoisonWeapon', () => {
 
       expect(state.clouds[0]!.radius).toBeGreaterThan(plain.clouds[0]!.radius);
     });
+  });
+});
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
+// Chaining/Bounce/Ricochet on Poison — used to be entirely dead on this
+// weapon. Fork/Bounce/Ricochet bake a flag onto the cloud, consumed at
+// expiry/per-tick by systems/clouds.ts (its own test file covers that
+// half); this file covers the spawn-time half — that the flags actually
+// reach the cloud, and Chaining's own extra "tendril" cloud.
+describe('poisonPipeline — Fork/Chaining/Bounce/Ricochet (Phase 6D-3)', () => {
+  it('Fork bakes forkOnExpiry onto the spawned cloud', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.poison = 1;
+    state.weaponSockets.poison = { extensions: [], gems: [{ id: 1, kind: 'fork' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updatePoisonWeapon(state, 0.016);
+
+    expect(state.clouds[0]!.forkOnExpiry).toBe(true);
+  });
+
+  it('with no gem, none of the flags are set — no regression', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.poison = 1;
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updatePoisonWeapon(state, 0.016);
+
+    const c = state.clouds[0]!;
+    expect(c.forkOnExpiry).toBeFalsy();
+    expect(c.bounceOnExpiry).toBeFalsy();
+    expect(c.ricochetDrift).toBeFalsy();
+    expect(state.clouds).toHaveLength(1); // no Chaining tendril either
+  });
+
+  it('Bounce bakes bounceOnExpiry and a positive hop budget onto the cloud', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.poison = 1;
+    state.weaponSockets.poison = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updatePoisonWeapon(state, 0.016);
+
+    const c = state.clouds[0]!;
+    expect(c.bounceOnExpiry).toBe(true);
+    expect(c.bouncesLeft).toBeGreaterThan(0);
+  });
+
+  it('Ricochet bakes ricochetDrift onto the cloud', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.poison = 1;
+    state.weaponSockets.poison = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updatePoisonWeapon(state, 0.016);
+
+    expect(state.clouds[0]!.ricochetDrift).toBe(true);
+  });
+
+  it('Chaining drops an extra homing "tendril" cloud, distinct from the main one', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.poison = 1;
+    state.weaponSockets.poison = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updatePoisonWeapon(state, 0.016);
+
+    expect(state.clouds).toHaveLength(2);
+    const tendril = state.clouds[1]!;
+    expect(tendril.homing).toBe(true);
+    expect(tendril.radius).toBeLessThan(state.clouds[0]!.radius);
+  });
+
+  it('the tendril cloud is homing even when the Homing gem itself is not socketed', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.poison = 1;
+    state.weaponSockets.poison = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y);
+    computeFrontier(state);
+
+    updatePoisonWeapon(state, 0.016);
+
+    expect(state.clouds[0]!.homing).toBeFalsy(); // the main cloud isn't homing
+    expect(state.clouds[1]!.homing).toBe(true); // the tendril always is
+  });
+
+  it('calling deliver directly at powerMult !== 1 (a Multishot/Barrage-style replay) still tags the flags — no special-casing needed', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.poison = 1;
+    state.weaponSockets.poison = { extensions: [], gems: [{ id: 1, kind: 'fork' }] };
+
+    poisonPipeline.deliver(state, 1, { x: 200, y: 150, dist: 50 }, 0.5);
+
+    expect(state.clouds[0]!.forkOnExpiry).toBe(true);
   });
 });

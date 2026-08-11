@@ -1,6 +1,6 @@
 import type { GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
-import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
+import { emissionPlan, projectileFlags, resolveOpts } from '../systems/resolveOpts';
 import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { fissionBlastRadius, fissionCooldown, fissionCount, fissionDamage, fissionScatter } from '../tuning/weapons';
@@ -35,7 +35,12 @@ export const fissionPipeline: WeaponPipeline = {
     if (!target) return;
     const mods = weaponMods(state, 'fission');
     const plan = emissionPlan(state, 'fission');
-    const opts = resolveOpts(state, 'fission');
+    // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S2): Fork/Chaining/
+    // Bounce/Ricochet merged in like Bolt's — Fission Charge rides the
+    // exact same 'missile' | 'fission' branch in systems/projectiles.ts,
+    // and that branch's own `continue` used to skip the generic flag
+    // resolution entirely, same defect as Missile's.
+    const opts = { ...projectileFlags(state, 'fission'), ...resolveOpts(state, 'fission') };
     const dmg = (fissionDamage(lvl) * mods.damage * powerMult) / plan.count;
     const splashRadius = fissionBlastRadius(lvl) * mods.area;
     const count = fissionCount(lvl);

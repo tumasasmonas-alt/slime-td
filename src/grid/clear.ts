@@ -357,13 +357,43 @@ function shapeCoagulantOverlap(shape: ClearShape | undefined, x: number, y: numb
   return total;
 }
 
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S3): `clearAt` used to
+// return only a mass figure, so no caller could know WHICH coagulant a
+// hit touched or killed — the stated blocker for Fork/Chaining/Bounce/
+// Ricochet's literal on-kill readings ("splits into two on a kill,"
+// Bounce's coagulant-to-coagulant hop). `removed` is the exact same
+// number the old bare return was — every existing caller that only reads
+// `.removed` sees byte-identical behaviour, proven by the full suite
+// before anything downstream consumes `touched`/`killed` (S3's own
+// non-negotiable constraint, the same one 6C-1's shape generalization
+// held for the disc path).
+export interface ClearResult {
+  readonly removed: number;
+  // Every coagulant this call actually dealt damage to (removeAmt > 0),
+  // including overflow's own nearest-survivor hop — NOT filtered to
+  // "still alive," so a caller can distinguish "touched and died" from
+  // "touched and survived" via `killed` below rather than re-deriving it
+  // from mass. Can contain the same coagulant twice, if it received both
+  // a direct hit and overflow's extra hop in the same call — a caller
+  // that needs a unique set should dedupe, most only need `touched[0]`
+  // or a length check and don't care.
+  readonly touched: readonly Coagulant[];
+  // The subset of `touched` whose mass reached 0 as a direct result of
+  // THIS call (not a coagulant that was already at 0 mass beforehand —
+  // the main loop's own `if (c.mass <= 0) continue` guard already
+  // excludes those from ever being touched in the first place).
+  readonly killed: readonly Coagulant[];
+}
+
+const EMPTY_CLEAR_RESULT: ClearResult = { removed: 0, touched: [], killed: [] };
+
 // The core damage-the-field function: density directly resists both the
 // radius and magnitude of a hit — sparse tissue clears in one satisfying
 // chunk, mature tissue only chips down a little per hit. Direct port of
 // the prototype's clearAt().
-export function clearAt(state: GameState, x: number, y: number, power: number, opts: ClearOptions = {}): number {
+export function clearAt(state: GameState, x: number, y: number, power: number, opts: ClearOptions = {}): ClearResult {
   const grid = state.grid;
-  if (!grid) return 0;
+  if (!grid) return EMPTY_CLEAR_RESULT;
   // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Opportunist's
   // shared record — a single mutation of the existing object, never a new
   // allocation (clearAt is the hottest function in the game, per the
@@ -398,12 +428,6 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   // that's the one place that already knows both the weapon key and the
   // live socket state) — just applied here, same as the other two.
   if (opts.momentumMult) power *= opts.momentumMult;
-  // Captured before either loop runs so the streak update at the bottom
-  // can tell whether a kill happened DURING this specific call, not just
-  // whether one happened recently — tighter attribution than Bladestorm's
-  // window check gets away with, since we're comparing across exactly
-  // this synchronous call rather than a multi-second window.
-  const deathAtBefore = state.lastCoagulantDeathAt;
 
   // Bucketing (not the yield formula below) needs the current age floor —
   // see tuning/maturity.ts's maturityBucket for why a fixed 0..1 split
@@ -414,6 +438,12 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   // XP (Decision 31/61) — totalRemoved itself stays the honest physical
   // mass-removed figure the return value and the gem-drop threshold use.
   let coagulantRemoved = 0;
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S3): populated by the
+  // coagulant loop and the overflow block below, returned as ClearResult's
+  // `touched`/`killed` — see that interface's own comment for exactly what
+  // each contains.
+  const touched: Coagulant[] = [];
+  const killed: Coagulant[] = [];
   // Set by whichever branch below runs — the disc's own density-scaled
   // radius, or the new shape's literal half-width — and read afterward by
   // the (shared, shape-agnostic) coagulant loop's cheap reject.
@@ -570,6 +600,7 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     c.mass -= removeAmt;
     totalRemoved += removeAmt;
     coagulantRemoved += removeAmt;
+    touched.push(c);
     // Culling's finisher: a fraction of the coagulant's OWN starting
     // mass, not an absolute — checked after this hit's ordinary damage
     // has already landed, only on a hit that actually did something
@@ -586,7 +617,10 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       c.x = clamp(c.x + Math.cos(angle) * opts.kickback, c.radius, WORLD_WIDTH - c.radius);
       c.y = clamp(c.y + Math.sin(angle) * opts.kickback, c.radius, WORLD_HEIGHT - c.radius);
     }
-    if (c.mass <= 0) splatterOnDeath(state, c);
+    if (c.mass <= 0) {
+      splatterOnDeath(state, c);
+      killed.push(c);
+    }
   }
 
   if (overflowExcess > 0) {
@@ -606,7 +640,11 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       totalRemoved += applied;
       coagulantRemoved += applied;
       nearest.lastHitAt = state.time;
-      if (nearest.mass <= 0) splatterOnDeath(state, nearest);
+      touched.push(nearest);
+      if (nearest.mass <= 0) {
+        splatterOnDeath(state, nearest);
+        killed.push(nearest);
+      }
     }
   }
 
@@ -631,10 +669,15 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   // Ramps on a hit that actually removed mass; resets on a miss (nothing
   // removed) or a kill (the plan's own rule S1: it rewards sustained
   // pressure on a target, not finishing it off).
+  //
+  // Phase 6D-3: reads `killed.length` directly now instead of comparing
+  // `state.lastCoagulantDeathAt` across the call — a strictly tighter
+  // signal (this call's own kills, not "did any coagulant die anywhere
+  // at this exact timestamp," which a same-tick sibling weapon could
+  // have false-positived on).
   if (opts.momentumKey) {
-    const killedThisCall = state.lastCoagulantDeathAt !== deathAtBefore;
-    state.weaponStreak[opts.momentumKey] = totalRemoved > 0 && !killedThisCall ? (state.weaponStreak[opts.momentumKey] ?? 0) + 1 : 0;
+    state.weaponStreak[opts.momentumKey] = totalRemoved > 0 && killed.length === 0 ? (state.weaponStreak[opts.momentumKey] ?? 0) + 1 : 0;
   }
 
-  return totalRemoved;
+  return { removed: totalRemoved, touched, killed };
 }

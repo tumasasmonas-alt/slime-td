@@ -3,8 +3,8 @@ import { clearAt } from '../grid/clear';
 import { LANCE_COLOR } from '../render/beam';
 import { extensionLevel } from '../systems/extensions';
 import { scheduleEmission } from '../systems/emissions';
-import { resolveOpts } from '../systems/resolveOpts';
-import { highestMassPoint } from '../systems/targeting';
+import { hasBounceGem, hasChainingGem, hasForkGem, hasRicochetGem, resolveOpts } from '../systems/resolveOpts';
+import { bestCoagulant, highestMassPoint } from '../systems/targeting';
 import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { LANCE_LINGER, LANCE_LINGER_MULT, LANCE_RANGE, lanceBeamWidth, lanceChargeTime, lanceDamage } from '../tuning/weapons';
@@ -22,6 +22,35 @@ const AFTERGLOW_REGROW_MULT = 0.4;
 const AFTERGLOW_REGROW_SECONDS = 2.5;
 const OVERCHARGE_TIME_MULT: readonly [number, number, number] = [0.45, 0.7, 1.0];
 const OVERCHARGE_POWER_MULT: readonly [number, number, number] = [1.7, 2.1, 2.6];
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Lance's beam
+// reading for Fork/Chaining/Bounce/Ricochet.
+// Fork reuses Twin Lance's own fireBeam helper — "splits into two
+// diverging beams," at wider angles than Twin Lance's own offset so the
+// two read as distinct if a build somehow carries both.
+const FORK_ANGLE_OFFSET = 0.32;
+const FORK_POWER_SHARE = 0.45;
+// Chaining/Bounce both continue from the beam's own endpoint to a SECOND
+// target, found the same way the aura-focus gems already pick a
+// coagulant (systems/targeting.ts's bestCoagulant) — Chaining reads
+// "continues... to a second target" as the next-biggest threat near the
+// endpoint (extending the beam's own "hit what matters" identity);
+// Bounce reads "reflects to a second target" as whatever's physically
+// closest to where the beam stopped (a literal bounce off the nearest
+// thing).
+const CHAIN_SEARCH_RADIUS = 220;
+const CHAIN_POWER_SHARE = 0.55;
+const BOUNCE_SEARCH_RADIUS = 220;
+const BOUNCE_POWER_SHARE = 0.55;
+// Ricochet: "fires again along the same line at reduced power" is, on
+// Lance specifically, textually identical to the beam's OWN native
+// linger (S2.1, below) — which fires unconditionally, gem or not. Giving
+// Ricochet the exact same behaviour would make it silently inert (the
+// native linger already does it), so this grants a SECOND, independent
+// extra pass along the same line instead — genuinely more total damage
+// over the beam's lifetime when socketed, not a renamed freebie.
+const RICOCHET_DELAY = 0.5;
+const RICOCHET_POWER_MULT = 0.35;
 
 // Phase 6C-2 (docs/plans/phase-6c2-lance.md S4.2, S5.2): NOT
 // cooldownReady — Lance owns its own charge bookkeeping so the renderer
@@ -97,6 +126,43 @@ export const lancePipeline: WeaponPipeline = {
     const twinLvl = extensionLevel(state, 'lance', 'twinLance');
     if (twinLvl > 0) fireBeam(TWIN_ANGLE_OFFSET, dmg * TWIN_POWER_SHARE[twinLvl - 1]!);
 
+    // Fork: two diverging beams past the target, at FORK_ANGLE_OFFSET —
+    // wider than Twin Lance's own offset so the two read as distinct.
+    if (hasForkGem(state, 'lance')) {
+      fireBeam(FORK_ANGLE_OFFSET, dmg * FORK_POWER_SHARE);
+      fireBeam(-FORK_ANGLE_OFFSET, dmg * FORK_POWER_SHARE);
+    }
+
+    // Chaining/Bounce: a second beam from the endpoint to a target found
+    // near it — see this file's own const comments above for the exact
+    // selection criterion each uses.
+    const endX = t.x + Math.cos(Math.atan2(target.y - t.y, target.x - t.x)) * LANCE_RANGE;
+    const endY = t.y + Math.sin(Math.atan2(target.y - t.y, target.x - t.x)) * LANCE_RANGE;
+    if (hasChainingGem(state, 'lance')) {
+      const next = bestCoagulant(state, endX, endY, CHAIN_SEARCH_RADIUS, (a, b) => a.mass > b.mass);
+      if (next) {
+        const angle = Math.atan2(next.y - endX, next.x - endX);
+        const toX = endX + Math.cos(angle) * LANCE_RANGE;
+        const toY = endY + Math.sin(angle) * LANCE_RANGE;
+        clearAt(state, endX, endY, dmg * CHAIN_POWER_SHARE, { shape: { kind: 'capsule', toX, toY }, radiusPx: beamWidth, armorIgnoreCap, ...opts });
+        state.beamFx.push({ x: endX, y: endY, toX, toY, life: BEAM_FLASH_LIFE, maxLife: BEAM_FLASH_LIFE, color: LANCE_COLOR });
+      }
+    }
+    if (hasBounceGem(state, 'lance')) {
+      const nearest = bestCoagulant(state, endX, endY, BOUNCE_SEARCH_RADIUS, (a, b) => {
+        const da = Math.hypot(a.x - endX, a.y - endY);
+        const db = Math.hypot(b.x - endX, b.y - endY);
+        return da < db;
+      });
+      if (nearest) {
+        const angle = Math.atan2(nearest.y - endY, nearest.x - endX);
+        const toX = endX + Math.cos(angle) * LANCE_RANGE;
+        const toY = endY + Math.sin(angle) * LANCE_RANGE;
+        clearAt(state, endX, endY, dmg * BOUNCE_POWER_SHARE, { shape: { kind: 'capsule', toX, toY }, radiusPx: beamWidth, armorIgnoreCap, ...opts });
+        state.beamFx.push({ x: endX, y: endY, toX, toY, life: BEAM_FLASH_LIFE, maxLife: BEAM_FLASH_LIFE, color: LANCE_COLOR });
+      }
+    }
+
     // The beam's own base linger (S2.1) — resolves a second time at
     // reduced power after LANCE_LINGER seconds, independent of Afterglow
     // (which only makes the window longer). `powerMult === 1` guards
@@ -109,6 +175,13 @@ export const lancePipeline: WeaponPipeline = {
     if (powerMult === 1) {
       const lingerDuration = (LANCE_LINGER + (afterglowLvl > 0 ? AFTERGLOW_EXTRA[afterglowLvl - 1]! : 0)) * mods.duration;
       scheduleEmission(state, 'lance', lingerDuration, lvl, target, LANCE_LINGER_MULT);
+
+      // Ricochet: a SECOND, independent extra pass along the same line —
+      // see this file's own comment above for why this can't just be the
+      // native linger renamed. Same powerMult===1 guard, same reason.
+      if (hasRicochetGem(state, 'lance')) {
+        scheduleEmission(state, 'lance', RICOCHET_DELAY, lvl, target, RICOCHET_POWER_MULT);
+      }
     }
   },
   // Phase 6A-2's cleanup hook — the one piece of "not equipped" state a

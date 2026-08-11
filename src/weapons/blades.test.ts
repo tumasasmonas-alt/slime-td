@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { bladeCount, bladeRadius } from '../tuning/weapons';
-import { updateBladesWeapon } from './blades';
+import { bladesPipeline, updateBladesWeapon } from './blades';
 
 function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
   return {
@@ -386,5 +386,153 @@ describe('updateBladesWeapon — Targeting gems (Phase 6D-1)', () => {
     updateBladesWeapon(withoutGem, 0.016);
 
     expect(500 - target1.mass).toBeGreaterThan(500 - target2.mass);
+  });
+});
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
+// Chaining/Bounce/Ricochet on Blades — used to be entirely dead on this
+// weapon. Calling bladesPipeline.deliver directly at a fixed state.time
+// (t=0, so bladeCount(1)'s two blades sit at angle 0 and pi — due east
+// and due west of the tower) for a deterministic single tick.
+describe('bladesPipeline — Fork/Chaining/Bounce/Ricochet (Phase 6D-3)', () => {
+  it('Fork sheds a small projectile from a blade that lands a hit', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.blades = 1;
+    state.weaponSockets.blades = { extensions: [], gems: [{ id: 1, kind: 'fork' }] };
+    state.time = 0;
+    const radius = bladeRadius(1, state.grid.perimeter);
+    // A blade sits here at t=0 (angle 0, east) — give it something to hit.
+    state.coagulants = [makeCoagulant({ x: state.tower.x + radius, y: state.tower.y, mass: 500 })];
+
+    bladesPipeline.deliver(state, 1, null);
+
+    expect(state.projectiles).toHaveLength(1);
+    expect(state.projectiles[0]!.type).toBe('bolt');
+  });
+
+  it('with no gem, no projectile is shed even on a landed hit', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.blades = 1;
+    state.time = 0;
+    const radius = bladeRadius(1, state.grid.perimeter);
+    state.coagulants = [makeCoagulant({ x: state.tower.x + radius, y: state.tower.y, mass: 500 })];
+
+    bladesPipeline.deliver(state, 1, null);
+
+    expect(state.projectiles).toHaveLength(0);
+  });
+
+  it('Chaining deals extra damage to a second coagulant near a landed hit', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.blades = 1;
+    state.weaponSockets.blades = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+    state.time = 0;
+    const radius = bladeRadius(1, state.grid.perimeter);
+    const main = makeCoagulant({ x: state.tower.x + radius, y: state.tower.y, mass: 500 });
+    // Near the blade's own landing point, but not exactly on it.
+    const nearby = makeCoagulant({ x: state.tower.x + radius + 60, y: state.tower.y, mass: 200 });
+    state.coagulants = [main, nearby];
+
+    bladesPipeline.deliver(state, 1, null);
+
+    expect(nearby.mass).toBeLessThan(200);
+  });
+
+  it('Bounce sets a per-slot radius-override window after a landed hit', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.blades = 1;
+    state.weaponSockets.blades = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+    state.time = 0;
+    const radius = bladeRadius(1, state.grid.perimeter);
+    state.coagulants = [makeCoagulant({ x: state.tower.x + radius, y: state.tower.y, mass: 500 })];
+
+    bladesPipeline.deliver(state, 1, null);
+
+    expect(state.bladeBounceUntil[0]).toBeGreaterThan(0);
+  });
+
+  it('Bounce actually changes the blade\'s own orbit radius while its window is active', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.blades = 1;
+    state.weaponSockets.blades = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+    state.time = 0;
+    const radius = bladeRadius(1, state.grid.perimeter);
+    state.coagulants = [makeCoagulant({ x: state.tower.x + radius, y: state.tower.y, mass: 500 })];
+    bladesPipeline.deliver(state, 1, null); // lands a hit, sets bladeBounceUntil[0]
+
+    state.orbitals = [];
+    // A tiny time step later — well within BOUNCE_DURATION, and small
+    // enough that the orbit's own angle hasn't moved far.
+    state.time = 0.05;
+    bladesPipeline.deliver(state, 1, null);
+
+    const distFromTower = Math.hypot(state.orbitals[0]!.x - 300, state.orbitals[0]!.y - 300);
+    expect(distFromTower).toBeLessThan(radius); // orbiting at the reduced Bounce radius
+  });
+
+  it('with no gem, the orbit radius never changes after a hit', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.blades = 1;
+    state.time = 0;
+    const radius = bladeRadius(1, state.grid.perimeter);
+    state.coagulants = [makeCoagulant({ x: state.tower.x + radius, y: state.tower.y, mass: 500 })];
+    bladesPipeline.deliver(state, 1, null);
+
+    state.orbitals = [];
+    state.time = 0.05;
+    bladesPipeline.deliver(state, 1, null);
+
+    const distFromTower = Math.hypot(state.orbitals[0]!.x - 300, state.orbitals[0]!.y - 300);
+    expect(distFromTower).toBeCloseTo(radius, 0);
+  });
+
+  it('Ricochet oscillates the ring\'s own angle rather than spinning monotonically', () => {
+    const withGem = freshState();
+    withGem.grid = makeTestGrid();
+    withGem.tower.x = 300;
+    withGem.tower.y = 300;
+    withGem.weapons.blades = 1;
+    withGem.weaponSockets.blades = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+
+    const without = freshState();
+    without.grid = makeTestGrid();
+    without.tower.x = 300;
+    without.tower.y = 300;
+    without.weapons.blades = 1;
+
+    // One full RICOCHET_PERIOD (2.5s) later, the oscillation has swung
+    // back to exactly its own starting angle (sin(2*pi) = 0) — the plain,
+    // monotonically-spinning ring has no reason to be anywhere near its
+    // own t=0 position after the same elapsed time.
+    withGem.time = 2.5; // RICOCHET_PERIOD
+    without.time = 2.5;
+    bladesPipeline.deliver(withGem, 1, null);
+    bladesPipeline.deliver(without, 1, null);
+
+    const withGemAngle = Math.atan2(withGem.orbitals[0]!.y - 300, withGem.orbitals[0]!.x - 300);
+    const withoutAngle = Math.atan2(without.orbitals[0]!.y - 300, without.orbitals[0]!.x - 300);
+    // At exactly one full RICOCHET_PERIOD, the oscillation returns to 0
+    // (sin(2*pi) = 0) — back at its starting angle. The plain ring, spun
+    // continuously for 2.5s, is somewhere else entirely.
+    expect(Math.abs(withGemAngle)).toBeLessThan(0.05);
+    expect(Math.abs(withoutAngle)).toBeGreaterThan(0.05);
   });
 });

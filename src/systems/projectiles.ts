@@ -54,8 +54,22 @@ export function updateProjectiles(state: GameState, dt: number): void {
       const hadCluster = p.clusterCount;
       if (updateMissile(state, grid, p, dt)) {
         remaining.push(p);
-      } else if (hadCluster) {
-        remaining.push(...spawnClusterSubmunitions(p));
+      } else {
+        if (hadCluster) {
+          remaining.push(...spawnClusterSubmunitions(p));
+        }
+        // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S2): Fork/
+        // Chaining/Bounce/Ricochet, grafted onto the detonation point —
+        // this branch's own `continue` used to skip the generic block
+        // entirely, so Missile and Fission Charge never read these flags
+        // even when resolveOpts spread them onto the projectile at spawn.
+        // Recomputed fresh rather than threaded out of updateMissile:
+        // detonation doesn't move `p` any further, so `p.x`/`p.y` are
+        // already the right point to sample.
+        const { cx, cy } = worldToCell(grid, p.x, p.y);
+        const cellIdx = gIdx(grid, cx, cy);
+        const hitCoagulant = findCoagulantHit(state, p.x, p.y, p.radius);
+        resolveGenericBehaviourFlags(state, grid, p, cellIdx, hitCoagulant, remaining);
       }
       continue;
     }
@@ -165,9 +179,11 @@ export function updateProjectiles(state: GameState, dt: number): void {
         clearAt(state, p.x, p.y, hitDmg, { radiusPx: CHAIN_IMPACT_RADIUS * areaMult, coagulantMult, ...resolveOpts });
         p.visited.add(i);
         p.hopsLeft -= 1;
+        let continuedNatively = false;
         if (p.hopsLeft > 0) {
           const next = findNextChainHop(state, grid, p.x, p.y, p.visited, p.densityBias);
           if (next) {
+            continuedNatively = true;
             const a = Math.atan2(next.y - p.y, next.x - p.x);
             p.legStart = { x: p.x, y: p.y };
             p.vx = Math.cos(a) * CHAIN_HOP_SPEED;
@@ -189,57 +205,92 @@ export function updateProjectiles(state: GameState, dt: number): void {
             }
           }
         }
+        // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S2): Fork/
+        // Chaining/Bounce/Ricochet apply exactly once, at the moment
+        // Chain's own native hop budget is exhausted (or fizzles early
+        // with no target) — never per native hop, so a Chaining gem makes
+        // this chain hop FURTHER (one extra hop past chainCount(lvl)), not
+        // twice as often per hop. Chain's own machinery stays untouched
+        // either way (`continuedNatively` only gates whether this runs).
+        //
+        // Note `advanceHop` (Chaining's own reading, below) only steers
+        // the projectile and decrements its budget — it deals no damage
+        // of its own. `p.type` is still 'chain', so the NEXT tick lands
+        // back in THIS branch, dealing damage via this same clearAt call
+        // and decrementing `p.hopsLeft` further (harmlessly negative,
+        // ignored) before re-checking the generic flags again — one
+        // physical hop, one clearAt call, whichever branch supplied the
+        // steering. This is what makes "hops further" cost no new damage
+        // path, not a coincidence.
+        if (!continuedNatively) {
+          resolveGenericBehaviourFlags(state, grid, p, i, hitCoagulant, remaining);
+        }
         continue;
       }
 
       clearAt(state, p.x, p.y, p.dmg, { radiusPx: BOLT_IMPACT_RADIUS * areaMult, coagulantMult, ...resolveOpts });
-
-      // Phase 6A-2: the generic behaviour flags, in priority order —
-      // at most one outcome per hit rather than composing all five, which
-      // is a deliberate simplification (docs/plans/phase-6a2-behaviour-
-      // gems.md), not an oversight. Most builds carry one Behaviour gem
-      // per weapon anyway; this ordering just guarantees sane behaviour
-      // for any combination rather than crashing or double-resolving.
-      if (p.forks && p.forks > 0 && !p.forked) {
-        // Pushed onto `remaining`, not `state.projectiles` — this loop is
-        // mid-iteration over state.projectiles, and it's overwritten
-        // wholesale by `remaining` at the end. Pushing onto the array
-        // currently being iterated would silently vanish the moment that
-        // overwrite happens.
-        remaining.push(...spawnForks(p));
-        continue; // the parent itself is consumed — only the children survive
-      }
-      if (p.chains && p.chains > 0) {
-        p.visited ??= new Set();
-        if (advanceHop(state, grid, p, p.visited, i, findNextChainHop, CHAIN_DAMAGE_DECAY, 'chains')) {
-          remaining.push(p);
-        }
-        continue;
-      }
-      if (p.bounces && p.bounces > 0 && hitCoagulant) {
-        p.bounceVisited ??= new Set();
-        if (advanceHop(state, grid, p, p.bounceVisited, null, findNextBounceHop, CHAIN_DAMAGE_DECAY, 'bounces')) {
-          remaining.push(p);
-        }
-        continue;
-      }
-      if (p.ricochet && !p.ricocheted) {
-        p.ricocheted = true;
-        p.vx = -p.vx;
-        p.vy = -p.vy;
-        remaining.push(p);
-        continue;
-      }
-      if (p.pierce && p.pierce > 0) {
-        p.pierce -= 1;
-        remaining.push(p);
-        continue;
-      }
-      continue; // no behaviour flag applies — despawn on impact, same as before 6A-2
+      resolveGenericBehaviourFlags(state, grid, p, i, hitCoagulant, remaining);
+      continue;
     }
     remaining.push(p);
   }
   state.projectiles = remaining;
+}
+
+// Phase 6A-2: the generic behaviour flags, in priority order — at most
+// one outcome per hit rather than composing all five, which is a
+// deliberate simplification (docs/plans/phase-6a2-behaviour-gems.md), not
+// an oversight. Most builds carry one Behaviour gem per weapon anyway;
+// this ordering just guarantees sane behaviour for any combination rather
+// than crashing or double-resolving.
+//
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S2): extracted from the
+// bolt/generic impact branch so Chain's own hop-completion point and
+// Missile/Fission's own detonation point can call the exact same
+// resolution — both used to skip this block entirely (their own `continue`
+// fired first), which is why Fork/Chaining/Bounce/Ricochet worked on Bolt
+// alone (Decision, this batch's whole reason for existing). Pushes onto
+// `remaining`, never `state.projectiles` — the caller is always
+// mid-iteration over that array.
+function resolveGenericBehaviourFlags(
+  state: GameState,
+  grid: Grid,
+  p: Projectile,
+  cellIdx: number,
+  hitCoagulant: ReturnType<typeof findCoagulantHit>,
+  remaining: Projectile[],
+): void {
+  if (p.forks && p.forks > 0 && !p.forked) {
+    remaining.push(...spawnForks(p));
+    return; // the parent itself is consumed — only the children survive
+  }
+  if (p.chains && p.chains > 0) {
+    p.visited ??= new Set();
+    if (advanceHop(state, grid, p, p.visited, cellIdx, findNextChainHop, CHAIN_DAMAGE_DECAY, 'chains')) {
+      remaining.push(p);
+    }
+    return;
+  }
+  if (p.bounces && p.bounces > 0 && hitCoagulant) {
+    p.bounceVisited ??= new Set();
+    if (advanceHop(state, grid, p, p.bounceVisited, null, findNextBounceHop, CHAIN_DAMAGE_DECAY, 'bounces')) {
+      remaining.push(p);
+    }
+    return;
+  }
+  if (p.ricochet && !p.ricocheted) {
+    p.ricocheted = true;
+    p.vx = -p.vx;
+    p.vy = -p.vy;
+    remaining.push(p);
+    return;
+  }
+  if (p.pierce && p.pierce > 0) {
+    p.pierce -= 1;
+    remaining.push(p);
+    return;
+  }
+  // no behaviour flag applies — despawn on impact, same as before 6A-2
 }
 
 // Shared by the generic `chains` and `bounces` flags — advances a

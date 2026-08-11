@@ -1,6 +1,6 @@
 import type { GameState, ShockwaveRing } from '../state';
 import { extensionLevel } from '../systems/extensions';
-import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
+import { emissionPlan, hasBounceGem, hasChainingGem, hasForkGem, hasRicochetGem, resolveOpts } from '../systems/resolveOpts';
 import { auraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { shockwaveCooldown, shockwaveDamage, shockwaveReach, shockwaveStartRadius, SHOCKWAVE_SPEED } from '../tuning/weapons';
@@ -22,6 +22,26 @@ const SECOND_WAVE_POWER: readonly [number, number, number] = [0.55, 0.7, 0.85];
 const KNOCKBACK_PX: readonly [number, number, number] = [20, 32, 46];
 const RESONANT_RING_BONUS: readonly [number, number, number] = [0.4, 0.65, 0.9];
 const IMPLOSION_POWER: readonly [number, number, number] = [1.1, 1.25, 1.4];
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Shockwave's own
+// reading for Fork/Chaining/Bounce/Ricochet — every one an EXTRA ring,
+// reusing the exact machinery Second Wave (an extra ring, delayed) and
+// Implosion (`inward: true`) already established, rather than inventing
+// a fifth way to make a ring. Fork is Second Wave's own shape at the
+// gem's own values; Chaining is a delayed ring at double radius; Bounce
+// and Ricochet both add an inward ring — Bounce's travels alongside the
+// outward one (simultaneous, "alternates" read as both directions
+// represented at once); Ricochet's is delayed to start only once the
+// outward ring reaches its own max radius — "an inward-travelling ring
+// AFTER the outward one," the plan's own literal reading, and the reason
+// this gem's other archetypes all reuse THIS weapon's machinery.
+const FORK_DELAY = 0.3;
+const FORK_POWER_SHARE = 0.6;
+const CHAINING_DELAY = 0.5;
+const CHAINING_RADIUS_MULT = 2.0;
+const CHAINING_POWER_SHARE = 0.5;
+const BOUNCE_POWER_SHARE = 0.5;
+const RICOCHET_POWER_SHARE = 0.45;
 
 // Untargeted — expands outward from the tower on a cooldown. No ACQUIRE
 // stage; the ring's damage is applied per-sim-tick in
@@ -107,6 +127,54 @@ export const shockwavePipeline: WeaponPipeline = {
           ...ring,
           bornAt: state.time + SECOND_WAVE_DELAY[secondWaveLvl - 1]!,
           power: dmg * SECOND_WAVE_POWER[secondWaveLvl - 1]!,
+        });
+      }
+
+      // Fork: Second Wave's own shape (an extra outward ring, delayed),
+      // at the gem's own values — see this file's own comment above.
+      if (hasForkGem(state, 'shockwave')) {
+        state.shockwaveRings.push({
+          ...ring,
+          bornAt: state.time + FORK_DELAY,
+          power: dmg * FORK_POWER_SHARE,
+        });
+      }
+
+      // Chaining: a delayed ring at double the max radius.
+      if (hasChainingGem(state, 'shockwave')) {
+        state.shockwaveRings.push({
+          ...ring,
+          bornAt: state.time + CHAINING_DELAY,
+          maxRadius: maxRadius * CHAINING_RADIUS_MULT,
+          power: dmg * CHAINING_POWER_SHARE,
+        });
+      }
+
+      // Bounce: an inward ring travelling ALONGSIDE the outward one —
+      // "alternates," read as both directions represented at once.
+      if (hasBounceGem(state, 'shockwave')) {
+        state.shockwaveRings.push({
+          ...ring,
+          bornAt: state.time,
+          damagedTo: maxRadius,
+          radius: maxRadius,
+          inward: true,
+          power: dmg * BOUNCE_POWER_SHARE,
+        });
+      }
+
+      // Ricochet: an inward ring that starts only once the outward one
+      // reaches its own max radius — sequential, not simultaneous, per
+      // the plan's own literal reading ("AFTER the outward one").
+      if (hasRicochetGem(state, 'shockwave')) {
+        const travelTime = (maxRadius - startRadius) / SHOCKWAVE_SPEED;
+        state.shockwaveRings.push({
+          ...ring,
+          bornAt: state.time + travelTime,
+          damagedTo: maxRadius,
+          radius: maxRadius,
+          inward: true,
+          power: dmg * RICOCHET_POWER_SHARE,
         });
       }
     }

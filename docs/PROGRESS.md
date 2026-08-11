@@ -48,7 +48,29 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-11 (**Phase 6D-2 shipped** — Decisions 90–91:
+**Last updated:** 2026-08-11 (**Phase 6D-3 partially shipped** —
+Decision 92: Steps 1–3 of the gem-reality fix. Fork/Chaining/Bounce/
+Ricochet now have real, weapon-appropriate readings on every weapon
+they're legal on (previously Bolt Turret alone), and `clearAt` returns a
+richer `ClearResult` (mass removed, coagulants touched/killed) that made
+those readings possible. **Steps 4 and 5 are unbuilt** — Multishot/
+Formation's unconditional damage division (still a zero on Blades, a
+downgrade on Frost) is the one defect from the original audit not yet
+fixed, and the gem-copy/test-matrix/doc cleanup pass hasn't run. Cut here
+by the same weekly-limit constraint as the batches below; a clean
+stopping point, not an interrupted one — everything shipped is tested
+green. **888 tests pass, `tsc --noEmit` clean.** Full detail:
+`docs/plans/phase-6d3-gem-reality.md` §10, Decision 92.
+
+**▶ MACHINE HANDOFF — pick up here.** Next session should start at
+`phase-6d3-gem-reality.md` §8 step 5 (the `plan.count` divisor in
+`blades.ts`/`frost.ts`/every weapon that reads `emissionPlan()`) — read
+§5's table and §9's risk note (the renderer, not the damage-rule logic,
+is the part likeliest to run long) before starting. A playtest is still
+owed on top of this — see the entry below, unchanged by this session's
+work since 6D-3 doesn't touch balance numbers.
+
+**Previously:** 2026-08-11 (**Phase 6D-2 shipped** — Decisions 90–91:
 the 9 Conditional gems, all RESOLVE-stage damage multipliers/debuffs on
 `ClearOptions`, legal on every weapon (no refusal table). **A real bug
 found and fixed during implementation, not by the browser** — six of ten
@@ -65,34 +87,14 @@ typecheck + `vitest run` only — no live playtest across any of the three
 batches**, continuing the departure Decisions 88/89 recorded. **828 tests
 pass, `tsc --noEmit` clean.**
 
-**6D-0/6D-1/6D-2 are shipped; 6D-3 (the gem-reality fix) was not part of
-this session's scope and remains unbuilt.**
-
-**▶ MACHINE HANDOFF — pick up here.** Tree is clean, everything pushed to
-`main` (`e6ff7d2`). Full session account:
-`docs/sessions/2026-08-11-phase-6d-batches.md`.
-
-**The next session has a real choice to make, and it should be made
-deliberately rather than by momentum:**
-
-- **Option A — playtest first (recommended).** Three batches shipped
-  unverified. 6D-0 moved the aura weapons' reach from ~105px to
-  165–210px, and **6D-1's five aura-targeting gem readings assume that
-  move landed them somewhere with mass in it** — the two are a coupled
-  pair, and if 6D-0's numbers are wrong, 6D-1's gems are built on a wrong
-  assumption. What to watch, and which lever to reach for in each case,
-  is written out in `docs/BACKLOG.md`'s top entry.
-- **Option B — build 6D-3 first** (`docs/plans/phase-6d3-gem-reality.md`),
-  the last unbuilt sub-batch: the gem-reality fix that makes six
-  already-shipped gems do what their cards claim. Largest of the four,
-  touches `clearAt` hardest. Choosing this means carrying four unverified
-  batches instead of three.
-
-Either way, **read Decision 91 before adding any new `ClearOptions`
-field** — this session's one serious bug was a field that reached each
-weapon's spawned entity correctly and was then silently dropped at
-impact by three consumers with hardcoded field lists, invisible to both
-typecheck and 823 passing tests.
+**6D-0/6D-1/6D-2 shipped this session; 6D-3 was picked up in the very next
+session (above) rather than the playtest option — see that entry for why
+and what's still owed.** Full session account:
+`docs/sessions/2026-08-11-phase-6d-batches.md`. Read Decision 91 before
+adding any new `ClearOptions` field — this session's one serious bug was
+a field that reached each weapon's spawned entity correctly and was then
+silently dropped at impact by three consumers with hardcoded field lists,
+invisible to both typecheck and 823 passing tests.
 
 **Previously:** 2026-08-11, **Phase 6D-1 shipped** — Decision 89: the 7
 Targeting gems, each replacing a weapon's ACQUIRE stage via a new
@@ -570,6 +572,57 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-11 — Phase 6D-3 partially shipped: Steps 1–3 of the gem-reality fix (Decision 92)
+
+**Full account:** `docs/plans/phase-6d3-gem-reality.md` §10 as-built
+delta; Decision 92 has the complete reasoning.
+
+**Cut short by the weekly-limit constraint** — same one that drove
+Decisions 88/89/91's no-playtest departure. Stopped at a clean checkpoint
+(everything shipped is typechecked and tested green) rather than mid-step.
+
+**What shipped:**
+- **Step 1** — `chain.ts`/`missile.ts`/`fission.ts` now merge
+  `projectileFlags(state, key)` into their spawn options, same as
+  `bolt.ts` already did. `lance.ts` was moved into Step 3 instead (its
+  beam has no `Projectile` entity, so the same wiring doesn't compose).
+- **Step 2** — `clearAt` now returns `ClearResult` (`removed`/`touched`/
+  `killed`) instead of a bare number. The scalar return proven
+  byte-identical first; zero production call sites read the old return
+  value, so the whole migration surface was 6 test assertions.
+- **Step 3** — Fork/Chaining/Bounce/Ricochet now have real, weapon-
+  appropriate readings on all six remaining archetypes (Blades, Frost,
+  Shockwave, Immolation, Poison, Lance), matching the plan's §4 table.
+  The owner picked full bespoke Shockwave mechanisms (not the
+  Ricochet-only fallback) when asked mid-batch — every one of Shockwave's
+  four readings reuses Second Wave's or Implosion's own ring machinery
+  rather than inventing new ring mechanics. One real bug caught and fixed
+  during this step: Blades' Chaining reading kept re-selecting the
+  coagulant already being hit directly instead of a second nearby one,
+  because `systems/targeting.ts`'s `bestCoagulant()` has no way to
+  express "closest excluding X" — fixed with a local inline scan in
+  `blades.ts`, not a `bestCoagulant` signature change (that function is
+  shared with the 6D-1 Targeting gems).
+
+**Still open — Steps 4 and 5, next session's starting point:**
+- Step 4: the emission-multiplication rule. Multishot/Formation still
+  divide damage unconditionally (`emissionPlan().count`) even where the
+  extra emissions can't overlap the same target — still a precise zero on
+  Blades, still a downgrade on Frost. This is now the *only* unfixed half
+  of the original audit finding. Needs new rendering (satellite orbit
+  centres for Blades, concentric rings for Immolation) — §9 already
+  flagged this as the batch's least-reliably-estimated cost.
+- Step 5: fix `tuning/gems.ts`'s Multishot/Formation copy (its Fork/
+  Chaining/Bounce/Ricochet copy is now accurate, but the class comment's
+  argument against disclosing gaps is moot for those four and not yet
+  updated), write the plan's §7 test matrix (6 named categories — some
+  already incidentally covered by this session's per-weapon tests, but no
+  comprehensive matrix exists yet), and the single end-of-batch commit +
+  push the owner asked for (done this session, but for a partial batch —
+  Step 4/5's own commit is still to come).
+
+**888 tests pass, `tsc --noEmit` clean**, covering only Steps 1–3.
 
 ### 2026-08-11 — Phase 6D-2 shipped: the Conditional gems (Decisions 90–91)
 

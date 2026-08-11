@@ -1,6 +1,6 @@
 import type { GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
-import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
+import { emissionPlan, projectileFlags, resolveOpts } from '../systems/resolveOpts';
 import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { missileCooldown, missileDamage, missileRadius } from '../tuning/weapons';
@@ -30,6 +30,13 @@ const SALVO_SPACING = 0.13;
 // have nothing to add. Multishot/Formation fire a salvo instead
 // (converging on the same target point rather than spreading, which
 // reads as "more missiles," not "worse aim").
+//
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S2): Fork/Chaining/
+// Bounce/Ricochet were never merged in here at all, so a missile carrying
+// one of these gems silently ignored it regardless of what
+// systems/projectiles.ts's own branch did with the field — the field
+// never reached the projectile in the first place. Merged in like Bolt's
+// now; systems/projectiles.ts grafts their resolution onto detonation.
 export const missilePipeline: WeaponPipeline = {
   ready: cooldownReady('missile', missileCooldown),
   acquire: targetingAcquire('missile', (s) => s.grid?.maxRange ?? 0, frontierAcquire),
@@ -37,7 +44,7 @@ export const missilePipeline: WeaponPipeline = {
     if (!target) return;
     const mods = weaponMods(state, 'missile');
     const plan = emissionPlan(state, 'missile');
-    const opts = resolveOpts(state, 'missile');
+    const opts = { ...projectileFlags(state, 'missile'), ...resolveOpts(state, 'missile') };
     const dmg = (missileDamage(lvl) * mods.damage * powerMult) / plan.count;
 
     const bunkerLvl = extensionLevel(state, 'missile', 'bunkerBuster');
@@ -82,7 +89,7 @@ function fireMissile(
   dmg: number,
   splashRadius: number,
   velocityMult: number,
-  opts: ReturnType<typeof resolveOpts>,
+  opts: ReturnType<typeof projectileFlags> & ReturnType<typeof resolveOpts>,
   proximityFuseDist: number | undefined,
   clusterCount: number | undefined,
   armAt: number,

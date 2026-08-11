@@ -181,4 +181,36 @@ is a bug with a UI, not a documentation gap.
 
 ## 10. As-built delta
 
-*To be filled in when this ships.*
+**Partial ship, 2026-08-11 — Steps 1–3 landed, Steps 4–5 did not.** Full
+reasoning: Decision 92.
+
+- **Step 1** shipped as planned for `chain.ts`, `missile.ts`, `fission.ts`.
+  `lance.ts` was moved out of Step 1 into Step 3 instead — its beam has no
+  `Projectile` entity, so `projectileFlags()` doesn't compose onto it the
+  way it does for the other three; the §4 table already scoped Lance's
+  readings as bespoke, so Step 3 was always going to touch it regardless.
+- **Step 2** shipped as planned: `ClearResult` (`removed`/`touched`/
+  `killed`), scalar return proven byte-identical first, zero production
+  call sites needed migration (only test assertions did).
+- **Step 3** shipped in full, including the owner's explicit choice of
+  full bespoke Shockwave mechanisms (not the Ricochet-only fallback) when
+  asked mid-batch. Every one of the six weapon archetypes (Blades,
+  Frost/Shockwave, Immolation, Poison, Lance) now has a real, weapon-
+  appropriate Fork/Chaining/Bounce/Ricochet reading, matching §4's table.
+  One implementation snag worth knowing before touching this code again:
+  Blades' Chaining reading needed an inline nearest-excluding-X scan
+  rather than `systems/targeting.ts`'s `bestCoagulant()`, which cannot
+  express that query — see Decision 92 for the full explanation.
+- **Step 4 (the emission-multiplication rule) and Step 5 (copy fix, the
+  §7 test matrix, this delta's own completion) are unbuilt.** Multishot/
+  Formation still divide damage unconditionally — still a precise zero on
+  Blades, still a downgrade on Frost. `tuning/gems.ts`'s Multishot/
+  Formation copy is therefore still wrong; its Fork/Chaining/Bounce/
+  Ricochet copy is now true. Pick up at §8 step 5 (`emissionPlan`'s
+  `plan.count` divisor in `blades.ts`/`frost.ts`/every other weapon that
+  reads it) — the renderer work (satellite orbit centres, concentric
+  rings) is the part §9 already flagged as the real cost and the least
+  reliably estimated.
+- Cut here by the same weekly-limit constraint Decisions 88/89 already
+  recorded for the inter-batch playtest gate — this was a clean stopping
+  point (everything shipped is tested and green), not an interrupted one.

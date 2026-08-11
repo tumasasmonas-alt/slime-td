@@ -1,13 +1,15 @@
-import type { GameState } from '../state';
+import type { Coagulant, GameState } from '../state';
 import { clearAt } from '../grid/clear';
 import { gIdx, isRevealedIdx, worldToCell } from '../grid/grid';
 import { findCoagulantHit } from '../systems/coagulants';
 import { extensionLevel } from '../systems/extensions';
 import { nearestFrontierPoint } from '../systems/frontier';
-import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { emissionPlan, hasBounceGem, hasChainingGem, hasForkGem, hasHomingGem, hasRicochetGem, resolveOpts } from '../systems/resolveOpts';
+import { findNearbyRevealedPoint } from '../systems/targeting';
 import { auraTargetingReading, type AuraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { WEAPON_DEFS, bladeCount, bladeDamage, bladeRadius } from '../tuning/weapons';
+import { dist } from '../util/math';
 import { runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const SPIN_SPEED = 2.4;
@@ -37,6 +39,32 @@ const BLADESTORM_WINDOW = 2.0;
 const WHIRL_RADIUS_MULT: readonly [number, number, number] = [1.25, 1.35, 1.45];
 const WHIRL_DURATION = 0.3;
 
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Blades' own
+// reading for Fork/Chaining/Bounce/Ricochet — all four trigger off a
+// landed hit (or, for Ricochet, off elapsed time directly), never a
+// separate cooldown, since a blade's own HIT_COOLDOWN already rate-limits
+// how often any one slot can trigger these.
+// Fork: a small projectile sheds from the blade's own position, flying
+// outward — reuses the generic 'bolt' projectile shape rather than
+// inventing a new entity type.
+const FORK_SPEED = 260;
+const FORK_DAMAGE_SHARE = 0.4;
+const FORK_LIFE = 1.0;
+// Chaining: an extra hit at a point found beyond the blade's own orbit —
+// reuses findNearbyRevealedPoint (Chain Bolt's own search) and
+// findCoagulantHit, whichever is closer, the same "just another close
+// thing" comparison Chain's own findNextChainHop uses.
+const CHAINING_SEARCH_RADIUS = 120;
+const CHAINING_POWER_SHARE = 0.5;
+// Bounce: the blade's own orbit radius jumps to this multiplier for
+// BOUNCE_DURATION seconds after a landed hit.
+const BOUNCE_RADIUS_MULT = 0.6;
+const BOUNCE_DURATION = 0.5;
+// Ricochet: the WHOLE ring's spin direction reverses every
+// RICOCHET_PERIOD seconds — stateless (read directly off state.time),
+// since it's a property of the ring as a whole, not any one blade slot.
+const RICOCHET_PERIOD = 2.5;
+
 // No targeting at all — blades circle the tower and damage whatever
 // revealed tissue they sweep through, each on its own per-slot cooldown
 // (state.bladeNextHit) so a blade can't hit the same patch every single
@@ -55,6 +83,12 @@ const WHIRL_DURATION = 0.3;
 // disjoint range of bladeNextHit/bladeStreak/bladeWhirlUntil keys — both
 // rings share GameState's sparse per-slot maps, so without an offset a
 // slot index from one ring would collide with the other's.
+interface BladeGemFlags {
+  readonly fork: boolean;
+  readonly chaining: boolean;
+  readonly bounce: boolean;
+}
+
 function runBladeRing(
   state: GameState,
   grid: NonNullable<GameState['grid']>,
@@ -79,13 +113,23 @@ function runBladeRing(
   // point wouldn't mean "avoid the near field" the way it does on a
   // tower-centred disc anyway.
   auraReading: AuraTargetingReading,
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Fork/Chaining/
+  // Bounce — see this file's own const comments above for each reading.
+  gemFlags: BladeGemFlags,
 ): void {
   for (let i = 0; i < count; i++) {
     const a = arcStart !== null
       ? arcStart + (count <= 1 ? arcSpan / 2 : (i / (count - 1)) * arcSpan) + spin * 0.15
       : spin + (i / count) * Math.PI * 2;
-    const bx = t.x + Math.cos(a) * radius;
-    const by = t.y + Math.sin(a) * radius;
+    const slot = slotBase + i;
+    // Bounce: this slot's orbit radius jumps to BOUNCE_RADIUS_MULT for a
+    // short window after its own last landed hit — read BEFORE computing
+    // this tick's position, same "previous hit affects this reading"
+    // ordering Whirl's own flare already uses.
+    const bounceActive = gemFlags.bounce && (state.bladeBounceUntil[slot] ?? 0) > state.time;
+    const effectiveRadius = bounceActive ? radius * BOUNCE_RADIUS_MULT : radius;
+    const bx = t.x + Math.cos(a) * effectiveRadius;
+    const by = t.y + Math.sin(a) * effectiveRadius;
     state.orbitals.push({
       x: bx,
       y: by,
@@ -95,7 +139,6 @@ function runBladeRing(
       glowColor: BLADE_GLOW_COLOR,
     });
 
-    const slot = slotBase + i;
     const { cx, cy } = worldToCell(grid, bx, by);
     const ci = gIdx(grid, cx, cy);
     const nextAllowed = state.bladeNextHit[slot] ?? 0;
@@ -107,7 +150,8 @@ function runBladeRing(
     // Coagulants are entities, not grid cells — a blade sweeping
     // through already-cleared space still needs to connect with a
     // blob sitting there, which isRevealedIdx alone can't see.
-    const onTarget = isRevealedIdx(grid, ci) || findCoagulantHit(state, bx, by, hitRadius) !== null;
+    const primaryHit = findCoagulantHit(state, bx, by, hitRadius);
+    const onTarget = isRevealedIdx(grid, ci) || primaryHit !== null;
     if (onTarget && state.time >= nextAllowed) {
       const streak = serrationLvl > 0 ? (state.bladeStreak[slot] ?? 0) : 0;
       const serrationMult = serrationLvl > 0 ? Math.min(SERRATION_CAP, 1 + streak * SERRATION_RAMP[serrationLvl - 1]!) : 1;
@@ -121,6 +165,61 @@ function runBladeRing(
       state.bladeNextHit[slot] = state.time + hitCooldown;
       if (serrationLvl > 0) state.bladeStreak[slot] = streak + 1;
       if (whirlLvl > 0) state.bladeWhirlUntil[slot] = state.time + WHIRL_DURATION;
+      if (gemFlags.bounce) state.bladeBounceUntil[slot] = state.time + BOUNCE_DURATION;
+
+      // Fork: a small projectile sheds from the blade's own position,
+      // flying radially outward (away from the tower).
+      if (gemFlags.fork) {
+        const outward = Math.atan2(by - t.y, bx - t.x);
+        state.projectiles.push({
+          type: 'bolt',
+          src: 'blades',
+          x: bx,
+          y: by,
+          vx: Math.cos(outward) * FORK_SPEED,
+          vy: Math.sin(outward) * FORK_SPEED,
+          dmg: dmg * FORK_DAMAGE_SHARE,
+          radius: 4,
+          color: BLADE_COLOR,
+          life: FORK_LIFE,
+        });
+      }
+
+      // Chaining: an extra hit at a point found beyond this blade's own
+      // position — whichever is closer, a nearby revealed grid cluster
+      // or a nearby coagulant, the same comparison Chain Bolt's own
+      // findNextChainHop uses. Explicitly excludes whatever this same
+      // blade just hit directly (`primaryHit`) — findCoagulantHit alone
+      // would just re-find that same coagulant every time, since it's
+      // definitionally the closest thing to (bx, by).
+      if (gemFlags.chaining) {
+        const gridPoint = findNearbyRevealedPoint(grid, bx, by, CHAINING_SEARCH_RADIUS, new Set([ci]));
+        // bestCoagulant has no way to express "closest excluding X" — its
+        // `!best` seed check picks the first candidate regardless of the
+        // comparator, so a post-hoc `!== primaryHit` filter can't recover
+        // a second-best once the loop has already discarded it. Scanning
+        // inline instead.
+        let blob: Coagulant | null = null;
+        let blobDist = Infinity;
+        for (const c of state.coagulants) {
+          if (c === primaryHit || c.mass <= 0) continue;
+          const d = dist(bx, by, c.x, c.y);
+          if (d > CHAINING_SEARCH_RADIUS + c.radius) continue;
+          if (d < blobDist) {
+            blobDist = d;
+            blob = c;
+          }
+        }
+        const blobCandidate = blob ? { x: blob.x, y: blob.y } : null;
+        const next = blobCandidate && (!gridPoint || blobDist < dist(bx, by, gridPoint.x, gridPoint.y)) ? blobCandidate : gridPoint;
+        if (next) {
+          clearAt(state, next.x, next.y, dmg * CHAINING_POWER_SHARE, {
+            radiusPx: hitRadius,
+            coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1,
+            ...opts,
+          });
+        }
+      }
     } else if (serrationLvl > 0 && state.time >= nextAllowed) {
       // Cooldown elapsed but nothing was here to hit — a miss, which
       // resets the streak rather than leaving it stale until the next
@@ -162,7 +261,20 @@ export const bladesPipeline: WeaponPipeline = {
     const bladestormLvl = extensionLevel(state, 'blades', 'bladestorm');
     const bladestormActive = bladestormLvl > 0 && state.time - state.lastCoagulantDeathAt < BLADESTORM_WINDOW;
     const spinVelocity = mods.velocity * (bladestormActive ? BLADESTORM_MULT[bladestormLvl - 1]! : 1);
-    const spin = state.time * SPIN_SPEED * spinVelocity;
+    // Ricochet: the ring's direction periodically reverses — "re-sweeping
+    // ground," per the card's own reading. Implemented as a smooth
+    // sine-driven oscillation (angle, not accumulated angle * sign) so
+    // there's no discontinuous jump at the moment of reversal the way
+    // flipping the SIGN of a monotonically-growing `time * speed` value
+    // would cause — this is the angle whose own derivative (angular
+    // velocity) already reverses smoothly through zero at each swing's
+    // end, which literally IS "re-sweeping the same ground" rather than
+    // completing full reversed revolutions.
+    const ricochetOn = hasRicochetGem(state, 'blades');
+    const ricochetAmplitude = (SPIN_SPEED * spinVelocity * RICOCHET_PERIOD) / (2 * Math.PI);
+    const spin = ricochetOn
+      ? ricochetAmplitude * Math.sin((2 * Math.PI * state.time) / RICOCHET_PERIOD)
+      : state.time * SPIN_SPEED * spinVelocity;
     const radius = bladeRadius(lvl, grid.perimeter) * mods.area;
     // Pierce: no per-blade hit cooldown — never stopped by what it cuts.
     // Reusing ignoreResistance as the signal (only Pierce ever sets it)
@@ -193,6 +305,11 @@ export const bladesPipeline: WeaponPipeline = {
     // shared focus target across both, same reasoning as Frost's Multishot
     // copies.
     const auraReading = auraTargetingReading(state, 'blades', t.x, t.y, radius);
+    const gemFlags: BladeGemFlags = {
+      fork: hasForkGem(state, 'blades'),
+      chaining: hasChainingGem(state, 'blades'),
+      bounce: hasBounceGem(state, 'blades'),
+    };
 
     state.orbitals = [];
     runBladeRing(
@@ -211,6 +328,7 @@ export const bladesPipeline: WeaponPipeline = {
       plan.formation ? arcStart : null,
       arcSpan,
       auraReading,
+      gemFlags,
     );
 
     // Counter-Rotation: a second ring, spinning the OTHER way, orbiting
@@ -238,6 +356,7 @@ export const bladesPipeline: WeaponPipeline = {
         plan.formation ? arcStart : null,
         arcSpan,
         auraReading,
+        gemFlags,
       );
     }
   },

@@ -1,6 +1,6 @@
 import type { BubbleSeed, GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
-import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { emissionPlan, hasBounceGem, hasChainingGem, hasForkGem, hasHomingGem, hasRicochetGem, resolveOpts } from '../systems/resolveOpts';
 import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { poisonCooldown, poisonDamage, poisonRadius } from '../tuning/weapons';
@@ -27,6 +27,18 @@ const TWIN_CANISTER_DIST = 40;
 const TWIN_CANISTER_RADIUS_MULT = 0.6;
 const TWIN_CANISTER_LIFE_MULT = 2;
 
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Poison's cloud
+// reading for Fork/Chaining/Bounce/Ricochet. Fork/Bounce/Ricochet bake a
+// flag onto the cloud itself, consumed by systems/clouds.ts at expiry or
+// per-tick; Chaining is its own thing entirely — a genuine extra cloud
+// ("tendril... toward the nearest mass"), reusing the SAME `homing` field
+// Homing itself uses, just forced on for this one extra cloud regardless
+// of whether the Homing gem is also socketed.
+const CHAINING_RADIUS_MULT = 0.5;
+const CHAINING_LIFE_MULT = 0.8;
+const CHAINING_DMG_MULT = 0.6;
+const BOUNCE_MAX_HOPS = 2;
+
 export const poisonPipeline: WeaponPipeline = {
   ready: cooldownReady('poison', poisonCooldown),
   acquire: targetingAcquire('poison', (s) => s.grid?.maxRange ?? 0, frontierAcquire),
@@ -44,6 +56,10 @@ export const poisonPipeline: WeaponPipeline = {
     const armorShred = corrosiveLvl > 0 ? CORROSIVE_SHRED[corrosiveLvl - 1] : undefined;
     const lingeringLvl = extensionLevel(state, 'poison', 'lingeringSpores');
     const driftOutward = lingeringLvl > 0 ? LINGERING_DRIFT[lingeringLvl - 1] : undefined;
+
+    const forkOnExpiry = hasForkGem(state, 'poison');
+    const bounceOnExpiry = hasBounceGem(state, 'poison');
+    const ricochetDrift = hasRicochetGem(state, 'poison');
 
     for (let i = 0; i < plan.count; i++) {
       const angle = (i / plan.count) * Math.PI * 2;
@@ -64,6 +80,31 @@ export const poisonPipeline: WeaponPipeline = {
         armorShred,
         driftOutward,
         driftAngle: rand(0, Math.PI * 2),
+        forkOnExpiry,
+        bounceOnExpiry,
+        bouncesLeft: bounceOnExpiry ? BOUNCE_MAX_HOPS : undefined,
+        ricochetDrift,
+        ...opts,
+      });
+    }
+
+    // Chaining: a genuine extra cloud — a smaller "tendril" that drifts
+    // toward the nearest mass, reusing Homing's own drift mechanism
+    // (systems/clouds.ts) forced on for this one cloud regardless of
+    // whether the Homing gem itself is socketed.
+    if (hasChainingGem(state, 'poison')) {
+      const tendrilLife = life * CHAINING_LIFE_MULT;
+      state.clouds.push({
+        x: target.x,
+        y: target.y,
+        radius: radius * CHAINING_RADIUS_MULT,
+        life: tendrilLife,
+        maxLife: tendrilLife,
+        dmgPerSec: perDmg * CHAINING_DMG_MULT,
+        color: CLOUD_COLOR,
+        tickTimer: 0,
+        bubbleSeeds: spawnBubbleSeeds(),
+        homing: true,
         ...opts,
       });
     }

@@ -196,3 +196,19 @@ export function hasHomingGem(state: GameState, key: WeaponKey): boolean {
   const sockets = state.weaponSockets[key];
   return sockets?.gems.some((g) => g.kind === 'homing') ?? false;
 }
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): the same
+// presence-check shape as hasHomingGem, for the four gems whose
+// non-projectile readings (Blades/Frost/Immolation/Poison/Lance/
+// Shockwave) are per-weapon-local mechanisms rather than
+// systems/projectiles.ts flags — those weapons never touch
+// projectileFlags() at all, so they need their own direct socket check.
+function hasBehaviourGem(state: GameState, key: WeaponKey, kind: 'fork' | 'chaining' | 'bounce' | 'ricochet'): boolean {
+  const sockets = state.weaponSockets[key];
+  return sockets?.gems.some((g) => g.kind === kind) ?? false;
+}
+
+export const hasForkGem = (state: GameState, key: WeaponKey): boolean => hasBehaviourGem(state, key, 'fork');
+export const hasChainingGem = (state: GameState, key: WeaponKey): boolean => hasBehaviourGem(state, key, 'chaining');
+export const hasBounceGem = (state: GameState, key: WeaponKey): boolean => hasBehaviourGem(state, key, 'bounce');
+export const hasRicochetGem = (state: GameState, key: WeaponKey): boolean => hasBehaviourGem(state, key, 'ricochet');

@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import type { Grid } from '../state';
+import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { updateClouds } from './clouds';
+
+function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
+  return {
+    x: 0,
+    y: 0,
+    mass: 50,
+    armor: 0,
+    kind: 'congealer',
+    radius: 12,
+    speed: 45,
+    phase: 'active',
+    phaseTimer: 0,
+    seeds: [],
+    splitAtMass: 0,
+    sourceMaturity: 0,
+    parts: [],
+    startMass: 50,
+    lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
+    ...overrides,
+  };
+}
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
   const size = 3600;
@@ -267,5 +291,178 @@ describe('updateClouds', () => {
     const removedWithout = 1000 - without.coagulants[0]!.mass;
 
     expect(removedWith).toBeGreaterThan(removedWithout);
+  });
+});
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
+// Bounce/Ricochet's expiry/drift half — weapons/poison.test.ts covers the
+// spawn-time half (that the flags actually reach the cloud).
+describe('Fork/Bounce/Ricochet at expiry (Phase 6D-3)', () => {
+  it('Fork replaces an expiring cloud with two smaller children instead of just vanishing', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 40,
+      life: 0.05, // expires this tick
+      maxLife: 3.4,
+      dmgPerSec: 10,
+      color: '#8aff4d',
+      tickTimer: 5,
+      bubbleSeeds: [],
+      forkOnExpiry: true,
+    });
+
+    updateClouds(state, 0.1);
+
+    expect(state.clouds).toHaveLength(2);
+    expect(state.clouds[0]!.radius).toBeLessThan(40);
+    expect(state.clouds[0]!.forkOnExpiry).toBeFalsy(); // children never re-fork
+  });
+
+  it('a plain expiring cloud (no forkOnExpiry) just vanishes — no regression', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 40,
+      life: 0.05,
+      maxLife: 3.4,
+      dmgPerSec: 10,
+      color: '#8aff4d',
+      tickTimer: 5,
+      bubbleSeeds: [],
+    });
+
+    updateClouds(state, 0.1);
+
+    expect(state.clouds).toHaveLength(0);
+  });
+
+  it('Bounce relocates an expiring cloud to the nearest mass and keeps it alive instead of vanishing', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const target = makeCoagulant({ x: 450, y: 300, mass: 200 });
+    state.coagulants = [target];
+    state.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 40,
+      life: 0.05,
+      maxLife: 3.4,
+      dmgPerSec: 10,
+      color: '#8aff4d',
+      tickTimer: 5,
+      bubbleSeeds: [],
+      bounceOnExpiry: true,
+      bouncesLeft: 2,
+    });
+
+    updateClouds(state, 0.1);
+
+    expect(state.clouds).toHaveLength(1); // relocated, not removed
+    const c = state.clouds[0]!;
+    expect(c.x).toBeCloseTo(target.x, 5);
+    expect(c.y).toBeCloseTo(target.y, 5);
+    expect(c.life).toBeGreaterThan(0); // refreshed
+    expect(c.bouncesLeft).toBe(1); // one hop consumed
+  });
+
+  it('Bounce\'s hop budget terminates — once bouncesLeft reaches 0, the cloud vanishes on expiry like normal', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const target = makeCoagulant({ x: 450, y: 300, mass: 200 });
+    state.coagulants = [target];
+    state.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 40,
+      life: 0.05,
+      maxLife: 3.4,
+      dmgPerSec: 10,
+      color: '#8aff4d',
+      tickTimer: 5,
+      bubbleSeeds: [],
+      bounceOnExpiry: true,
+      bouncesLeft: 0, // budget already exhausted
+    });
+
+    updateClouds(state, 0.1);
+
+    expect(state.clouds).toHaveLength(0);
+  });
+
+  it('Bounce with nothing nearby to hop to just vanishes, same as a plain expiry', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    // no coagulants anywhere
+    state.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 40,
+      life: 0.05,
+      maxLife: 3.4,
+      dmgPerSec: 10,
+      color: '#8aff4d',
+      tickTimer: 5,
+      bubbleSeeds: [],
+      bounceOnExpiry: true,
+      bouncesLeft: 2,
+    });
+
+    updateClouds(state, 0.1);
+
+    expect(state.clouds).toHaveLength(0);
+  });
+
+  it('Ricochet moves a cloud even with no Lingering Spores extension socketed', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 30,
+      life: 3.4,
+      maxLife: 3.4,
+      dmgPerSec: 10,
+      color: '#8aff4d',
+      tickTimer: 5,
+      bubbleSeeds: [],
+      ricochetDrift: true,
+      driftAngle: 0,
+    });
+
+    updateClouds(state, 0.5);
+
+    const c = state.clouds[0]!;
+    const distFromOrigin = Math.hypot(c.x - 300, c.y - 300);
+    expect(distFromOrigin).toBeGreaterThan(0);
+  });
+
+  it('Ricochet flips driftAngle once, partway through the cloud\'s life, not every tick', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 30,
+      life: 3.4,
+      maxLife: 3.4,
+      dmgPerSec: 10,
+      color: '#8aff4d',
+      tickTimer: 5,
+      bubbleSeeds: [],
+      ricochetDrift: true,
+      driftAngle: 0,
+    });
+
+    // Advance well past the flip fraction (life <= maxLife * 0.5).
+    for (let i = 0; i < 20 && state.clouds.length > 0; i++) updateClouds(state, 0.1);
+
+    const c = state.clouds[0]!;
+    expect(c.ricochetFlipped).toBe(true);
+    expect(c.driftAngle).toBeCloseTo(Math.PI, 5); // flipped exactly once from 0
   });
 });

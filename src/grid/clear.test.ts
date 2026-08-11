@@ -58,7 +58,10 @@ function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
 describe('clearAt', () => {
   it('does nothing and returns 0 when there is no grid yet', () => {
     const state = freshState();
-    expect(clearAt(state, 0, 0, 10)).toBe(0);
+    const result = clearAt(state, 0, 0, 10);
+    expect(result.removed).toBe(0);
+    expect(result.touched).toEqual([]);
+    expect(result.killed).toEqual([]);
   });
 
   it('removes more density near the hit center than at the edge of the radius', () => {
@@ -319,7 +322,7 @@ describe('clearAt', () => {
       state.grid = makeTestGrid(); // empty grid — nothing but the coagulant to hit
       state.coagulants = [makeCoagulant({ mass: 50 })];
 
-      const removed = clearAt(state, 105, 105, 50, { radiusPx: 20 });
+      const removed = clearAt(state, 105, 105, 50, { radiusPx: 20 }).removed;
 
       expect(removed).toBeGreaterThan(0);
       expect(state.gems.length).toBeGreaterThan(0);
@@ -332,7 +335,7 @@ describe('clearAt', () => {
       // getting lost in it at trivial removed amounts.
       state.coagulants = [makeCoagulant({ mass: 200, radius: 15 })];
 
-      const removed = clearAt(state, 105, 105, 5000, { radiusPx: 50 });
+      const removed = clearAt(state, 105, 105, 5000, { radiusPx: 50 }).removed;
 
       const totalGemXp = state.gems.reduce((sum, g) => sum + g.xp, 0);
       // With the grid empty, totalRemoved === coagulantRemoved, so the
@@ -370,6 +373,98 @@ describe('clearAt', () => {
       // tuning/coagulants.ts's COAGULANT_SPLATTER, applied by
       // systems/coagulants.ts's splatterOnDeath.
       expect(after).toBeGreaterThan(before);
+    });
+  });
+
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S3): clearAt's return
+  // value grew from a bare mass figure into { removed, touched, killed }
+  // — `removed` proven byte-identical to the old scalar by the rest of
+  // this file's own tests still passing unmodified (only reading
+  // `.removed` where they used to read the bare number). This block
+  // guards the two NEW fields specifically.
+  describe('ClearResult — touched/killed (Phase 6D-3)', () => {
+    it('touched is empty when nothing overlaps the hit', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ x: 105, y: 105, radius: 5 });
+      state.coagulants = [c];
+
+      const result = clearAt(state, 300, 300, 50, { radiusPx: 10 }); // far away, misses entirely
+
+      expect(result.touched).toEqual([]);
+      expect(result.killed).toEqual([]);
+    });
+
+    it('touched contains a coagulant that was hit but survived', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ mass: 1000 });
+      state.coagulants = [c];
+
+      const result = clearAt(state, 105, 105, 5, { radiusPx: 20 }); // small power — survives
+
+      expect(c.mass).toBeGreaterThan(0);
+      expect(result.touched).toEqual([c]);
+      expect(result.killed).toEqual([]);
+    });
+
+    it('killed contains a coagulant whose mass reached 0 this call, and it is also in touched', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ mass: 5 });
+      state.coagulants = [c];
+
+      const result = clearAt(state, 105, 105, 500, { radiusPx: 20 }); // overkill
+
+      expect(c.mass).toBe(0);
+      expect(result.touched).toEqual([c]);
+      expect(result.killed).toEqual([c]);
+    });
+
+    it('a coagulant that was already dead before this call is neither touched nor killed', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const c = makeCoagulant({ mass: 0 });
+      state.coagulants = [c];
+
+      const result = clearAt(state, 105, 105, 500, { radiusPx: 20 });
+
+      expect(result.touched).toEqual([]);
+      expect(result.killed).toEqual([]);
+    });
+
+    it('touched lists every coagulant a single hit overlaps, not just the first', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const a = makeCoagulant({ x: 100, y: 105, mass: 1000, radius: 5 });
+      const b = makeCoagulant({ x: 110, y: 105, mass: 1000, radius: 5 });
+      state.coagulants = [a, b];
+
+      const result = clearAt(state, 105, 105, 5, { radiusPx: 20 });
+
+      expect(result.touched).toHaveLength(2);
+      expect(result.touched).toEqual(expect.arrayContaining([a, b]));
+    });
+
+    it('overflow\'s own nearest-survivor hop is also reflected in touched/killed', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      const weak = makeCoagulant({ x: 105, y: 105, mass: 5 });
+      const survivor = makeCoagulant({ x: 108, y: 105, mass: 1000 });
+      state.coagulants = [weak, survivor];
+
+      const result = clearAt(state, 105, 105, 500, { radiusPx: 20, overflow: true });
+
+      expect(weak.mass).toBe(0);
+      expect(survivor.mass).toBeLessThan(1000); // took overflow's excess
+      expect(result.killed).toEqual([weak]);
+      expect(result.touched).toEqual(expect.arrayContaining([weak, survivor]));
+    });
+
+    it('a no-grid call returns the same empty shape as EMPTY_CLEAR_RESULT — no crash, no undefined access', () => {
+      const state = freshState();
+      const result = clearAt(state, 0, 0, 10);
+      expect(result).toEqual({ removed: 0, touched: [], killed: [] });
     });
   });
 
@@ -450,7 +545,7 @@ describe('clearAt', () => {
         const survivor = makeCoagulant({ x: 108, y: 105, mass: 1000 });
         state.coagulants = [weak, survivor];
 
-        const removed = clearAt(state, 105, 105, 500, { radiusPx: 20, overflow: true });
+        const removed = clearAt(state, 105, 105, 500, { radiusPx: 20, overflow: true }).removed;
 
         // totalRemoved returned by clearAt already accounts for exactly
         // what left both bodies — no double counting, no invention.
@@ -1242,7 +1337,7 @@ describe('clearAt', () => {
       const state = freshState();
       state.grid = makeBigGrid();
 
-      const removed = clearAt(state, CENTER_X, CENTER_Y, 200, { shape: { kind: 'annulus', inner: 60, outer: 140 } });
+      const removed = clearAt(state, CENTER_X, CENTER_Y, 200, { shape: { kind: 'annulus', inner: 60, outer: 140 } }).removed;
       const totalGemXp = state.gems.reduce((sum, g) => sum + g.xp, 0);
 
       expect(removed).toBeGreaterThan(0);
@@ -1350,7 +1445,7 @@ describe('clearAt', () => {
       const state = freshState();
       state.grid = makeBigGrid();
 
-      const removed = clearAt(state, ORIGIN_X, ORIGIN_Y, 300, { shape: { kind: 'capsule', toX: FAR_X, toY: TARGET_Y }, radiusPx: 18 });
+      const removed = clearAt(state, ORIGIN_X, ORIGIN_Y, 300, { shape: { kind: 'capsule', toX: FAR_X, toY: TARGET_Y }, radiusPx: 18 }).removed;
       const totalGemXp = state.gems.reduce((sum, g) => sum + g.xp, 0);
 
       expect(removed).toBeGreaterThan(0);

@@ -3,7 +3,7 @@ import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { computeFrontier } from '../systems/frontier';
 import { lanceChargeTime } from '../tuning/weapons';
-import { updateLanceWeapon } from './lance';
+import { lancePipeline, updateLanceWeapon } from './lance';
 
 function makeTestGrid(): Grid {
   const size = 3600;
@@ -282,6 +282,114 @@ describe('updateLanceWeapon', () => {
       const removedWithoutExt = 100_000 - withoutExt.mass;
 
       expect(removedWithExt).toBeGreaterThan(removedWithoutExt);
+    });
+  });
+
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
+  // Chaining/Bounce/Ricochet on Lance — used to be entirely dead on this
+  // weapon. Calling lancePipeline.deliver directly (bypassing the charge-up
+  // gate) for a deterministic single fire.
+  describe('Fork/Chaining/Bounce/Ricochet (Phase 6D-3)', () => {
+    it('Fork adds two extra diverging beams', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 300;
+      state.tower.y = 300;
+      state.weapons.lance = 1;
+      state.weaponSockets.lance = { extensions: [], gems: [{ id: 1, kind: 'fork' }] };
+
+      lancePipeline.deliver(state, 1, { x: 500, y: 300, dist: 200 });
+
+      expect(state.beamFx).toHaveLength(3); // main + 2 fork beams
+    });
+
+    it('with no gem, only the main beam fires', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 300;
+      state.tower.y = 300;
+      state.weapons.lance = 1;
+
+      lancePipeline.deliver(state, 1, { x: 500, y: 300, dist: 200 });
+
+      expect(state.beamFx).toHaveLength(1);
+    });
+
+    it('Chaining fires a second beam from the endpoint toward another coagulant nearby', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 100;
+      state.tower.y = 300;
+      state.weapons.lance = 1;
+      state.weaponSockets.lance = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+      // Main target due east; the beam's own endpoint lands near (620,300)
+      // (tower.x + LANCE_RANGE) — a second coagulant off to the side of
+      // that endpoint, within CHAIN_SEARCH_RADIUS.
+      const mainTarget = makeCoagulant({ x: 300, y: 300, mass: 900 });
+      const secondTarget = makeCoagulant({ x: 620, y: 400, mass: 50 });
+      state.coagulants = [mainTarget, secondTarget];
+
+      lancePipeline.deliver(state, 1, { x: mainTarget.x, y: mainTarget.y, dist: 200 });
+
+      expect(state.beamFx).toHaveLength(2); // main beam + the chained one
+    });
+
+    it('Bounce fires a second beam from the endpoint toward the CLOSEST coagulant, not necessarily the biggest', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 100;
+      state.tower.y = 300;
+      state.weapons.lance = 1;
+      state.weaponSockets.lance = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+      const mainTarget = makeCoagulant({ x: 300, y: 300, mass: 900 });
+      const closeButSmall = makeCoagulant({ x: 620, y: 350, mass: 10 });
+      const farButBig = makeCoagulant({ x: 620, y: 500, mass: 900 });
+      state.coagulants = [mainTarget, closeButSmall, farButBig];
+
+      lancePipeline.deliver(state, 1, { x: mainTarget.x, y: mainTarget.y, dist: 200 });
+
+      expect(state.beamFx).toHaveLength(2);
+      const bounceBeam = state.beamFx[1]!;
+      // The bounce beam's own endpoint should read toward the CLOSE
+      // target, not the far-but-bigger one — a rough directional check
+      // via the beam's toX/toY heading from its own origin.
+      const angleToClose = Math.atan2(closeButSmall.y - bounceBeam.y, closeButSmall.x - bounceBeam.x);
+      const angleFired = Math.atan2(bounceBeam.toY - bounceBeam.y, bounceBeam.toX - bounceBeam.x);
+      expect(Math.abs(angleToClose - angleFired)).toBeLessThan(0.1);
+    });
+
+    it('Ricochet schedules an EXTRA deferred pass, on top of the native linger', () => {
+      const withGem = freshState();
+      withGem.grid = makeTestGrid();
+      withGem.tower.x = 300;
+      withGem.tower.y = 300;
+      withGem.weapons.lance = 1;
+      withGem.weaponSockets.lance = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+      lancePipeline.deliver(withGem, 1, { x: 500, y: 300, dist: 200 });
+      const withGemQueued = withGem.pendingEmissions.filter((e) => e.weapon === 'lance');
+
+      const without = freshState();
+      without.grid = makeTestGrid();
+      without.tower.x = 300;
+      without.tower.y = 300;
+      without.weapons.lance = 1;
+      lancePipeline.deliver(without, 1, { x: 500, y: 300, dist: 200 });
+      const withoutQueued = without.pendingEmissions.filter((e) => e.weapon === 'lance');
+
+      expect(withGemQueued.length).toBeGreaterThan(withoutQueued.length);
+    });
+
+    it('the deferred re-fire itself (powerMult !== 1) never re-schedules Ricochet again', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.tower.x = 300;
+      state.tower.y = 300;
+      state.weapons.lance = 1;
+      state.weaponSockets.lance = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+
+      lancePipeline.deliver(state, 1, { x: 500, y: 300, dist: 200 }, 0.5); // simulating a replay, not an original fire
+
+      expect(state.pendingEmissions.filter((e) => e.weapon === 'lance')).toHaveLength(0);
     });
   });
 });

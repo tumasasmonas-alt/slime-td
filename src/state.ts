@@ -327,6 +327,25 @@ export interface CausticCloud extends ConditionalGemFields {
   // and held fixed — originX/originY are no longer needed.
   driftOutward?: number;
   driftAngle?: number;
+
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Poison's cloud
+  // reading for Fork/Bounce — both trigger on the cloud's own EXPIRY
+  // (life reaching 0), not on a kill or a tick, since a cloud has no
+  // single "impact" moment the way a projectile or beam does.
+  // Fork: splits into two smaller clouds instead of just vanishing.
+  forkOnExpiry?: boolean;
+  // Bounce: relocates to the nearest mass and keeps going, instead of
+  // vanishing — bounded by `bouncesLeft` so it can't hop forever
+  // (termination by construction, the same discipline Chain Fission's
+  // generation counter and Salvo's armAt both use).
+  bounceOnExpiry?: boolean;
+  bouncesLeft?: number;
+  // Ricochet: reverses driftAngle partway through the cloud's life.
+  // Independent of Lingering Spores' own driftOutward — granting its own
+  // small drift speed when set, so it isn't silently dead on a cloud with
+  // no Lingering Spores extension socketed.
+  ricochetDrift?: boolean;
+  ricochetFlipped?: boolean;
 }
 
 export interface Particle {
@@ -768,6 +787,11 @@ export interface GameState {
   // flare expires, same Record<number, number> shape bladeNextHit already
   // uses for the same reason (blade count is not fixed).
   bladeWhirlUntil: Record<number, number>;
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Bounce's own
+  // reading on Blades — "jumps to a different orbit radius on hit" — same
+  // per-slot-until-timestamp shape as bladeWhirlUntil, for the same
+  // reason.
+  bladeBounceUntil: Record<number, number>;
   // Blades' Bladestorm — state.time of the most recent coagulant death
   // from any source, per Decision-consistent reasoning: attributing a
   // kill to a specific weapon needs the clearAt return channel the
@@ -905,6 +929,7 @@ export function freshState(): GameState {
     weaponShots: {},
     bladeStreak: {},
     bladeWhirlUntil: {},
+    bladeBounceUntil: {},
     lastCoagulantDeathAt: -Infinity,
     // -Infinity so Opportunist's recency check naturally fails until a
     // real hit lands, falling back to its default acquire — the same

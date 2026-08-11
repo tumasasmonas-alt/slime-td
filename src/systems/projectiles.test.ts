@@ -179,6 +179,136 @@ describe('updateProjectiles — chain', () => {
     expect(state.projectiles).toHaveLength(0);
   });
 
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S2, S7 test 5): Fork/
+  // Chaining/Bounce/Ricochet used to be silently unreachable on Chain —
+  // this branch's own `continue` skipped the generic flag block entirely,
+  // regardless of what fields the projectile carried. Now grafted onto
+  // the moment Chain's own hop budget is exhausted.
+  describe('Fork/Chaining/Bounce/Ricochet on Chain (Phase 6D-3)', () => {
+    it('Chaining makes an exhausted chain hop FURTHER, not consumed — "hop further, not twice per hop"', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      revealAt(state.grid, 305, 300, 0.6);
+      revealAt(state.grid, 340, 300, 0.6); // a target for the BONUS hop, past the native budget
+      state.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 1, // native budget exhausts on this hit
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+        chains: 2,
+      });
+
+      updateProjectiles(state, 0.1);
+
+      // Consumed with no gem (the test above) — survives here, because
+      // the exhausted native chain got ONE bonus hop from the gem.
+      expect(state.projectiles).toHaveLength(1);
+    });
+
+    it('does not let Chaining grant a SECOND bonus hop beyond what the gem itself grants', () => {
+      // chains: 2 grants exactly one bonus hop — matches the established
+      // convention above ("hops to a nearby coagulant" test uses chains: 2
+      // for one hop; "despawns once its hop budget is exhausted" uses
+      // chains: 1 for zero).
+      const state = freshState();
+      state.grid = makeTestGrid();
+      revealAt(state.grid, 305, 300, 0.6);
+      revealAt(state.grid, 340, 300, 0.6);
+      state.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 1, // native budget exhausts on this hit
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+        chains: 2, // exactly one bonus hop
+      });
+
+      updateProjectiles(state, 0.1);
+
+      expect(state.projectiles).toHaveLength(1);
+      const p = state.projectiles[0]!;
+      expect(p.type).toBe('chain');
+      // The bonus hop was granted (survived) — its own budget must now
+      // read as "no further hop," the same value the OTHER "despawns once
+      // its hop budget is exhausted" test already pins for a fresh chain.
+      if (p.type === 'chain') expect(p.chains).toBe(1);
+    });
+
+    it('Fork splits the exhausted chain into two continuing children, not a doubled native hop', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      revealAt(state.grid, 305, 300, 0.6);
+      state.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 1,
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+        forks: 2,
+      });
+
+      updateProjectiles(state, 0.1);
+
+      expect(state.projectiles).toHaveLength(2);
+      expect(state.projectiles[0]!.type).toBe('chain'); // forked children preserve the parent's shape
+    });
+
+    it('a chain that hopped natively this tick does NOT also resolve the generic flags', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      revealAt(state.grid, 305, 300, 0.6);
+      revealAt(state.grid, 340, 300, 0.6); // a native hop target — budget is NOT exhausted this hit
+      state.projectiles.push({
+        type: 'chain',
+        src: 'chain',
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 0,
+        dmg: 20,
+        radius: 5,
+        color: '#e6c8ff',
+        life: 5,
+        hopsLeft: 2, // survives this hit natively — one hop left after
+        visited: new Set(),
+        legStart: { x: 300, y: 300 },
+        forks: 2, // would double the count if it fired here too
+      });
+
+      updateProjectiles(state, 0.1);
+
+      // Exactly one survivor (the natively-hopping parent) — Fork did not
+      // ALSO fire on the same tick the native hop already consumed.
+      expect(state.projectiles).toHaveLength(1);
+      expect(state.projectiles[0]!.type).toBe('chain');
+    });
+  });
+
   it('is consumed when hops remain but no further target is in range', () => {
     const state = freshState();
     state.grid = makeTestGrid();
@@ -597,6 +727,94 @@ describe('updateProjectiles — missile', () => {
       updateProjectiles(state, 0.02);
 
       expect(state.projectiles[0]!.x).toBeGreaterThan(300); // now moving toward the target
+    });
+  });
+
+  // Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S2, S7 test 5): the
+  // 'missile'/'fission' branch's own `continue` used to skip the generic
+  // flag block entirely (same defect as Chain's), so a missile carrying
+  // Fork/Chaining/Bounce/Ricochet reached detonation with the field
+  // completely unread — merged into weapons/missile.ts at spawn, resolved
+  // here at detonation (recomputed fresh, not threaded out of
+  // updateMissile — detonation doesn't move `p` any further).
+  describe('Fork/Chaining/Bounce/Ricochet on detonation (Phase 6D-3)', () => {
+    it('Fork splits a detonating missile into two children instead of just despawning', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.projectiles.push({
+        type: 'missile',
+        src: 'missile',
+        x: 300,
+        y: 300,
+        vx: 300,
+        vy: 0,
+        speed: 300,
+        dmg: 30,
+        splashRadius: 60,
+        radius: 5,
+        color: '#ff9d6b',
+        life: 5,
+        targetPoint: { x: 305, y: 300 }, // reached this tick
+        armAt: 0,
+        forks: 2,
+      });
+
+      updateProjectiles(state, 0.02);
+
+      expect(state.projectiles).toHaveLength(2);
+      expect(state.projectiles[0]!.type).toBe('missile');
+    });
+
+    it('Ricochet reverses a detonating missile instead of despawning it', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.projectiles.push({
+        type: 'missile',
+        src: 'missile',
+        x: 300,
+        y: 300,
+        vx: 300,
+        vy: 0,
+        speed: 300,
+        dmg: 30,
+        splashRadius: 60,
+        radius: 5,
+        color: '#ff9d6b',
+        life: 5,
+        targetPoint: { x: 305, y: 300 },
+        armAt: 0,
+        ricochet: true,
+      });
+
+      updateProjectiles(state, 0.02);
+
+      expect(state.projectiles).toHaveLength(1);
+      expect(state.projectiles[0]!.vx).toBeLessThan(0); // reversed
+    });
+
+    it('with no behaviour flag at all, detonation still just despawns (no regression)', () => {
+      const state = freshState();
+      state.grid = makeTestGrid();
+      state.projectiles.push({
+        type: 'missile',
+        src: 'missile',
+        x: 300,
+        y: 300,
+        vx: 300,
+        vy: 0,
+        speed: 300,
+        dmg: 30,
+        splashRadius: 60,
+        radius: 5,
+        color: '#ff9d6b',
+        life: 5,
+        targetPoint: { x: 305, y: 300 },
+        armAt: 0,
+      });
+
+      updateProjectiles(state, 0.02);
+
+      expect(state.projectiles).toHaveLength(0);
     });
   });
 });

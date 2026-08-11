@@ -1,11 +1,13 @@
 import type { GameState } from '../state';
 import { clearAt } from '../grid/clear';
+import { scheduleEmission } from '../systems/emissions';
 import { extensionLevel } from '../systems/extensions';
 import { nearestFrontierPoint } from '../systems/frontier';
-import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { emissionPlan, hasBounceGem, hasChainingGem, hasForkGem, hasHomingGem, hasRicochetGem, resolveOpts } from '../systems/resolveOpts';
 import { auraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { WEAPON_DEFS, frostCooldown, frostDamage, frostRadius } from '../tuning/weapons';
+import { rand } from '../util/math';
 import { cooldownReady, runWeaponPipeline, type WeaponPipeline } from './pipeline';
 
 const FREEZE_DURATION = 2.0;
@@ -33,6 +35,24 @@ const SHATTER_CHILL_SECONDS = 2.5;
 const SHATTER_DAMAGE_MULT: readonly [number, number, number] = [0.3, 0.45, 0.6];
 const RIME_MULT: readonly [number, number, number] = [0.5, 0.35, 0.2];
 const RIME_SECONDS = 3.0;
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4): Frost's pulse
+// reading for Fork/Chaining/Bounce/Ricochet. Fork/Bounce fire immediately
+// (no recursion risk — they never re-invoke deliver); Chaining reads
+// `clearAt`'s own ClearResult (S3's whole reason for existing) to find
+// the farthest coagulant the main pulse actually touched, rather than
+// guessing a direction; Ricochet reuses the deferred-emission queue,
+// guarded the same way Lance's own linger guards against re-scheduling
+// itself.
+const FORK_RADIUS_MULT = 0.45;
+const FORK_POWER_SHARE = 0.5;
+const CHAINING_RADIUS_MULT = 0.55;
+const CHAINING_POWER_SHARE = 0.55;
+const BOUNCE_OFFSET_FRACTION = 0.5;
+const BOUNCE_RADIUS_MULT = 0.5;
+const BOUNCE_POWER_SHARE = 0.5;
+const RICOCHET_DELAY = 0.4;
+const RICOCHET_POWER_MULT = 0.5;
 
 // Untargeted — pulses outward from the tower on a cooldown, damaging and
 // freezing growth in radius. The freeze mechanic itself (clearAt's
@@ -88,12 +108,19 @@ export const frostPipeline: WeaponPipeline = {
     // as "all the pulses agree on what matters," not a per-copy re-roll.
     const auraReading = auraTargetingReading(state, 'frost', originX, originY, radius);
 
+    // Phase 6D-3: Chaining reads every main pulse's own ClearResult to
+    // find the farthest coagulant actually touched, rather than guessing
+    // a direction — the whole reason clearAt's return grew a `touched`
+    // list (S3).
+    let farthest: { x: number; y: number } | null = null;
+    let farthestDist = -1;
+
     for (let i = 0; i < plan.count; i++) {
       const angle = (i / plan.count) * Math.PI * 2;
       const spreadDist = plan.count > 1 ? radius * MULTISHOT_OFFSET_FRACTION : 0;
       const x = originX + Math.cos(angle) * spreadDist;
       const y = originY + Math.sin(angle) * spreadDist;
-      clearAt(state, x, y, perDmg, {
+      const result = clearAt(state, x, y, perDmg, {
         radiusPx: perRadius,
         freezeDuration,
         coagulantMult,
@@ -105,10 +132,62 @@ export const frostPipeline: WeaponPipeline = {
         focusBonus: auraReading.focusBonus,
         ...opts,
       });
+      for (const c of result.touched) {
+        const d = Math.hypot(c.x - originX, c.y - originY);
+        if (d > farthestDist) {
+          farthestDist = d;
+          farthest = { x: c.x, y: c.y };
+        }
+      }
       // Phase 5B-6: pushed onto a list now, not assigned to a single slot —
       // a second pulse weapon firing the same frame no longer overwrites
       // this one. See docs/plans/phase-5b-framework.md S6a.
       state.novaFx.push({ x, y, radius: perRadius, life: FX_LIFE, maxLife: FX_LIFE, color: FX_COLOR });
+    }
+
+    // Fork: a second, smaller pulse at the main pulse's own rim, a
+    // random angle — "spawns a second smaller pulse at its rim."
+    if (hasForkGem(state, 'frost')) {
+      const forkAngle = rand(0, Math.PI * 2);
+      const fx = originX + Math.cos(forkAngle) * radius;
+      const fy = originY + Math.sin(forkAngle) * radius;
+      clearAt(state, fx, fy, perDmg * FORK_POWER_SHARE, { radiusPx: perRadius * FORK_RADIUS_MULT, freezeDuration, coagulantMult, ...opts });
+      state.novaFx.push({ x: fx, y: fy, radius: perRadius * FORK_RADIUS_MULT, life: FX_LIFE, maxLife: FX_LIFE, color: FX_COLOR });
+    }
+
+    // Chaining: a follow-up pulse centred on the farthest point the main
+    // pulse(s) actually touched. No touch this cast — no follow-up; this
+    // is a bonus on a connecting hit, not its own guaranteed emission.
+    if (hasChainingGem(state, 'frost') && farthest) {
+      clearAt(state, farthest.x, farthest.y, perDmg * CHAINING_POWER_SHARE, {
+        radiusPx: perRadius * CHAINING_RADIUS_MULT,
+        freezeDuration,
+        coagulantMult,
+        ...opts,
+      });
+      state.novaFx.push({ x: farthest.x, y: farthest.y, radius: perRadius * CHAINING_RADIUS_MULT, life: FX_LIFE, maxLife: FX_LIFE, color: FX_COLOR });
+    }
+
+    // Bounce: re-emits a smaller pulse offset from centre, toward the
+    // nearest touched coagulant if one connected, otherwise a random
+    // direction — distinct from Fork (always at the rim) and Chaining
+    // (always the farthest hit).
+    if (hasBounceGem(state, 'frost')) {
+      let bounceAngle = rand(0, Math.PI * 2);
+      if (farthest) bounceAngle = Math.atan2(farthest.y - originY, farthest.x - originX);
+      const offset = radius * BOUNCE_OFFSET_FRACTION;
+      const bx = originX + Math.cos(bounceAngle) * offset;
+      const by = originY + Math.sin(bounceAngle) * offset;
+      clearAt(state, bx, by, perDmg * BOUNCE_POWER_SHARE, { radiusPx: perRadius * BOUNCE_RADIUS_MULT, freezeDuration, coagulantMult, ...opts });
+      state.novaFx.push({ x: bx, y: by, radius: perRadius * BOUNCE_RADIUS_MULT, life: FX_LIFE, maxLife: FX_LIFE, color: FX_COLOR });
+    }
+
+    // Ricochet: a delayed second pass at the same origin, reduced power —
+    // reuses the deferred-emission queue, guarded by `powerMult === 1`
+    // the same way Lance's own linger guards against re-scheduling
+    // itself (a re-invoked deliver always carries powerMult != 1).
+    if (powerMult === 1 && hasRicochetGem(state, 'frost')) {
+      scheduleEmission(state, 'frost', RICOCHET_DELAY, lvl, null, RICOCHET_POWER_MULT);
     }
   },
 };

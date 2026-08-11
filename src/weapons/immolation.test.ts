@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { immolationRadius } from '../tuning/weapons';
-import { updateImmolationWeapon } from './immolation';
+import { immolationPipeline, updateImmolationWeapon } from './immolation';
 
 function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
   return {
@@ -311,5 +311,135 @@ describe('updateImmolationWeapon — Targeting gems (Phase 6D-1)', () => {
     updateImmolationWeapon(withoutGem, 0.1);
 
     expect(200 - target1.mass).toBeGreaterThan(200 - target2.mass);
+  });
+});
+
+// Phase 6D-3 (docs/plans/phase-6d3-gem-reality.md S4, S7 test 1): Fork/
+// Chaining/Bounce/Ricochet on Immolation — used to be entirely dead on
+// this weapon (the whole reason this batch exists). Uses the big grid,
+// same reasoning as the Second Ring/Flare tests above — these gems'
+// radii (up to 2x the already-large 6D-0 base reach) don't fit the
+// module's small default grid.
+describe('updateImmolationWeapon — Fork/Chaining/Bounce/Ricochet (Phase 6D-3)', () => {
+  it('Fork adds a wider ring, damaging a coagulant the base ring alone would miss', () => {
+    // A small coagulant (small own radius, ~18px at mass 50) so its
+    // physical size doesn't blur the base-ring-vs-Fork-ring boundary —
+    // a 1000-mass coagulant's own ~82px radius reaches well past its
+    // nominal placement distance and made this test flaky. Placed at
+    // 1.4x the base radius: clearAt's own disc widens the requested
+    // radius by up to 1.25x based on density at the hit's ORIGIN
+    // (virgin ground here reads as density 0, the maximum widening) —
+    // base ring's real reach is ~190*1.25 + coagulant radius ≈ 256px,
+    // Fork's is ~190*1.5*1.25 + coagulant radius ≈ 375px, so 1.4x
+    // (266px) sits cleanly between the two.
+    const withGem = freshState();
+    withGem.grid = makeBigTestGrid();
+    withGem.weapons.immolation = 1;
+    withGem.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'fork' }] };
+    withGem.tower.x = 250;
+    withGem.tower.y = 250;
+    const baseRadius = immolationRadius(1, withGem.grid.perimeter);
+    const target1 = makeCoagulant({ x: 250 + baseRadius * 1.4, y: 250, mass: 50 });
+    withGem.coagulants = [target1];
+
+    const without = freshState();
+    without.grid = makeBigTestGrid();
+    without.weapons.immolation = 1;
+    without.tower.x = 250;
+    without.tower.y = 250;
+    const target2 = makeCoagulant({ x: 250 + baseRadius * 1.4, y: 250, mass: 50 });
+    without.coagulants = [target2];
+
+    updateImmolationWeapon(withGem, 0.1);
+    updateImmolationWeapon(without, 0.1);
+
+    expect(target1.mass).toBeLessThan(50);
+    expect(target2.mass).toBe(50); // out of the base ring's own reach
+  });
+
+  it('Chaining schedules exactly one deferred re-fire, never re-schedules from within the re-fire itself', () => {
+    const state = freshState();
+    state.grid = makeBigTestGrid();
+    state.weapons.immolation = 1;
+    state.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+    state.tower.x = 250;
+    state.tower.y = 250;
+
+    updateImmolationWeapon(state, 0.1);
+
+    const queued = state.pendingEmissions.filter((e) => e.weapon === 'immolation');
+    expect(queued).toHaveLength(1);
+    expect(queued[0]!.powerMult).toBeLessThan(1); // reduced power, per the plan's own reading
+
+    // Directly invoking deliver at powerMult !== 1 — simulating the
+    // deferred re-fire itself — must not queue a second one.
+    immolationPipeline.deliver(state, 1, null, queued[0]!.powerMult);
+    const queuedAfter = state.pendingEmissions.filter((e) => e.weapon === 'immolation');
+    expect(queuedAfter).toHaveLength(1); // still just the one from the original fire
+  });
+
+  it('Chaining\'s deferred re-fire uses a wider radius than the original', () => {
+    const state = freshState();
+    state.grid = makeBigTestGrid();
+    state.weapons.immolation = 1;
+    state.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'chaining' }] };
+    state.tower.x = 250;
+    state.tower.y = 250;
+
+    state.novaFx = [];
+    immolationPipeline.deliver(state, 1, null, 1); // original fire
+    const originalRadius = state.novaFx[0]!.radius;
+
+    state.novaFx = [];
+    immolationPipeline.deliver(state, 1, null, 0.5); // simulating the scheduled replay (powerMult !== 1)
+    const replayRadius = state.novaFx[0]!.radius;
+
+    expect(replayRadius).toBeGreaterThan(originalRadius);
+  });
+
+  it('Ricochet schedules a deferred re-fire too, independent of Chaining', () => {
+    const state = freshState();
+    state.grid = makeBigTestGrid();
+    state.weapons.immolation = 1;
+    state.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'ricochet' }] };
+    state.tower.x = 250;
+    state.tower.y = 250;
+
+    updateImmolationWeapon(state, 0.1);
+
+    const queued = state.pendingEmissions.filter((e) => e.weapon === 'immolation');
+    expect(queued).toHaveLength(1);
+  });
+
+  it('Bounce alternates the ring radius every tick', () => {
+    const state = freshState();
+    state.grid = makeBigTestGrid();
+    state.weapons.immolation = 1;
+    state.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'bounce' }] };
+    state.tower.x = 250;
+    state.tower.y = 250;
+
+    state.novaFx = [];
+    immolationPipeline.deliver(state, 1, null, 1); // tick 1 — odd, base radius
+    const firstRadius = state.novaFx[0]!.radius;
+
+    state.novaFx = [];
+    immolationPipeline.deliver(state, 1, null, 1); // tick 2 — even, wider radius
+    const secondRadius = state.novaFx[0]!.radius;
+
+    expect(secondRadius).toBeGreaterThan(firstRadius);
+  });
+
+  it('with no gem at all, none of the four fire — no regression', () => {
+    const state = freshState();
+    state.grid = makeBigTestGrid();
+    state.weapons.immolation = 1;
+    state.tower.x = 250;
+    state.tower.y = 250;
+
+    updateImmolationWeapon(state, 0.1);
+
+    expect(state.pendingEmissions.filter((e) => e.weapon === 'immolation')).toHaveLength(0);
+    expect(state.novaFx).toHaveLength(1); // just the base ring's own flash
   });
 });
