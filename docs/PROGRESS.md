@@ -707,10 +707,12 @@ tests pass, `tsc --noEmit` clean.**
 **Three of Phase 6D's four sub-batches are now shipped** (6D-0 balance,
 6D-1 Targeting, 6D-2 Conditional). **6D-3 (the gem-reality fix,
 `docs/plans/phase-6d3-gem-reality.md`) was not part of this session's
-scope** and remains unbuilt — the owner's instruction covered 6D-0
-through 6D-2 only. **No playtest has run across any of the three shipped
-batches** — that is the standing risk carried into whatever comes next;
-see Decisions 88/89/91.
+scope** and remains unbuilt as of this entry — the owner's instruction
+covered 6D-0 through 6D-2 only. (A follow-up session the same day picked
+up 6D-3 and shipped its Steps 1–3; see the entry above and Decision 92.)
+**No playtest has run across any of the three shipped batches** — that is
+the standing risk carried into whatever comes next; see Decisions
+88/89/91.
 
 ### 2026-08-11 — Phase 6D-1 shipped: the Targeting gems (Decision 89)
 

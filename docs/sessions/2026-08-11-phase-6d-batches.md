@@ -5,8 +5,10 @@
 **Participants:** project owner + Claude.
 **Outcome:** 6D-0, 6D-1 and 6D-2 all shipped, committed and pushed
 separately (`4c211f0`, `3e4fbe8`, `e6ff7d2`). Decisions 88–91. 828 tests
-pass, `tsc --noEmit` clean. **6D-3 was not in scope and remains
-unbuilt.**
+pass, `tsc --noEmit` clean. **6D-3 was not in scope for this pass and was
+unbuilt as of this file's original writing.** A follow-up session the
+same day picked it up and shipped its Steps 1–3 (`bf30eb8`, Decision 92)
+— see §6's update below; Steps 4–5 are still open.
 
 > **Why this file exists.** Two things happened here that the next
 > session needs and that a status file can't carry. First, the owner
@@ -230,9 +232,16 @@ specific thing to watch, in priority order:
 4. **Does anything trivialise the curve when stacked?** Nine Conditional
    multipliers compound, and 6D-2's own §7 flagged this specifically.
 
-**Not done: 6D-3** (`docs/plans/phase-6d3-gem-reality.md`), the
-gem-reality fix that makes six already-shipped gems do what their cards
-claim. It was outside this session's stated scope. It remains the largest
-of the four sub-batches and the one that touches `clearAt` hardest.
+**Update — 6D-3 Steps 1–3 shipped in a follow-up session the same day**
+(`bf30eb8`, Decision 92, `phase-6d3-gem-reality.md` §10's as-built delta):
+`projectileFlags` wired into Chain/Missile/Fission, `clearAt`'s
+`ClearResult` return, and real Fork/Chaining/Bounce/Ricochet readings on
+every weapon they're legal on (previously Bolt Turret alone). **Steps 4
+and 5 are still open** — Multishot/Formation's unconditional damage
+division (still a zero on Blades, a downgrade on Frost) is the one
+defect from the original audit not yet fixed, plus the gem-copy/test-
+matrix/doc cleanup pass. That follow-up session was cut short by the same
+weekly-limit constraint as this one, at a clean, fully-tested checkpoint
+(888 tests, `tsc --noEmit` clean) rather than mid-step.
 
 **No blockers.** Tree is clean, everything pushed to `main`.
