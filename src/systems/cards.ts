@@ -1,8 +1,9 @@
 import type { ExtensionInstance, GameState } from '../state';
 import { CORE_GEM_KEYS, type CoreGemKey } from '../tuning/coreGems';
 import { EXTENSION_MAX_LEVEL, EXTENSIONS_BY_WEAPON, type ExtensionKey } from '../tuning/extensions';
-import { ALL_GEM_KEYS } from '../tuning/gems';
+import { ALL_GEM_KEYS, isConditionalGem, isTargetingGem } from '../tuning/gems';
 import type { GemKey, WeaponKey } from '../types';
+import { clamp } from '../util/math';
 
 // Phase 5B (docs/plans/phase-5b-framework.md S4): weapon LEVEL cards are
 // gone entirely (Decision 40) — weapon power comes only from
@@ -70,6 +71,28 @@ function findOwnedExtension(state: GameState, weaponKey: WeaponKey, extKind: Ext
 // placeholder's single card-per-weapon becomes EXTENSIONS_BY_WEAPON's
 // four real candidates — each independently offered, independently
 // levelled, independently retired once maxed.
+// Post-6D-3 playtest (2026-08-11, owner): Targeting and Conditional gems
+// kept coming up in early draws before there was much of a run for either
+// class to bite on — Targeting replaces an ACQUIRE stage a fresh deck
+// barely exercises yet, Conditional gems condition on state (streaks,
+// core HP, coagulant mass) a level-1 run hasn't accumulated much of. Both
+// classes now ramp in a per-card chance to appear rather than being
+// uniformly weighted like Amplifier/Behaviour/extensions from level 1:
+// rare at the start, full parity with everything else by
+// LATE_GEM_RAMP_END. Amplifier and Behaviour gems (and every extension)
+// are unaffected — the owner's complaint was specifically about these two
+// classes, not the draw as a whole.
+const LATE_GEM_RAMP_START = 1;
+const LATE_GEM_RAMP_END = 10;
+const LATE_GEM_MIN_CHANCE = 0.15;
+
+// Exported for direct testing — pure, no randomness, so the curve's shape
+// (start, end, floor) is checkable without mocking Math.random.
+export function lateGemDrawChance(level: number): number {
+  const t = clamp((level - LATE_GEM_RAMP_START) / (LATE_GEM_RAMP_END - LATE_GEM_RAMP_START), 0, 1);
+  return LATE_GEM_MIN_CHANCE + (1 - LATE_GEM_MIN_CHANCE) * t;
+}
+
 export function buildWeaponSidePool(state: GameState): CardChoice[] {
   const pool: CardChoice[] = [];
 
@@ -87,7 +110,9 @@ export function buildWeaponSidePool(state: GameState): CardChoice[] {
     }
   }
 
+  const lateChance = lateGemDrawChance(state.tower.level);
   for (const key of ALL_GEM_KEYS) {
+    if ((isTargetingGem(key) || isConditionalGem(key)) && Math.random() >= lateChance) continue;
     pool.push({ kind: 'gem', key });
   }
 

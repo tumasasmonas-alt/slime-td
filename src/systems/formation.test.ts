@@ -646,15 +646,21 @@ describe('coagulantArmor — time scaling is bounded (Phase 6D-0)', () => {
     }
   });
 
-  it("a levelled Lance (>=3) — the roster's highest per-hit weapon — keeps at least half its damage against max armour at any time the curve can produce", () => {
+  it("a levelled Lance (>=4) — the roster's highest per-hit weapon — keeps at least half its damage against max armour at any time the curve can produce", () => {
     // Mirrors grid/clear.ts's effectivePower formula exactly, so this
     // fails the moment either side of the bound (armour's cap, or a
-    // future Lance damage buff) reopens the degeneracy. Scoped to level
-    // >=3, where Lance's own power (>=140) first clears 2x the armour cap
-    // (70) — a Lance left at level 1 all run is a real edge case the
-    // bound doesn't cover, same as a flat-armour model wouldn't have
+    // future Lance damage buff) reopens the degeneracy.
+    //
+    // Post-6D-3 playtest (2026-08-11, owner): armour raised 70→90
+    // combined cap ("armour still feels like it's not there" —
+    // tuning/coagulants.ts has the full reasoning). Rescoped 3→4 to
+    // match: this bound was always derived from "the level where Lance's
+    // own power first clears 2x the armour cap," not a fixed level
+    // number, and 2x90=180 is first cleared at level 4 (181.5), not 3
+    // (148.5) — a Lance left below level 4 all run is a real edge case
+    // the bound doesn't cover, same as a flat-armour model wouldn't have
     // either (tuning/coagulants.ts's ARMOR_TIME_CAP comment).
-    for (const lvl of [3, 4, 8]) {
+    for (const lvl of [4, 8]) {
       const power = lanceDamage(lvl);
       for (const t of [0, 600, 1800, 7200, 36000]) {
         const armor = coagulantArmor(1, t); // maturity 1 — worst case
@@ -664,11 +670,19 @@ describe('coagulantArmor — time scaling is bounded (Phase 6D-0)', () => {
     }
   });
 
-  it('at t=0, even a level-1 Lance keeps at least half its damage — the bound holds from the very start of a run', () => {
+  // Post-6D-3 playtest (2026-08-11, owner): before the armour raise
+  // above, this test asserted the OPPOSITE — that even a level-1 Lance
+  // kept half power at t=0. Maturity-only armour (45, up from 35) alone
+  // now denies that for an unlevelled Lance; below level 4 was already an
+  // accepted edge case for the *time-scaled* bound (see the test above),
+  // and this documents that the maturity-only floor now reaches the same
+  // edge case even at t=0 — an intentional consequence of making armour
+  // matter more, not a regression to silently "fix" back.
+  it('at t=0, a level-1 Lance can now drop below half its damage against a fully-mature target — the accepted cost of the armour raise', () => {
     const power = lanceDamage(1);
     const armor = coagulantArmor(1, 0);
     const effectivePower = Math.max(power - armor, power * COAGULANT_ARMOR_FLOOR);
-    expect(effectivePower).toBeGreaterThanOrEqual(power * 0.5 - 1e-9);
+    expect(effectivePower).toBeLessThan(power * 0.5);
   });
 });
 

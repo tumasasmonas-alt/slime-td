@@ -141,8 +141,15 @@ export function missileCooldown(lvl: number): number {
 // mechanism every weapon participates in identically
 // (weapons/immolation.ts builds on cooldownReady() and reads
 // weaponMods() like every other weapon).
+// Post-6D-3 playtest (2026-08-11, owner): cut 10→7 per level (~30%) —
+// with the reach fix landed (IMMOLATION_REACH below), the ring cleared
+// slime regardless of armour level; this is the damage-side half of the
+// fix, paired with Flare's own cut just below (the extension the owner
+// called out as clearing "almost entire screen") and the armour raise in
+// tuning/coagulants.ts. Reach is left alone — the owner wants the reach
+// fix kept and the damage brought back in line with it, not the reverse.
 export function immolationDamage(lvl: number): number {
-  return 10 * lvl * WEAPON_DAMAGE_SCALE;
+  return 7 * lvl * WEAPON_DAMAGE_SCALE;
 }
 
 // Fixed, level-independent — matches Ward Pulse's WARD_TICK exactly.
@@ -196,8 +203,13 @@ export function bladeRadius(lvl: number, perimeter: number): number {
 // excluded from the aura reach fix (it already travels outward from the
 // floor), and its weakness is the swept band being too thin. Paired with
 // SHOCKWAVE_SPEED's cut below, which thickens the band per tick.
+//
+// Post-6D-3 playtest (2026-08-11, owner): trimmed back down, ~17% —
+// "a little strong too but only in damage." Reach/band thickness
+// (shockwaveReach, SHOCKWAVE_SPEED) are unaffected; this is a damage-only
+// correction, not a reversal of the 6D-0 raise.
 export function shockwaveDamage(lvl: number): number {
-  return (17 + (lvl - 1) * 6) * WEAPON_DAMAGE_SCALE;
+  return (14 + (lvl - 1) * 5) * WEAPON_DAMAGE_SCALE;
 }
 
 export function shockwaveCooldown(lvl: number): number {

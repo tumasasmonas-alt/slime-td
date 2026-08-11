@@ -20,31 +20,47 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### 🔴 A playtest is owed — three batches shipped 2026-08-11, none verified by play.
+### 🔴 A fuller playtest is still owed — the first pass found real problems, now fixed; unverified whether the fixes are right.
 
-**6D-0, 6D-1 and 6D-2 all shipped in one session with typecheck +
-`vitest run` only**, at the owner's explicit instruction (weekly-limit
-constraint). This overrode `phase-6d0-balance-shape.md` §8's own
-"playtest before 6D-1" gate. Decisions 88/89/91 record it; full reasoning
-in `docs/sessions/2026-08-11-phase-6d-batches.md` §1.
+**6D-0, 6D-1 and 6D-2 all shipped 2026-08-11 with typecheck + `vitest run`
+only**, at the owner's explicit instruction (weekly-limit constraint).
+This overrode `phase-6d0-balance-shape.md` §8's own "playtest before
+6D-1" gate. Decisions 88/89/91 record it; full reasoning in
+`docs/sessions/2026-08-11-phase-6d-batches.md` §1.
 
-**The coupled risk:** 6D-0 moved the aura weapons' reach from ~105px to
-165–210px, and 6D-1's five aura-targeting readings assume that move
-landed them somewhere with mass in it. **If 6D-0's numbers are wrong,
-6D-1's aura gems are built on a wrong assumption** — check the two
-together, never one alone.
+**The first live playtest ran the same day and found two real problems,
+both now fixed (Decisions 93–94):**
+1. **The aura reach fix (6D-0) overshot on damage.** Immolation cleared
+   slime regardless of armour, Flare especially ("clears almost entire
+   screen"), Shockwave a little. Damage cut on both (reach kept), armour
+   raised 70→90 combined cap. **Blades and Frost were not playtested and
+   were deliberately left untouched** — still an open question below.
+2. **The level-up draw offered Targeting/Conditional gems too early to
+   mean anything** ("kept getting Conditional gems which didn't help").
+   Both classes now ramp from a 0.15 floor to full parity by tower level
+   10 (Decision 94) instead of being uniformly weighted from level 1.
 
-**What to watch, in priority order:**
-1. **Do the aura weapons engage at all now?** If still dead, reach moved
-   too little; if they trivialise the opening, too much — and §3's
-   separate ~10% opening cut is the first thing to revert (two
-   constants: `AMBIENT_BASE`, `CREEP_RAMP`).
-2. **Does the late game still flatten?** If it now spikes instead,
-   `LATE_GROWTH_PER_MINUTE` (1.05/min, `tuning/growth.ts`) is the lever.
-3. **Do the Targeting gems read as real choices** — especially the five
-   aura readings, the most invented part of the batch.
-4. **Does any stack of Conditional gems trivialise the curve?** Nine
-   multipliers compound; `phase-6d2-conditional-gems.md` §7 flagged this.
+**Still unverified — what the next playtest should watch:**
+1. **Do the Immolation/Shockwave cuts land right, or did they overshoot
+   the other way?** No numeric target was measured, only the owner's
+   "too strong" read on the old numbers.
+2. **Do Blades and Frost need the same treatment?** Untested by the
+   owner's own account — don't assume yes or no without a play session
+   that actually uses them.
+3. **Does the armour raise make weak/unlevelled weapons feel *too* denied
+   now**, especially the accepted level-1 Lance regression Decision 93
+   named (`formation.test.ts`'s inverted invariant)?
+4. **Does the Targeting/Conditional ramp read as fair**, or does it still
+   feel too rare early / not rare enough? The 0.15 floor and level-10 end
+   point (`systems/cards.ts`'s `lateGemDrawChance`) are first-draft
+   numbers, not measured.
+5. **Does the late game still flatten?** Untouched by this pass — if it
+   spikes instead, `LATE_GROWTH_PER_MINUTE` (1.05/min, `tuning/growth.ts`)
+   is the lever.
+6. **Does any stack of Conditional gems trivialise the curve** once the
+   ramp actually lets players reach them mid-run? Nine multipliers
+   compound; `phase-6d2-conditional-gems.md` §7 flagged this and it was
+   never actually exercised in the first playtest.
 
 ### ▶ Phase 6D-3 — the gem-reality fix. Steps 1–3 shipped, Steps 4–5 still open.
 

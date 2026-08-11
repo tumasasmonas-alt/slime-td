@@ -48,7 +48,32 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-11 (**Phase 6D-3 partially shipped** —
+**Last updated:** 2026-08-11 (**Post-6D-3 playtest balance pass** —
+Decisions 93–94. The owner's first live playtest of the day's batches
+found the 6D-0 aura reach fix had overshot on damage (Immolation
+especially, its Flare extension worst of all — "clears almost entire
+screen") and that the level-up draw offered Targeting/Conditional gems
+before a fresh run had anything for them to condition on ("kept getting
+Conditional gems which didn't help"). Fixed: Immolation/Shockwave damage
+cut, Flare cut on three levers at once (radius/power/frequency), armour
+raised 70→90 combined cap (with `formation.test.ts`'s Lance invariant
+recomputed for the new cap, not just loosened), and Targeting/Conditional
+gems now ramp from a 0.15 floor to full draw parity by tower level 10
+(`systems/cards.ts`'s new `lateGemDrawChance`). **Blades and Frost were
+not playtested and are deliberately untouched** — see the entry below for
+what's still unverified. **896 tests pass, `tsc --noEmit` clean**, plus a
+browser smoke test (game loads, no console errors — not a full playtest).
+
+**▶ MACHINE HANDOFF — pick up here.** No code work is queued — this was
+a direct response to playtest feedback, not a plan step. **A fuller
+playtest is the next real step**, watching specifically: did the
+Immolation/Shockwave cuts land right or overshoot the other way, do
+Blades/Frost need the same treatment, does the armour raise deny
+weak/unlevelled weapons too hard, does the gem-ramp's shape (0.15 floor,
+level-10 end) feel right. Full list: `docs/BACKLOG.md`'s top entry. Once
+that's in, 6D-3 Steps 4–5 (below) are still the next *build* item.
+
+**Previously:** 2026-08-11 (**Phase 6D-3 partially shipped** —
 Decision 92: Steps 1–3 of the gem-reality fix. Fork/Chaining/Bounce/
 Ricochet now have real, weapon-appropriate readings on every weapon
 they're legal on (previously Bolt Turret alone), and `clearAt` returns a
@@ -56,21 +81,11 @@ richer `ClearResult` (mass removed, coagulants touched/killed) that made
 those readings possible. **Steps 4 and 5 are unbuilt** — Multishot/
 Formation's unconditional damage division (still a zero on Blades, a
 downgrade on Frost) is the one defect from the original audit not yet
-fixed, and the gem-copy/test-matrix/doc cleanup pass hasn't run. Cut here
-by the same weekly-limit constraint as the batches below; a clean
-stopping point, not an interrupted one — everything shipped is tested
-green. **888 tests pass, `tsc --noEmit` clean.** Full detail:
+fixed, and the gem-copy/test-matrix/doc cleanup pass hasn't run. **888
+tests pass, `tsc --noEmit` clean** at the time. Full detail:
 `docs/plans/phase-6d3-gem-reality.md` §10, Decision 92.
 
-**▶ MACHINE HANDOFF — pick up here.** Next session should start at
-`phase-6d3-gem-reality.md` §8 step 5 (the `plan.count` divisor in
-`blades.ts`/`frost.ts`/every weapon that reads `emissionPlan()`) — read
-§5's table and §9's risk note (the renderer, not the damage-rule logic,
-is the part likeliest to run long) before starting. A playtest is still
-owed on top of this — see the entry below, unchanged by this session's
-work since 6D-3 doesn't touch balance numbers.
-
-**Previously:** 2026-08-11 (**Phase 6D-2 shipped** — Decisions 90–91:
+**Before that:** 2026-08-11 (**Phase 6D-2 shipped** — Decisions 90–91:
 the 9 Conditional gems, all RESOLVE-stage damage multipliers/debuffs on
 `ClearOptions`, legal on every weapon (no refusal table). **A real bug
 found and fixed during implementation, not by the browser** — six of ten
@@ -572,6 +587,60 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-11 — Post-6D-3 playtest balance pass (Decisions 93–94)
+
+**Full account:** Decisions 93 (Immolation/Shockwave/armour) and 94
+(the Targeting/Conditional gem-draw ramp) have the complete reasoning.
+
+**Trigger: the owner's first live playtest of the day's batches**, run
+after 6D-3 Steps 1–3 shipped. Two findings, both addressed same-session:
+
+1. **The aura reach fix overshot on damage.** Immolation "does a lot of
+   damage easily clearing all slime no matter at what armor level," and
+   its Flare extension specifically "is way too op it clears almost
+   entire screen." Shockwave "a little strong too but only in damage."
+   Armour "still feels like its not there."
+   - `immolationDamage`: per-level coefficient cut 10→7 (~30%), reach
+     untouched (the owner wants reach kept, damage brought in line).
+   - Flare (`weapons/immolation.ts`): cut on all three levers at once —
+     radius 1.8×→1.3×, power ceiling 100%→65%, frequency every-4th-
+     tick→every-5th. Card copy updated to match (`tuning/extensions.ts`).
+   - `shockwaveDamage`: cut ~17%, reach/band thickness untouched —
+     damage-only, per the owner's own scoping ("only in damage").
+   - `ARMOR_AT_FULL_MATURITY`/`ARMOR_TIME_CAP`: both 35→45 (combined cap
+     70→90). This broke a designed invariant in `formation.test.ts`
+     ("a level-3+ Lance keeps at least half damage against max armour") —
+     rescoped to level 4 (recomputed from the same underlying rule: the
+     level where Lance's power first clears 2x the new cap) rather than
+     weakened, and a second, narrower invariant ("even a level-1 Lance at
+     t=0") was inverted into a test of the now-accepted regression
+     instead of deleted.
+   - **Blades and Frost were not playtested and are deliberately left
+     alone** — this fix is scoped to what the owner actually observed.
+2. **The level-up draw offered Targeting/Conditional gems too early to
+   be useful:** "I kept getting Conditional gems which didn't help."
+   `systems/cards.ts`'s `buildWeaponSidePool` previously weighted every
+   gem key uniformly from level 1. New: `lateGemDrawChance(level)`, a
+   pure ramp from a 0.15 floor at level 1 to full parity (1.0) at level
+   10; each Targeting/Conditional candidate rolls against it
+   independently, Amplifier/Behaviour gems and every extension
+   unaffected. A chance curve, not a hard level gate — the owner's own
+   phrasing ("less at the start... equal with all else later") described
+   a curve.
+
+**Verification:** typecheck clean, `896 tests pass` (up from 888 — new
+coverage for both changes, including two rewritten armour-invariant
+tests and a new `lateGemDrawChance`/pool-weighting describe block in
+`systems/cards.test.ts`), plus a browser smoke test (dev server up, game
+loads, zero console errors) — **not** a full playtest; the numbers here
+are the owner's read on the old ones, not independently measured.
+
+**Planned:** another playtest, specifically to check whether these cuts
+landed right (vs. overshooting the other way), whether Blades/Frost need
+the same treatment, and whether the gem-ramp's shape feels right. Full
+watch-list: `docs/BACKLOG.md`'s top entry (rewritten this session to
+reflect what was found and fixed, not just what was owed).
 
 ### 2026-08-11 — Phase 6D-3 partially shipped: Steps 1–3 of the gem-reality fix (Decision 92)
 

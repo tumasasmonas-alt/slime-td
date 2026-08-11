@@ -267,7 +267,7 @@ export const EXTENSION_DEFS: Readonly<Record<ExtensionKey, ExtensionDef>> = {
     weaponKey: 'immolation',
     name: 'Flare',
     icon: '✨',
-    desc: (lvl) => `Every 4th tick, an outward pulse at 1.8× radius and ${[70, 85, 100][lvl - 1]}% power.`,
+    desc: (lvl) => `Every 5th tick, an outward pulse at 1.3× radius and ${[45, 55, 65][lvl - 1]}% power.`,
   },
   ash: {
     weaponKey: 'immolation',

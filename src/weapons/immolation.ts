@@ -38,9 +38,15 @@ const FLASH_LIFE = 0.35;
 // whatever the ring just burned.
 const SECOND_RING_MULT = 1.4;
 const SECOND_RING_POWER: readonly [number, number, number] = [0.6, 0.75, 0.9];
-const FLARE_EVERY = 4;
-const FLARE_RADIUS_MULT = 1.8;
-const FLARE_POWER: readonly [number, number, number] = [0.7, 0.85, 1.0];
+// Post-6D-3 playtest (2026-08-11, owner): Flare was "way too op, clears
+// almost entire screen" — at the old 1.8x radius and up to 100% power, it
+// was a second nearly-full-power ring at almost double reach, every 4th
+// tick. Cut on all three levers together (radius, power, frequency)
+// rather than any one alone: 1.8x→1.3x, power ceiling 100%→65%, and every
+// 4th tick→every 5th. See tuning/extensions.ts's matching copy update.
+const FLARE_EVERY = 5;
+const FLARE_RADIUS_MULT = 1.3;
+const FLARE_POWER: readonly [number, number, number] = [0.45, 0.55, 0.65];
 const BACKDRAFT_SCALE: readonly [number, number, number] = [0.3, 0.45, 0.6];
 const ASH_MULT: readonly [number, number, number] = [0.6, 0.45, 0.3];
 const ASH_SECONDS = 2.0;

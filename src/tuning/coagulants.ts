@@ -133,7 +133,13 @@ export function coagulantKindFrom(
 //
 // 6D-0 (docs/plans/phase-6d0-balance-shape.md S6): raised 20→35 — a flat
 // cap this low was inconsequential against level-8 hits of 44-313.
-export const ARMOR_AT_FULL_MATURITY = 35;
+//
+// Post-6D-3 playtest (2026-08-11, owner): raised again, 35→45 — armour
+// "still feels like it's not there." Compounds with the same session's
+// aura-weapon damage cuts (tuning/weapons.ts's immolationDamage/
+// shockwaveDamage) rather than replacing them — the complaint was armour
+// AND raw damage both being off, not one alone.
+export const ARMOR_AT_FULL_MATURITY = 45;
 
 // 6D-0: armour now also scales with elapsed run time, so it joins the
 // escalation the owner asked for rather than capping the instant a
@@ -150,15 +156,23 @@ export const ARMOR_AT_FULL_MATURITY = 35;
 // curve, since neither has this floor's degeneracy.
 //
 // The cap is sized so Lance — the highest per-hit weapon in the roster —
-// keeps at least half its damage against max armour (70) once levelled
-// past ~3 (power >= 140, so power - 70 >= power * 0.5): level-8 power is
-// ~313.5, comfortably clear. This does NOT cover a Lance left at level 1
-// for the whole run — an unlevelled weapon against a fully-time-scaled
-// coagulant is a real edge case the bound doesn't promise anything about,
-// same as it wouldn't under the old flat armour. The design assumption is
-// the ordinary one: a socketed weapon gets levelled as the run goes on.
-// First-draft, expected to move at Phase 8 like every number in this file.
-export const ARMOR_TIME_CAP = 35;
+// keeps at least half its damage against max armour (90, post-2026-08-11
+// raise) once levelled past ~4 (power >= 180, so power - 90 >= power *
+// 0.5): level-8 power is ~313.5, comfortably clear. This does NOT cover a
+// Lance left below level 4 for the whole run — an unlevelled weapon
+// against a fully-time-scaled (or even just fully-mature, post-raise —
+// see formation.test.ts) coagulant is a real edge case the bound doesn't
+// promise anything about, same as it wouldn't under the old flat armour.
+// The design assumption is the ordinary one: a socketed weapon gets
+// levelled as the run goes on. First-draft, expected to move at Phase 8
+// like every number in this file.
+//
+// Post-6D-3 playtest (2026-08-11, owner): raised 35→45 alongside
+// ARMOR_AT_FULL_MATURITY above — "armour still feels like it's not
+// there." Moved the guaranteed-half-damage threshold 3→4 (formerly
+// derived from clearing 2x a 70 cap, now 2x a 90 cap) — see
+// formation.test.ts's updated invariant tests for the exact numbers.
+export const ARMOR_TIME_CAP = 45;
 // Seconds to reach ARMOR_TIME_CAP — 15 minutes, so armour is still rising
 // well past the point ambient/event escalation stop plateauing (6D-0 S2).
 const ARMOR_TIME_RAMP_SECONDS = 900;

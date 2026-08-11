@@ -237,21 +237,28 @@ describe('updateImmolationWeapon', () => {
       expect(state.grid.growth[i]).toBeLessThan(0.9);
     });
 
-    it('Flare fires an extra pulse every 4th tick', () => {
+    it('Flare fires an extra pulse every 5th tick', () => {
       const state = freshState();
       state.grid = makeBigTestGrid();
       state.weapons.immolation = 1;
       state.weaponSockets.immolation = { extensions: [{ id: 1, weaponKey: 'immolation', kind: 'flare', level: 3 }], gems: [] };
       state.tower.x = 250;
       state.tower.y = 250;
-      // Well outside the base ring but inside its 1.8x Flare radius.
+      // Well outside the base ring but inside its 1.3x Flare radius.
+      // (Post-6D-3 playtest, 2026-08-11: Flare's radius mult was cut
+      // 1.8x→1.3x — weapons/immolation.ts has the full reasoning.) Note
+      // clearAt's own density-based radius scaling (grid/clear.ts's
+      // `clamp(1.25 - baseDensity, 0.4, 1.25)`, baseDensity sampled at
+      // the tower's own cell — 0 here) stretches the BASE ring's actual
+      // reach to 1.25x its nominal radius, not 1.0x — 1.4x leaves a clear
+      // margin on both sides of that, unlike a placement closer to 1.25x.
       const baseRadius = immolationRadius(1, state.grid.perimeter);
-      const cx = Math.floor((state.tower.x + baseRadius * 1.5) / state.grid.cellSize);
+      const cx = Math.floor((state.tower.x + baseRadius * 1.4) / state.grid.cellSize);
       const cy = Math.floor(state.tower.y / state.grid.cellSize);
       const i = cy * state.grid.cols + cx;
       state.grid.growth[i] = 0.9;
 
-      for (let tick = 1; tick <= 3; tick++) {
+      for (let tick = 1; tick <= 4; tick++) {
         state.weaponTimers.immolation = 0;
         updateImmolationWeapon(state, 0.1);
       }
@@ -259,7 +266,7 @@ describe('updateImmolationWeapon', () => {
       expect(beforeFlare).toBeCloseTo(0.9, 3); // the base ring barely reaches this cell, if at all
 
       state.weaponTimers.immolation = 0;
-      updateImmolationWeapon(state, 0.1); // the 4th tick — Flare fires
+      updateImmolationWeapon(state, 0.1); // the 5th tick — Flare fires
 
       expect(state.grid.growth[i]!).toBeLessThan(beforeFlare);
     });

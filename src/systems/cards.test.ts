@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { freshState } from '../state';
-import { applyCardChoice, buildCoreGemPool, buildWeaponSidePool, CARDS_PER_DRAW, pickCards, shuffled, type CardChoice } from './cards';
+import { applyCardChoice, buildCoreGemPool, buildWeaponSidePool, CARDS_PER_DRAW, lateGemDrawChance, pickCards, shuffled, type CardChoice } from './cards';
 
 describe('shuffled', () => {
   it('returns a permutation — same elements, same length', () => {
@@ -154,6 +154,81 @@ describe('buildWeaponSidePool — weapon level cards are gone (Decision 40)', ()
     expect(gemKeys).toContain('extension');
     expect(gemKeys).toContain('velocity');
     expect(gemKeys).toContain('amplifier');
+  });
+});
+
+// Post-6D-3 playtest (2026-08-11, owner): "I kept getting Conditional
+// gems which didn't help" — Targeting and Conditional gems now ramp in a
+// per-card chance to appear rather than being uniformly weighted from
+// level 1. systems/cards.ts has the full reasoning.
+describe('lateGemDrawChance — the Targeting/Conditional ramp (post-6D-3 playtest)', () => {
+  it('is at its floor at the ramp start', () => {
+    expect(lateGemDrawChance(1)).toBeCloseTo(0.15, 5);
+  });
+
+  it('reaches full parity (1.0) at the ramp end', () => {
+    expect(lateGemDrawChance(10)).toBeCloseTo(1, 5);
+  });
+
+  it('stays at 1.0 past the ramp end — it never comes back down', () => {
+    expect(lateGemDrawChance(50)).toBe(1);
+  });
+
+  it('rises monotonically across the ramp', () => {
+    let prev = lateGemDrawChance(1);
+    for (let lvl = 2; lvl <= 10; lvl++) {
+      const chance = lateGemDrawChance(lvl);
+      expect(chance).toBeGreaterThanOrEqual(prev);
+      prev = chance;
+    }
+  });
+
+  it('never drops below the floor for a level below the ramp start', () => {
+    expect(lateGemDrawChance(0)).toBeCloseTo(0.15, 5);
+  });
+});
+
+describe('buildWeaponSidePool — the Targeting/Conditional ramp applied to the pool', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('excludes every Targeting/Conditional gem at level 1 when the roll fails, but keeps Amplifier/Behaviour gems', () => {
+    const state = freshState();
+    state.tower.level = 1; // ramp floor: 0.15 chance
+    vi.spyOn(Math, 'random').mockReturnValue(0.99); // fails any chance below 0.99
+    const gemKeys = buildWeaponSidePool(state)
+      .filter((c) => c.kind === 'gem')
+      .map((c) => (c.kind === 'gem' ? c.key : null));
+
+    expect(gemKeys).not.toContain('threatPriority'); // Targeting
+    expect(gemKeys).not.toContain('penetration'); // Conditional
+    expect(gemKeys).toContain('amplifier'); // unaffected — never rolled
+    expect(gemKeys).toContain('extension'); // unaffected — never rolled
+  });
+
+  it('always includes Targeting/Conditional gems once the ramp reaches its end, regardless of the roll', () => {
+    const state = freshState();
+    state.tower.level = 10; // ramp end: chance = 1.0
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999); // the highest roll Math.random can return
+    const gemKeys = buildWeaponSidePool(state)
+      .filter((c) => c.kind === 'gem')
+      .map((c) => (c.kind === 'gem' ? c.key : null));
+
+    expect(gemKeys).toContain('threatPriority');
+    expect(gemKeys).toContain('penetration');
+  });
+
+  it('a mid-ramp level can include a Targeting/Conditional gem when the roll succeeds', () => {
+    const state = freshState();
+    state.tower.level = 5; // mid-ramp — chance is neither the floor nor 1
+    vi.spyOn(Math, 'random').mockReturnValue(0); // the lowest possible roll always succeeds
+    const gemKeys = buildWeaponSidePool(state)
+      .filter((c) => c.kind === 'gem')
+      .map((c) => (c.kind === 'gem' ? c.key : null));
+
+    expect(gemKeys).toContain('threatPriority');
+    expect(gemKeys).toContain('penetration');
   });
 });
 

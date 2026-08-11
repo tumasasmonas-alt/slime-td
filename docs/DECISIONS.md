@@ -2885,6 +2885,94 @@ shockwave,blades}.ts` and their test files is the authoritative record.
 
 ---
 
+**93. The first live playtest of the 2026-08-11 batches found the aura
+reach fix (6D-0) had overshot on the damage side — Immolation (and its
+Flare extension especially) cleared slime regardless of armour level,
+Shockwave a little. Damage cut on both, armour raised, reach left
+untouched.**
+📋 *2026-08-11.*
+
+The owner's own words: Immolation "does a lot of damage easily clearing
+all slime no matter at what armor level," and Flare specifically "is way
+too op it clears almost entire screen." Blades and Frost were **not**
+playtested and are deliberately untouched here — this fix is scoped to
+what was actually observed, not a blanket cut across every aura weapon
+the 6D-0 reach fix touched.
+
+**What moved** (all in `tuning/weapons.ts`, `weapons/immolation.ts`,
+`tuning/extensions.ts`, and `tuning/coagulants.ts`):
+- `immolationDamage`'s per-level coefficient cut 10→7 (~30%). Reach
+  (`IMMOLATION_REACH`) is unchanged — the owner explicitly wants the
+  reach fix kept and the damage brought back in line with it, not
+  reverted.
+- Flare (the extension singled out) cut on all three of its levers at
+  once rather than any one alone: radius multiplier 1.8×→1.3×, power
+  ceiling 100%→65%, frequency every-4th-tick→every-5th. At the old
+  numbers it was effectively a second near-full-power ring at almost
+  double reach every ~4.4s; the plan gem cards' copy was updated to match
+  (`tuning/extensions.ts`).
+- `shockwaveDamage` cut ~17% — "a little strong too but only in damage."
+  Reach (`shockwaveReach`) and band thickness (`SHOCKWAVE_SPEED`) are
+  untouched; this is a damage-only correction, unlike Immolation's.
+- `ARMOR_AT_FULL_MATURITY` and `ARMOR_TIME_CAP` both raised 35→45
+  (combined cap 70→90) — "armor... still feels like its not there." A
+  flat, not proportional, raise: it does not change the shape of the
+  degeneracy 6D-0 already bounded (`grid/clear.ts`'s
+  `effectivePower = max(power - armor, power * COAGULANT_ARMOR_FLOOR)`),
+  only how much of a well-levelled hit it now absorbs.
+
+**The armour raise broke a previously-guaranteed invariant, recomputed
+rather than dropped.** `formation.test.ts` protected "a level-3+ Lance
+(the roster's highest per-hit weapon) keeps at least half its damage
+against max armour, at any time" — derived from "the level where Lance's
+own power first clears 2x the armour cap." Raising the cap 70→90 moves
+that level from 3 to 4 (2×90=180 is first cleared at level 4's 181.5, not
+level 3's 148.5); the test was rescoped 3→4 rather than weakened or
+deleted, preserving the *same* underlying promise ("the strongest weapon
+in the roster still means something against the strongest armour, once
+levelled") against the new numbers. A second test — "even a level-1 Lance
+keeps half damage at t=0" — could not be preserved at all: maturity-only
+armour (45) alone now denies it for an unlevelled Lance. Rather than
+delete that test, it was **inverted** to assert the new behaviour
+explicitly (effective power IS now below half at that specific edge
+case) — a deliberately accepted cost of the raise, tested so it can't be
+silently "fixed" back by someone who doesn't know it's intentional.
+
+**94. Targeting and Conditional gems now ramp in a per-card chance to
+appear in the level-up draw — rare at low tower levels, full parity with
+Amplifier/Behaviour/extensions by level 10.**
+📋 *2026-08-11.*
+
+Same playtest as Decision 93. The owner's finding: "I kept getting
+Conditional gems which didn't help" — both classes condition on things a
+fresh run hasn't built up yet (Targeting replaces an ACQUIRE stage a
+level-1 deck barely exercises; Conditional gems read state — streaks,
+core HP, coagulant mass — a new run has little of), so drawing them early
+reads as dead cards even though `phase-6d3-gem-reality.md` (Decision 92)
+had just finished making sure neither class is ever a silent no-op.
+
+`systems/cards.ts`'s `buildWeaponSidePool` previously pushed one entry
+per `ALL_GEM_KEYS` unconditionally — every gem, every class, uniformly
+weighted from level 1, same as every extension. New: a pure curve
+function, `lateGemDrawChance(level)`, linear from a 0.15 floor at level 1
+to 1.0 at level 10 (clamped, never regresses past 10); each Targeting or
+Conditional candidate independently rolls against it before being added
+to the pool, while Amplifier/Behaviour gems and every extension are
+unaffected (still unconditional, matching the owner's complaint being
+specific to those two classes, not the draw as a whole). Below the ramp,
+a draw can simply lack any Targeting/Conditional option that level-up —
+by design, not a bug — while the pool can never go fully empty from this
+alone, since Amplifier/Behaviour gems are never rolled out.
+
+Deliberately a **chance to appear**, not a hard level gate (no
+Targeting/Conditional card at all until level N) — the owner's phrasing
+("less at the start... equal with all else later") described a curve,
+not a threshold, and a hard gate would have made the first several
+level-ups suspiciously narrow in an already-shortened 3-card draw
+(`CARDS_PER_DRAW`, cut from 4 the same prior session).
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 
