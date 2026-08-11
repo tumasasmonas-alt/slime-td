@@ -3,6 +3,7 @@ import { clearAt } from '../grid/clear';
 import { extensionLevel } from '../systems/extensions';
 import { nearestFrontierPoint } from '../systems/frontier';
 import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { auraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { WEAPON_DEFS, frostCooldown, frostDamage, frostRadius } from '../tuning/weapons';
 import { cooldownReady, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -77,6 +78,16 @@ export const frostPipeline: WeaponPipeline = {
     const shatterLvl = extensionLevel(state, 'frost', 'shatterCore');
     const rimeLvl = extensionLevel(state, 'frost', 'rime');
 
+    // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Frost has no
+    // ACQUIRE stage to replace, so a socketed Targeting gem reads instead
+    // as either Vigilance's near-field cutout (an annulus shape) or a
+    // focus-damage bonus on one coagulant within the pulse (Threat
+    // Priority/Triage/Breach Priority/Fixation). Computed once against
+    // the pulse's own origin (post-Homing-offset) and full radius, then
+    // reused by every Multishot copy below — a shared focus target reads
+    // as "all the pulses agree on what matters," not a per-copy re-roll.
+    const auraReading = auraTargetingReading(state, 'frost', originX, originY, radius);
+
     for (let i = 0; i < plan.count; i++) {
       const angle = (i / plan.count) * Math.PI * 2;
       const spreadDist = plan.count > 1 ? radius * MULTISHOT_OFFSET_FRACTION : 0;
@@ -89,6 +100,9 @@ export const frostPipeline: WeaponPipeline = {
         chill: shatterLvl > 0 ? SHATTER_CHILL_SECONDS : undefined,
         shatter: shatterLvl > 0 ? SHATTER_DAMAGE_MULT[shatterLvl - 1] : undefined,
         suppressRegrowth: rimeLvl > 0 ? { mult: RIME_MULT[rimeLvl - 1]!, seconds: RIME_SECONDS } : undefined,
+        shape: auraReading.shape,
+        focusTarget: auraReading.focusTarget,
+        focusBonus: auraReading.focusBonus,
         ...opts,
       });
       // Phase 5B-6: pushed onto a list now, not assigned to a single slot —

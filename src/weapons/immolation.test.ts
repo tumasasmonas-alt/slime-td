@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import type { Grid } from '../state';
+import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { immolationRadius } from '../tuning/weapons';
 import { updateImmolationWeapon } from './immolation';
+
+function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
+  return {
+    x: 0,
+    y: 0,
+    mass: 200,
+    armor: 0,
+    kind: 'congealer',
+    radius: 12,
+    speed: 45,
+    phase: 'active',
+    phaseTimer: 0,
+    seeds: [],
+    splitAtMass: 0,
+    sourceMaturity: 0,
+    parts: [],
+    startMass: 200,
+    lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
+    ...overrides,
+  };
+}
 
 function makeTestGrid(): Grid {
   const size = 400;
@@ -255,5 +279,37 @@ describe('updateImmolationWeapon', () => {
       expect(state.grid.regrowMult[i]).toBeCloseTo(0.45, 5); // ASH_MULT level 2
       expect(state.grid.regrowTimer[i]).toBeCloseTo(2.0, 5); // ASH_SECONDS
     });
+  });
+});
+
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3, S4 test 2):
+// Immolation has no ACQUIRE stage either — same aura reading as Frost's,
+// end-to-end proof that immolationPipeline actually consults it.
+describe('updateImmolationWeapon — Targeting gems (Phase 6D-1)', () => {
+  it('Triage deals more damage to a coagulant than the same hit does without it', () => {
+    // Paired with/without comparison — see weapons/frost.test.ts's
+    // equivalent test for why a loss-RATIO comparison across different
+    // masses would measure mass, not the gem's actual effect.
+    const withGem = freshState();
+    withGem.grid = makeTestGrid();
+    withGem.weapons.immolation = 1;
+    withGem.weaponSockets.immolation = { extensions: [], gems: [{ id: 1, kind: 'triage' }] };
+    withGem.tower.x = 100;
+    withGem.tower.y = 100;
+    const target1 = makeCoagulant({ x: 100, y: 100, mass: 200 });
+    withGem.coagulants = [target1];
+
+    const withoutGem = freshState();
+    withoutGem.grid = makeTestGrid();
+    withoutGem.weapons.immolation = 1;
+    withoutGem.tower.x = 100;
+    withoutGem.tower.y = 100;
+    const target2 = makeCoagulant({ x: 100, y: 100, mass: 200 });
+    withoutGem.coagulants = [target2];
+
+    updateImmolationWeapon(withGem, 0.1);
+    updateImmolationWeapon(withoutGem, 0.1);
+
+    expect(200 - target1.mass).toBeGreaterThan(200 - target2.mass);
   });
 });

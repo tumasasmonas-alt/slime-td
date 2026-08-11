@@ -1,6 +1,7 @@
 import type { GameState, ShockwaveRing } from '../state';
 import { extensionLevel } from '../systems/extensions';
 import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
+import { auraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { shockwaveCooldown, shockwaveDamage, shockwaveReach, shockwaveStartRadius, SHOCKWAVE_SPEED } from '../tuning/weapons';
 import { cooldownReady, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -44,10 +45,23 @@ export const shockwavePipeline: WeaponPipeline = {
     const implosionLvl = extensionLevel(state, 'shockwave', 'implosion');
     const secondWaveLvl = extensionLevel(state, 'shockwave', 'secondWave');
 
+    // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Shockwave has
+    // no ACQUIRE stage either. Committed once here, at ring creation, and
+    // carried on the entity — the ring's own band geometry is recomputed
+    // every tick in systems/shockwave.ts, which has no other place to read
+    // a per-shot setting from. Vigilance reads as a floor on the band's
+    // inner edge (usually redundant with the ring's own perimeter-floored
+    // start, real once Implosion sends it travelling back inward); the
+    // other four read as the same focus-bonus every other aura uses.
+    const auraReading = auraTargetingReading(state, 'shockwave', t.x, t.y, maxRadius);
+
     const ringOpts = {
       ...opts,
       kickback: knockbackLvl > 0 ? KNOCKBACK_PX[knockbackLvl - 1] : opts.kickback,
       densityScaled: resonantLvl > 0 ? RESONANT_RING_BONUS[resonantLvl - 1] : undefined,
+      vigilanceFloor: auraReading.shape ? grid.perimeter : undefined,
+      focusTarget: auraReading.focusTarget,
+      focusBonus: auraReading.focusBonus,
     };
 
     for (let i = 0; i < plan.count; i++) {

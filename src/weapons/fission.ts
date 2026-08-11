@@ -1,6 +1,7 @@
 import type { GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
 import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
+import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { fissionBlastRadius, fissionCooldown, fissionCount, fissionDamage, fissionScatter } from '../tuning/weapons';
 import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -29,7 +30,7 @@ const STICKY_RADIUS = 26;
 // exactly 5 roughly-equal hits, not one big hit plus four small ones.
 export const fissionPipeline: WeaponPipeline = {
   ready: cooldownReady('fission', fissionCooldown),
-  acquire: frontierAcquire,
+  acquire: targetingAcquire('fission', (s) => s.grid?.maxRange ?? 0, frontierAcquire),
   deliver: (state, lvl, target, powerMult = 1) => {
     if (!target) return;
     const mods = weaponMods(state, 'fission');

@@ -30,7 +30,14 @@ export function updateShockwaveRings(state: GameState, dt: number): void {
     // the current radius, is what makes a cell hit exactly once across the
     // ring's whole life (S2.1's core invariant) rather than re-hit every
     // tick as the ring keeps growing past it.
-    const bandInner = ring.inward ? newRadius : ring.damagedTo;
+    //
+    // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Vigilance's
+    // reading — clamps the band's inner edge to at least vigilanceFloor,
+    // never letting the ring damage anything closer to the tower than
+    // that. Usually a no-op against the outward case (the ring's own
+    // startRadius already floors at the perimeter), real once Implosion
+    // sends bandInner traveling back down toward it.
+    const bandInner = Math.max(ring.inward ? newRadius : ring.damagedTo, ring.vigilanceFloor ?? 0);
     const bandOuter = ring.inward ? ring.damagedTo : newRadius;
     if (bandOuter > bandInner) {
       clearAt(state, ring.x, ring.y, ring.power, {
@@ -45,6 +52,8 @@ export function updateShockwaveRings(state: GameState, dt: number): void {
         armorShred: ring.armorShred,
         armorScaled: ring.armorScaled,
         densityScaled: ring.densityScaled,
+        focusTarget: ring.focusTarget,
+        focusBonus: ring.focusBonus,
       });
     }
     ring.damagedTo = newRadius;

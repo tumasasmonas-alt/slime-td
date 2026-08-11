@@ -123,6 +123,29 @@ describe('updateLanceWeapon', () => {
     expect(state.lanceCharge!.target!.x).toBe(big.x); // jumped, didn't stay locked on `small`
   });
 
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3, S4 test 5):
+  // Lance's own targeting IS Threat Priority, built in — the test above
+  // already pins that default. This is the other half: a DIFFERENT
+  // socketed Targeting gem must actually override it, proving the two
+  // route through the same wrapper rather than Lance quietly ignoring
+  // whatever's socketed.
+  it('a socketed Triage gem overrides Lance\'s default highest-mass targeting with lowest-mass', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 300;
+    state.tower.y = 300;
+    state.weapons.lance = 1;
+    state.weaponSockets.lance = { extensions: [], gems: [{ id: 1, kind: 'triage' }] };
+    const small = makeCoagulant({ x: 320, y: 300, mass: 50 });
+    const big = makeCoagulant({ x: 500, y: 300, mass: 900 });
+    state.coagulants = [small, big];
+    computeFrontier(state);
+
+    updateLanceWeapon(state, 0.1);
+
+    expect(state.lanceCharge!.target!.x).toBe(small.x); // lowest-mass now, not the default highest-mass
+  });
+
   // The defining property: the beam pierces THROUGH its target, not just
   // to it — the one thing that distinguishes Lance from a large Bolt.
   it('damages a cell behind its target once the beam fires', () => {

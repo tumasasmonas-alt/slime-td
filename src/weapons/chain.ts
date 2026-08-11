@@ -1,6 +1,7 @@
 import type { GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
 import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
+import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { chainCooldown, chainCount, chainDamage } from '../tuning/weapons';
 import { cooldownReady, emissionAngles, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -27,7 +28,7 @@ const SPLIT_ARC_POWER: readonly [number, number, number] = [0.5, 0.65, 0.8];
 // compose cleanly, so those are wired.
 export const chainPipeline: WeaponPipeline = {
   ready: cooldownReady('chain', chainCooldown),
-  acquire: frontierAcquire,
+  acquire: targetingAcquire('chain', (s) => s.grid?.maxRange ?? 0, frontierAcquire),
   deliver: (state, lvl, target, powerMult = 1) => {
     if (!target) return;
     const mods = weaponMods(state, 'chain');

@@ -349,3 +349,42 @@ describe('updateBladesWeapon', () => {
     });
   });
 });
+
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3, S4 test 2):
+// Blades has no ACQUIRE stage — same focus-bonus reading as Frost/
+// Immolation for Threat/Triage/Breach/Fixation, but Vigilance is refused
+// here (tuning/gems.ts's TARGETING_GEM_DEFS comment): the orbit already
+// floors outside the perimeter by construction, so it would be a
+// guaranteed no-op.
+describe('updateBladesWeapon — Targeting gems (Phase 6D-1)', () => {
+  it('Threat Priority deals more damage to a coagulant a blade hits than the same hit does without it', () => {
+    // Paired with/without comparison — see frost.test.ts's equivalent test
+    // for why a loss-RATIO comparison across different masses would be
+    // measuring the wrong thing.
+    const radius = bladeRadius(1, makeTestGrid().perimeter);
+
+    const withGem = freshState();
+    withGem.grid = makeTestGrid();
+    withGem.tower.x = 300;
+    withGem.tower.y = 300;
+    withGem.weapons.blades = 1;
+    withGem.weaponSockets.blades = { extensions: [], gems: [{ id: 1, kind: 'threatPriority' }] };
+    withGem.time = 0;
+    const target1 = makeCoagulant({ x: withGem.tower.x + radius, y: withGem.tower.y, mass: 500 });
+    withGem.coagulants = [target1];
+
+    const withoutGem = freshState();
+    withoutGem.grid = makeTestGrid();
+    withoutGem.tower.x = 300;
+    withoutGem.tower.y = 300;
+    withoutGem.weapons.blades = 1;
+    withoutGem.time = 0;
+    const target2 = makeCoagulant({ x: withoutGem.tower.x + radius, y: withoutGem.tower.y, mass: 500 });
+    withoutGem.coagulants = [target2];
+
+    updateBladesWeapon(withGem, 0.016);
+    updateBladesWeapon(withoutGem, 0.016);
+
+    expect(500 - target1.mass).toBeGreaterThan(500 - target2.mass);
+  });
+});

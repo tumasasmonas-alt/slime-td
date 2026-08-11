@@ -1,9 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import type { Grid } from '../state';
+import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { computeFrontier } from '../systems/frontier';
 import { frostRadius } from '../tuning/weapons';
 import { updateFrostWeapon } from './frost';
+
+function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
+  return {
+    x: 0,
+    y: 0,
+    mass: 200,
+    armor: 0,
+    kind: 'congealer',
+    radius: 12,
+    speed: 45,
+    phase: 'active',
+    phaseTimer: 0,
+    seeds: [],
+    splitAtMass: 0,
+    sourceMaturity: 0,
+    parts: [],
+    startMass: 200,
+    lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
+    ...overrides,
+  };
+}
 
 function makeTestGrid(overrides: Partial<Grid> = {}): Grid {
   const size = 10000;
@@ -229,5 +253,63 @@ describe('updateFrostWeapon', () => {
 
       expect(state.grid.frozen[idx]).toBeCloseTo(2.0 * 1.75, 5); // FREEZE_DURATION * (1 + 0.75)
     });
+  });
+});
+
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3, S4 test 2): Frost
+// has no ACQUIRE stage — Vigilance and the focus-bonus gems read against
+// the pulse itself instead. End-to-end proof that frostPipeline actually
+// consults auraTargetingReading, not just the dispatcher-level test in
+// systems/targetingGems.test.ts.
+describe('updateFrostWeapon — Targeting gems (Phase 6D-1)', () => {
+  it('Vigilance leaves ground inside the perimeter untouched, while still clearing ground outside it', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.grid.perimeter = 100;
+    state.tower.x = 500;
+    state.tower.y = 500;
+    state.weapons.frost = 8; // high level, so its radius clears well past the perimeter
+    state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'vigilance' }] };
+    const insideIdx = 50 * state.grid.cols + 55; // ~50px east — inside the perimeter
+    const outsideIdx = 50 * state.grid.cols + 65; // ~150px east — outside it, still within radius
+    state.grid.threshold[insideIdx] = 0;
+    state.grid.growth[insideIdx] = 0.5;
+    state.grid.threshold[outsideIdx] = 0;
+    state.grid.growth[outsideIdx] = 0.5;
+
+    updateFrostWeapon(state, 0.016);
+
+    expect(state.grid.growth[insideIdx]).toBe(0.5); // untouched
+    expect(state.grid.growth[outsideIdx]).toBeLessThan(0.5); // cleared
+  });
+
+  it('Threat Priority deals more damage to a coagulant than the same hit does without it', () => {
+    // Paired with/without comparison, not a loss-RATIO comparison between
+    // different masses — a smaller coagulant loses a much larger fraction
+    // of its own mass than a bigger one even with NO bonus at all (the
+    // hit's absolute damage is roughly mass-independent), so comparing
+    // ratios across different masses would measure that confound instead
+    // of the gem's actual effect.
+    const withGem = freshState();
+    withGem.grid = makeTestGrid();
+    withGem.tower.x = 500;
+    withGem.tower.y = 500;
+    withGem.weapons.frost = 1;
+    withGem.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'threatPriority' }] };
+    const target1 = makeCoagulant({ x: 560, y: 500, mass: 500 });
+    withGem.coagulants = [target1];
+
+    const withoutGem = freshState();
+    withoutGem.grid = makeTestGrid();
+    withoutGem.tower.x = 500;
+    withoutGem.tower.y = 500;
+    withoutGem.weapons.frost = 1;
+    const target2 = makeCoagulant({ x: 560, y: 500, mass: 500 });
+    withoutGem.coagulants = [target2];
+
+    updateFrostWeapon(withGem, 0.016);
+    updateFrostWeapon(withoutGem, 0.016);
+
+    expect(500 - target1.mass).toBeGreaterThan(500 - target2.mass);
   });
 });

@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import type { Grid } from '../state';
+import type { Coagulant, Grid } from '../state';
 import { freshState } from '../state';
 import { computeFrontier } from '../systems/frontier';
 import { updateBoltWeapon } from './bolt';
+
+function makeCoagulant(overrides: Partial<Coagulant> = {}): Coagulant {
+  return {
+    x: 0,
+    y: 0,
+    mass: 50,
+    armor: 0,
+    kind: 'congealer',
+    radius: 12,
+    speed: 45,
+    phase: 'active',
+    phaseTimer: 0,
+    seeds: [],
+    splitAtMass: 0,
+    sourceMaturity: 0,
+    parts: [],
+    startMass: 50,
+    lastHitAt: -Infinity,
+    chilledUntil: 0,
+    armorDebuff: 0,
+    armorDebuffUntil: 0,
+    ...overrides,
+  };
+}
 
 function makeTestGrid(): Grid {
   const size = 900;
@@ -76,6 +100,31 @@ describe('updateBoltWeapon', () => {
     updateBoltWeapon(state, 0.016);
 
     expect(state.projectiles).toHaveLength(1);
+  });
+
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3, S4 test 2):
+  // Threat Priority replaces frontierAcquire wholesale — the end-to-end
+  // proof (not just the dispatcher-level test in systems/targetingGems.test.ts)
+  // that boltPipeline actually reads it, using the same fixture as the
+  // "fires at the nearest frontier point" test above but with a coagulant
+  // added that's farther away than the revealed cell.
+  it('fires at the highest-mass coagulant instead of the nearer frontier point, with Threat Priority socketed', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    state.tower.x = 150;
+    state.tower.y = 150;
+    state.weapons.bolt = 1;
+    state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'threatPriority' }] };
+    revealCellEastOfTower(state.grid, state.tower.x, state.tower.y); // dist ~40, east
+    state.coagulants = [makeCoagulant({ x: 150, y: 250, mass: 500 })]; // due south, dist 100 — farther, but the only mass in range
+    computeFrontier(state);
+
+    updateBoltWeapon(state, 0.016);
+
+    expect(state.projectiles).toHaveLength(1);
+    const p = state.projectiles[0]!;
+    expect(Math.abs(p.vx)).toBeLessThan(1); // no longer aiming east
+    expect(p.vy).toBeGreaterThan(0); // aims south, toward the coagulant
   });
 
   // Phase 6A-1: Overclock is a per-weapon socketed gem now

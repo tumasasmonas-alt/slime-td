@@ -1,6 +1,6 @@
 import type { CoreGemInstance, ExtensionInstance, GameState, GemInstance } from '../state';
 import type { CoreGemKey } from '../tuning/coreGems';
-import { gemSupportsDelivery } from '../tuning/gems';
+import { gemSupportsDelivery, isTargetingGem } from '../tuning/gems';
 import { WEAPON_DEFS } from '../tuning/weapons';
 import type { GemKey, WeaponKey } from '../types';
 import { applyCoreGemEffect, removeCoreGemEffect } from './passives';
@@ -11,6 +11,12 @@ import { freeExtensionSlots, freeGemSlots } from './sockets';
 // socketed into `weaponKey` right now — its delivery archetype supports
 // the gem, and it isn't already sitting in that weapon (arsenal plan S5:
 // the same gem may sit in several different weapons, never twice in one).
+//
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): a Targeting gem
+// replaces a weapon's ACQUIRE stage wholesale, and you can't replace it
+// twice — at most one Targeting gem per weapon, refused here the same way
+// an already-owned kind or an unsupported archetype is, so the UI never
+// needs its own copy of this rule.
 export function gemLegalFor(state: GameState, weaponKey: WeaponKey, kind: GemKey): boolean {
   if (state.weapons[weaponKey] === undefined) return false; // not in the deck this run
   const def = WEAPON_DEFS[weaponKey];
@@ -18,6 +24,7 @@ export function gemLegalFor(state: GameState, weaponKey: WeaponKey, kind: GemKey
   if (!gemSupportsDelivery(kind, def.delivery)) return false;
   const sockets = state.weaponSockets[weaponKey];
   if (sockets?.gems.some((g) => g.kind === kind)) return false;
+  if (isTargetingGem(kind) && sockets?.gems.some((g) => isTargetingGem(g.kind))) return false;
   return true;
 }
 

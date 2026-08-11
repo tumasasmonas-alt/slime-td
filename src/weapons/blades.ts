@@ -5,6 +5,7 @@ import { findCoagulantHit } from '../systems/coagulants';
 import { extensionLevel } from '../systems/extensions';
 import { nearestFrontierPoint } from '../systems/frontier';
 import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { auraTargetingReading, type AuraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { WEAPON_DEFS, bladeCount, bladeDamage, bladeRadius } from '../tuning/weapons';
 import { runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -69,6 +70,15 @@ function runBladeRing(
   slotBase: number,
   arcStart: number | null,
   arcSpan: number,
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Threat
+  // Priority/Triage/Breach Priority/Fixation's focus-bonus reading — the
+  // only aura reading Blades gets. Vigilance is refused on `orbital`
+  // (tuning/gems.ts): the orbit already floors outside the perimeter by
+  // construction, so its `shape` field, even if somehow present, is
+  // deliberately never read here — an annulus centred on a per-blade hit
+  // point wouldn't mean "avoid the near field" the way it does on a
+  // tower-centred disc anyway.
+  auraReading: AuraTargetingReading,
 ): void {
   for (let i = 0; i < count; i++) {
     const a = arcStart !== null
@@ -104,6 +114,8 @@ function runBladeRing(
       clearAt(state, bx, by, dmg * serrationMult, {
         radiusPx: hitRadius,
         coagulantMult: WEAPON_DEFS.blades?.coagulantMult ?? 1,
+        focusTarget: auraReading.focusTarget,
+        focusBonus: auraReading.focusBonus,
         ...opts,
       });
       state.bladeNextHit[slot] = state.time + hitCooldown;
@@ -176,6 +188,11 @@ export const bladesPipeline: WeaponPipeline = {
 
     const serrationLvl = extensionLevel(state, 'blades', 'serration');
     const whirlLvl = extensionLevel(state, 'blades', 'whirl');
+    // Phase 6D-1: computed once against the ring's own tower-centred
+    // radius, reused by both the main and Counter-Rotation rings — a
+    // shared focus target across both, same reasoning as Frost's Multishot
+    // copies.
+    const auraReading = auraTargetingReading(state, 'blades', t.x, t.y, radius);
 
     state.orbitals = [];
     runBladeRing(
@@ -193,6 +210,7 @@ export const bladesPipeline: WeaponPipeline = {
       0,
       plan.formation ? arcStart : null,
       arcSpan,
+      auraReading,
     );
 
     // Counter-Rotation: a second ring, spinning the OTHER way, orbiting
@@ -219,6 +237,7 @@ export const bladesPipeline: WeaponPipeline = {
         1000,
         plan.formation ? arcStart : null,
         arcSpan,
+        auraReading,
       );
     }
   },

@@ -53,4 +53,17 @@ export type BehaviourGemKey =
   | 'ricochet'
   | 'bounce';
 
-export type GemKey = AmplifierGemKey | BehaviourGemKey;
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md): the seven
+// Targeting gems (Scattershot cut — umbrella plan S4). Each replaces a
+// weapon's ACQUIRE stage wholesale, exactly one per weapon at a time
+// (enforced at socket time, systems/gemSockets.ts).
+export type TargetingGemKey =
+  | 'threatPriority'
+  | 'fieldPriority'
+  | 'breachPriority'
+  | 'vigilance'
+  | 'fixation'
+  | 'triage'
+  | 'opportunist';
+
+export type GemKey = AmplifierGemKey | BehaviourGemKey | TargetingGemKey;

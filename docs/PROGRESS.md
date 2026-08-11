@@ -48,15 +48,21 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-11 (**Phase 6D-0 shipped** — Decision 88: the
+**Last updated:** 2026-08-11 (**Phase 6D-1 shipped** — Decision 89: the 7
+Targeting gems, each replacing a weapon's ACQUIRE stage via a new
+dispatch layer, `systems/targetingGems.ts`. Two deviations from the plan
+found while implementing — Vigilance also refuses `orbital` (Blades),
+and Breach Priority's aura reading is a focus-damage bonus rather than a
+literal inner-edge pull — both recorded in Decision 89 and the plan's own
+as-built delta. **Built immediately after 6D-0 in the same session, at
+the owner's explicit instruction, typecheck + `vitest run` only — still
+no live playtest** between either batch, continuing the departure
+Decision 88 recorded. Next: 6D-2, the Conditional gems.
+
+**Previously:** 2026-08-11, **Phase 6D-0 shipped** — Decision 88: the
 balance-shape tuning pass. Unbounded ambient/event escalation, the aura
 reach fix for Blades/Frost/Immolation, Chain Bolt/Fission nerfs, Shockwave
-buff, and bounded time-scaled armour. Tuning-only, no new gems. **Built at
-the owner's explicit instruction alongside 6D-1 and 6D-2 in the same
-session, typecheck + `vitest run` only — no live playtest**, which departs
-from the plan's own §8 ("playtest before 6D-1, its result changes what the
-others should be"). See Decision 88 for the full reasoning and what that
-risks.)
+buff, and bounded time-scaled armour. Tuning-only, no new gems.)
 
 **Phase 6D grew from "add 19 gems" into a balance-and-honesty pass**,
 because reading the tuning constants against shipped code found four
@@ -521,6 +527,79 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-11 — Phase 6D-1 shipped: the Targeting gems (Decision 89)
+
+**Full account:** `docs/plans/phase-6d1-targeting-gems.md` (build + §7
+as-built). Umbrella: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
+
+**⚠️ Continues the departure Decision 88 recorded** — built immediately
+after 6D-0 in the same session, no live playtest in between, per the
+owner's explicit instruction. 6D-1's aura-specific gem readings are
+therefore unverified on top of 6D-0's own unverified reach numbers.
+
+**What shipped:** 7 Targeting gems (Scattershot cut) — Threat Priority,
+Field Priority, Breach Priority, Vigilance, Fixation, Triage, Opportunist.
+Each replaces a weapon's ACQUIRE stage wholesale via a new dispatch layer,
+`systems/targetingGems.ts`:
+
+- **`targetingAcquire(key, maxRangeFor, defaultAcquire)`** wraps every
+  weapon that already aims (Bolt/Chain/Poison/Missile/Fission/Lance) — a
+  socketed Targeting gem overrides the default, falls back to it
+  otherwise. Lance's own targeting is now literally "Threat Priority,
+  built in," routed through the same wrapper as everything else, per the
+  plan's instruction — no parallel implementation to drift.
+- **`auraTargetingReading(state, key, originX, originY, radius)`** gives
+  the self-centered reading for Blades/Frost/Immolation/Shockwave, none
+  of which have an ACQUIRE stage: Vigilance produces a `ClearShape`
+  annulus that clips the near field out entirely; Threat Priority/Triage/
+  Breach Priority/Fixation pick one coagulant within the aura's reach and
+  bonus-damage it via two new `ClearOptions` fields (`focusTarget`/
+  `focusBonus`, `grid/clear.ts`) — a reference-equality bonus, no second
+  damage path.
+- **Fixation** carries state across ticks (`state.fixationTarget`,
+  per-weapon) — the only Targeting gem that isn't a pure function of the
+  current field.
+- **Opportunist** reads `state.lastHitPoint`, written (mutated in place,
+  never reallocated) by every `clearAt` call, from any weapon.
+- **At most one Targeting gem per weapon**, refused at socket time
+  (`systems/gemSockets.ts`'s `gemLegalFor`), the same mechanism an
+  already-owned kind or an unsupported archetype already used.
+
+**Two deviations from the plan, found while implementing, both recorded
+in Decision 89 rather than silently reinterpreted:**
+
+1. **Vigilance also refuses `orbital` (Blades)** — its orbit radius
+   already floors at `perimeter + margin` (Decision 16), so the blade's
+   center is structurally never inside the perimeter. "Only outside the
+   perimeter" would be a guaranteed no-op there, the exact silent-inert
+   failure this whole batch exists to catch — caught during the build
+   instead of after.
+2. **Breach Priority's aura reading is a focus-damage bonus on whichever
+   coagulant is closest to the tower**, not a literal "pull the inner
+   edge inward" — a plain disc hit's inner edge is already 0, so there's
+   nothing to pull further in. Reuses the same focus-bonus mechanism as
+   Threat Priority/Triage/Fixation, keyed on distance instead of mass.
+
+**A real bug caught by the tests, not the browser:** an early draft of
+the focus-bonus tests compared damage as a loss *ratio* between two
+different-mass coagulants (e.g. "does the 500-mass one lose a bigger
+fraction than the 200-mass one") and failed — a smaller coagulant loses a
+much larger fraction of its own mass than a bigger one even with **zero**
+bonus, since a hit's absolute damage is roughly mass-independent. Fixed
+by comparing the same coagulant's mass loss across two paired runs
+(with the gem vs. without), which isolates the gem's actual effect.
+
+**Test coverage:** the full legality matrix (7 gems × 6 archetypes,
+`tuning/gems.test.ts`); the four new acquire functions plus their
+fallback behaviour (`systems/targeting.test.ts` — `highestMassPoint`
+itself refactored onto a new shared `bestCoagulant()` loop, behaviour
+unchanged, confirmed by its own existing tests passing unmodified); the
+full dispatcher (`systems/targetingGems.test.ts`, new file); the
+at-most-one-per-weapon refusal; and end-to-end wiring proofs in every
+weapon's own test file. **731 tests pass, `tsc --noEmit` clean.**
+
+**Next: 6D-2 (Conditional gems), immediately, same session.**
 
 ### 2026-08-11 — Phase 6D-0 shipped: the balance-shape tuning pass (Decision 88)
 

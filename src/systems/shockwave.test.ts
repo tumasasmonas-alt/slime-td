@@ -157,3 +157,40 @@ describe('updateShockwaveRings', () => {
     expect(state.shockwaveRings).toHaveLength(1); // still pending, not dropped
   });
 });
+
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3, S4 test 2):
+// Vigilance's reading on Shockwave — a floor on the band's inner edge,
+// baked onto the ring at creation (weapons/shockwave.ts) and read here.
+describe('updateShockwaveRings — Vigilance (Phase 6D-1)', () => {
+  it('clamps the damaged band to never reach inside vigilanceFloor, on an inward (Implosion) ring', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const grid = state.grid;
+    const vigilanceFloor = 80;
+    // A cell between vigilanceFloor (80) and startRadius (40) — Implosion
+    // travels inward past this point on its way to startRadius, and
+    // without the clamp it would eventually get hit.
+    const gx = Math.floor((300 + 60) / grid.cellSize);
+    const gy = Math.floor(300 / grid.cellSize);
+    const idx = gy * grid.cols + gx;
+
+    state.shockwaveRings.push({
+      x: 300,
+      y: 300,
+      bornAt: 0,
+      damagedTo: 200,
+      radius: 200,
+      startRadius: 40,
+      maxRadius: 200,
+      speed: 260,
+      power: 200,
+      color: '#7fd8ff',
+      inward: true,
+      vigilanceFloor,
+    });
+
+    for (let i = 0; i < 60; i++) updateShockwaveRings(state, 0.05);
+
+    expect(grid.growth[idx]).toBe(0.5); // untouched — vigilanceFloor kept the band from ever reaching it
+  });
+});

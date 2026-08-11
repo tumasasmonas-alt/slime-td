@@ -1,6 +1,7 @@
 import type { GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
 import { emissionPlan, resolveOpts } from '../systems/resolveOpts';
+import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { missileCooldown, missileDamage, missileRadius } from '../tuning/weapons';
 import { cooldownReady, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -31,7 +32,7 @@ const SALVO_SPACING = 0.13;
 // reads as "more missiles," not "worse aim").
 export const missilePipeline: WeaponPipeline = {
   ready: cooldownReady('missile', missileCooldown),
-  acquire: frontierAcquire,
+  acquire: targetingAcquire('missile', (s) => s.grid?.maxRange ?? 0, frontierAcquire),
   deliver: (state, lvl, target, powerMult = 1) => {
     if (!target) return;
     const mods = weaponMods(state, 'missile');

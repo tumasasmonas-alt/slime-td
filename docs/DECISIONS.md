@@ -2723,6 +2723,48 @@ repeated here.
 
 ---
 
+**89. Phase 6D-1 (the Targeting gems) shipped with two deviations from
+its own plan, both found while implementing.**
+📋 *2026-08-11.*
+
+Built per `docs/plans/phase-6d1-targeting-gems.md`: 7 Targeting gems
+(Scattershot cut), each replacing a weapon's ACQUIRE stage wholesale via
+the new `systems/targetingGems.ts` dispatch layer
+(`targetingAcquire`/`auraTargetingReading`), enforced as at-most-one-per-
+weapon at socket time (`systems/gemSockets.ts`).
+
+**Deviation 1 — Vigilance refuses `orbital` (Blades), not just
+`pulse`/`ring`.** Blades' orbit radius already floors at
+`perimeter + margin` (Decision 16's `towerCenteredRadius`) — the blade's
+own center is structurally never inside the perimeter, so "only outside
+the perimeter" would be a guaranteed no-op, the exact silent-inert defect
+this batch exists to catch. The plan's own §1 table didn't distinguish
+Blades from the other auras; this narrows it.
+
+**Deviation 2 — Breach Priority's aura reading is a focus-damage bonus
+on the nearest-to-core coagulant, not a literal "inner edge pulled
+inward."** A plain disc's inner edge is already 0; there's nothing to
+pull further in. Reuses the same `focusTarget`/`focusBonus` mechanism as
+Threat Priority/Triage/Fixation, keyed on distance instead of mass —
+keeps the thematic mirror of Vigilance without a second mechanism.
+
+Both are implementation-level findings within the scope of building this
+very batch (the plan's own status line called it a proposal, not yet
+built), not disputes with an already-shipped decision — raised here as
+the record, per `CLAUDE.md`'s posture, rather than silently reinterpreted.
+Full reasoning and the complete file list: the plan's own §7 as-built
+delta.
+
+**⚠️ No playtest ran between 6D-0 and 6D-1**, continuing the departure
+Decision 88 already recorded — the owner's explicit instruction was to
+build all of 6D-0/6D-1/6D-2 in sequence, typecheck + `vitest run` only.
+6D-1's aura-specific gem readings are therefore unverified by play on top
+of 6D-0's own unverified reach numbers; if a playtest later shows either
+needs to move, check both together, since the aura gems' value depends on
+where 6D-0 actually put the aura weapons' reach.
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

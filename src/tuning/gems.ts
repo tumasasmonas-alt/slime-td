@@ -1,4 +1,4 @@
-import type { AmplifierGemKey, BehaviourGemKey, DeliveryKind, GemKey } from '../types';
+import type { AmplifierGemKey, BehaviourGemKey, DeliveryKind, GemKey, TargetingGemKey } from '../types';
 
 // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S5): the six
 // Amplifier gems — a per-weapon replacement for the deleted global
@@ -314,10 +314,111 @@ export function isBehaviourGem(kind: GemKey): kind is BehaviourGemKey {
   return kind in BEHAVIOUR_GEM_DEFS;
 }
 
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md): the seven
+// Targeting gems. Unlike Amplifier (a numeric delta) or Behaviour (a
+// RESOLVE/projectile-flag effect), a Targeting gem replaces a weapon's
+// ACQUIRE stage wholesale (systems/targetingGems.ts's targetingAcquire) —
+// there is no `delta` field here because "what to aim at" isn't a number
+// to scale.
+//
+// `supports` is per-archetype like Amplifier's, not the Behaviour class's
+// always-true — Targeting gems have real refusals (plan S1): a weapon
+// with no ACQUIRE stage has nothing for most of these to replace, unless
+// the reading is re-expressed as something an aura CAN do (below).
+//
+// Two gems keep a real refusal on self-centered archetypes because there
+// is genuinely nothing to reinterpret without duplicating Homing (Field
+// Priority's "densest region" IS Homing's own pulse/ring reading;
+// Opportunist's "wherever was hit last" has no aim point on a weapon that
+// never aims). The other five get an honest aura-specific reading instead
+// of a refusal — see each `desc` below for what that reading actually is.
+//
+// Vigilance is additionally refused on `orbital` specifically (Blades) —
+// not in the original plan's table, found while implementing: Blades'
+// orbit radius already floors at `perimeter + margin`
+// (tuning/weaponGeometry.ts's towerCenteredRadius), so the blade's own
+// center is structurally never inside the perimeter. "Only outside the
+// perimeter" would be a guaranteed no-op there, not a real choice — the
+// same silent-inert failure this whole batch exists to catch, just found
+// during the build instead of after. See docs/plans/phase-6d1-targeting-gems.md
+// S10 (as-built) for the full reasoning.
+export interface TargetingGemDef {
+  readonly name: string;
+  readonly icon: string;
+  readonly supports: (delivery: DeliveryKind) => boolean;
+  readonly desc: (delivery: DeliveryKind) => string;
+  readonly genericDesc: string;
+}
+
+const AURA_DELIVERIES: readonly DeliveryKind[] = ['orbital', 'pulse', 'ring'];
+const isAuraDelivery = (d: DeliveryKind): boolean => AURA_DELIVERIES.includes(d);
+const NOT_ORBITAL = (d: DeliveryKind): boolean => d !== 'orbital';
+const TARGETED_ONLY = (d: DeliveryKind): boolean => d === 'projectile' || d === 'beam';
+
+export const TARGETING_GEM_DEFS: Readonly<Record<TargetingGemKey, TargetingGemDef>> = {
+  threatPriority: {
+    name: 'Threat Priority',
+    icon: '🔺',
+    supports: ALWAYS,
+    desc: (d) => (isAuraDelivery(d) ? 'Deals bonus damage to the single highest-mass coagulant it hits.' : 'Targets the highest-mass coagulant in range.'),
+    genericDesc: 'Prioritizes the biggest threat — the highest-mass coagulant, or bonus damage to it on a weapon with no aim.',
+  },
+  fieldPriority: {
+    name: 'Field Priority',
+    icon: '🌐',
+    supports: TARGETED_ONLY,
+    desc: () => 'Targets the densest revealed ground in range, not just whatever is nearest.',
+    genericDesc: 'Targets the densest ground in range. Only legal on weapons that aim — this is Homing\'s own reading on a ring or aura, so it would just duplicate that gem there.',
+  },
+  breachPriority: {
+    name: 'Breach Priority',
+    icon: '⛓️',
+    desc: (d) => (isAuraDelivery(d) ? 'Deals bonus damage to whichever coagulant it hits is closest to the core.' : 'Targets the deepest ground incursion toward the core, ignoring any coagulant that happens to be closer.'),
+    supports: ALWAYS,
+    genericDesc: 'Prioritizes the deepest threat toward the core — a ground breach on a weapon that aims, or bonus damage to the closest hit on a weapon that doesn\'t.',
+  },
+  vigilance: {
+    name: 'Vigilance',
+    icon: '🛡️',
+    supports: NOT_ORBITAL,
+    desc: (d) => {
+      if (d === 'projectile' || d === 'beam') return 'Never targets anything inside the perimeter.';
+      return 'Never damages anything inside the perimeter — the near field is untouched, on purpose.';
+    },
+    genericDesc: 'Refuses the near field entirely, only outside the perimeter. Not legal on Orbiting Blades — its orbit never reaches inside the perimeter in the first place, so this would do nothing there.',
+  },
+  fixation: {
+    name: 'Fixation',
+    icon: '📌',
+    supports: ALWAYS,
+    desc: (d) => (isAuraDelivery(d) ? 'Keeps its bonus damage on the same coagulant across hits, until it dies.' : 'Locks onto one coagulant and stays on it until it dies.'),
+    genericDesc: 'Commits to one target until it dies, instead of re-evaluating every shot. The mirror of Priming, which rewards spreading fire.',
+  },
+  triage: {
+    name: 'Triage',
+    icon: '🩹',
+    supports: ALWAYS,
+    desc: (d) => (isAuraDelivery(d) ? 'Deals bonus damage to the single lowest-mass coagulant it hits.' : 'Targets the weakest (lowest-mass) coagulant in range.'),
+    genericDesc: 'Prioritizes finishing off the weakest threat instead of the biggest one — the inverse of Threat Priority.',
+  },
+  opportunist: {
+    name: 'Opportunist',
+    icon: '👁️',
+    supports: TARGETED_ONLY,
+    desc: () => 'Targets wherever another weapon last landed a hit, riding its momentum instead of picking independently.',
+    genericDesc: 'Targets wherever damage last landed, from any weapon. Only legal on weapons that aim — a weapon with no aim point has nothing to redirect.',
+  },
+};
+
+export function isTargetingGem(kind: GemKey): kind is TargetingGemKey {
+  return kind in TARGETING_GEM_DEFS;
+}
+
 // The archetype-aware description, read once a gem is sitting in a
 // specific weapon's socket (the inventory screen).
 export function gemDesc(kind: GemKey, delivery: DeliveryKind): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].desc(delivery);
+  if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].desc(delivery);
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].desc(delivery);
 }
 
@@ -325,24 +426,29 @@ export function gemDesc(kind: GemKey, delivery: DeliveryKind): string {
 // gem has a weapon at all (docs/plans/phase-6a1-gem-foundation.md S6a).
 export function gemGenericDesc(kind: GemKey): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].genericDesc;
+  if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].genericDesc;
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].genericDesc;
 }
 
 export function gemName(kind: GemKey): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].name;
+  if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].name;
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].name;
 }
 
 export function gemIcon(kind: GemKey): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].icon;
+  if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].icon;
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].icon;
 }
 
 // Behaviour gems have no refusals (the owner's 2026-08-09 call) — every
 // archetype gets a real reading in the `desc` table above, even where the
 // class comment says the mechanism isn't wired up on that archetype yet.
+// Targeting gems DO have refusals (see TARGETING_GEM_DEFS's own comment).
 export function gemSupportsDelivery(kind: GemKey, delivery: DeliveryKind): boolean {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].supports(delivery);
+  if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].supports(delivery);
   return true;
 }
 
@@ -350,4 +456,5 @@ export function gemSupportsDelivery(kind: GemKey, delivery: DeliveryKind): boole
 export const ALL_GEM_KEYS: readonly GemKey[] = [
   ...(Object.keys(AMPLIFIER_GEM_DEFS) as GemKey[]),
   ...(Object.keys(BEHAVIOUR_GEM_DEFS) as GemKey[]),
+  ...(Object.keys(TARGETING_GEM_DEFS) as GemKey[]),
 ];

@@ -1,6 +1,7 @@
 import type { GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
 import { emissionPlan, projectileFlags, resolveOpts } from '../systems/resolveOpts';
+import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { boltCooldown, boltDamage } from '../tuning/weapons';
 import { cooldownReady, emissionAngles, frontierAcquire, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -21,7 +22,10 @@ const TRACKING_TURN_RATE: readonly [number, number, number] = [60, 90, 120];
 
 export const boltPipeline: WeaponPipeline = {
   ready: cooldownReady('bolt', boltCooldown),
-  acquire: frontierAcquire,
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md): a socketed
+  // Targeting gem replaces this wholesale; frontierAcquire is only the
+  // default when none is socketed.
+  acquire: targetingAcquire('bolt', (s) => s.grid?.maxRange ?? 0, frontierAcquire),
   deliver: (state, lvl, target, powerMult = 1) => {
     if (!target) return;
     const mods = weaponMods(state, 'bolt');

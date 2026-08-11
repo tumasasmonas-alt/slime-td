@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AMPLIFIER_GEM_DEFS, gemSupportsDelivery } from './gems';
+import type { DeliveryKind } from '../types';
+import { AMPLIFIER_GEM_DEFS, gemSupportsDelivery, TARGETING_GEM_DEFS } from './gems';
 
 // Phase 6C-2 (docs/plans/phase-6c2-lance.md S2.1, S9): the two real
 // legality calls the 'beam' archetype forces — settled by the owner
@@ -30,3 +31,37 @@ describe('beam archetype gem legality (6C-2)', () => {
     expect(gemSupportsDelivery('overclock', 'beam')).toBe(true);
   });
 });
+
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S1, S4 test 1): the
+// legality matrix — asserted per gem per archetype, exactly the guard the
+// plan calls out as "the guard the 6C 'beam' work established," so a
+// future eighth DeliveryKind can't silently inherit a legality nobody
+// chose. Pinned against the design table this batch settled on:
+// Field Priority and Opportunist are the two honest refusals (both would
+// duplicate Homing or have no aim point to redirect); Vigilance adds a
+// third, on 'orbital' only, found while implementing — Blades' orbit
+// already floors outside the perimeter by construction, so "only outside
+// the perimeter" would be a guaranteed no-op there.
+describe('Targeting gem legality matrix (Phase 6D-1)', () => {
+  const ALL_DELIVERIES: readonly DeliveryKind[] = ['projectile', 'orbital', 'pulse', 'cloud', 'ring', 'beam'];
+
+  const EXPECTED: Record<keyof typeof TARGETING_GEM_DEFS, (d: DeliveryKind) => boolean> = {
+    threatPriority: () => true,
+    fieldPriority: (d) => d === 'projectile' || d === 'beam',
+    breachPriority: () => true,
+    vigilance: (d) => d !== 'orbital',
+    fixation: () => true,
+    triage: () => true,
+    opportunist: (d) => d === 'projectile' || d === 'beam',
+  };
+
+  for (const kind of Object.keys(TARGETING_GEM_DEFS) as (keyof typeof TARGETING_GEM_DEFS)[]) {
+    for (const delivery of ALL_DELIVERIES) {
+      const expected = EXPECTED[kind](delivery);
+      it(`${kind} is ${expected ? 'legal' : 'illegal'} on ${delivery}`, () => {
+        expect(gemSupportsDelivery(kind, delivery)).toBe(expected);
+      });
+    }
+  }
+});
+

@@ -1,6 +1,7 @@
 import type { BubbleSeed, GameState } from '../state';
 import { extensionLevel } from '../systems/extensions';
 import { emissionPlan, hasHomingGem, resolveOpts } from '../systems/resolveOpts';
+import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { poisonCooldown, poisonDamage, poisonRadius } from '../tuning/weapons';
 import { rand } from '../util/math';
@@ -28,7 +29,7 @@ const TWIN_CANISTER_LIFE_MULT = 2;
 
 export const poisonPipeline: WeaponPipeline = {
   ready: cooldownReady('poison', poisonCooldown),
-  acquire: frontierAcquire,
+  acquire: targetingAcquire('poison', (s) => s.grid?.maxRange ?? 0, frontierAcquire),
   deliver: (state, lvl, target, powerMult = 1) => {
     if (!target) return;
     const mods = weaponMods(state, 'poison');

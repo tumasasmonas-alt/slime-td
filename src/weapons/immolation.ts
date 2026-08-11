@@ -3,6 +3,7 @@ import { clearAt } from '../grid/clear';
 import { IMMOLATION_RING_COLOR } from '../render/immolationRing';
 import { extensionLevel } from '../systems/extensions';
 import { resolveOpts } from '../systems/resolveOpts';
+import { auraTargetingReading } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { IMMOLATION_TICK, WEAPON_DEFS, immolationDamage, immolationRadius } from '../tuning/weapons';
 import { cooldownReady, runWeaponPipeline, type WeaponPipeline } from './pipeline';
@@ -91,10 +92,19 @@ export const immolationPipeline: WeaponPipeline = {
     const backdraftMult = backdraftLvl > 0 ? 1 + BACKDRAFT_SCALE[backdraftLvl - 1]! * sampleRingDensity(grid, t.x, t.y, radius) : 1;
     const ashLvl = extensionLevel(state, 'immolation', 'ash');
 
+    // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): same reading
+    // as Frost's — Immolation has no ACQUIRE stage either. Scoped to the
+    // primary ring only, not Second Ring/Flare below (both are extension-
+    // layered bonus pulses, not the weapon's own base identity).
+    const auraReading = auraTargetingReading(state, 'immolation', t.x, t.y, radius);
+
     clearAt(state, t.x, t.y, immolationDamage(lvl) * mods.damage * powerMult * backdraftMult, {
       radiusPx: radius,
       coagulantMult: WEAPON_DEFS.immolation?.coagulantMult ?? 1,
       suppressRegrowth: ashLvl > 0 ? { mult: ASH_MULT[ashLvl - 1]!, seconds: ASH_SECONDS } : undefined,
+      shape: auraReading.shape,
+      focusTarget: auraReading.focusTarget,
+      focusBonus: auraReading.focusBonus,
       ...opts,
     });
     state.novaFx.push({ x: t.x, y: t.y, radius, life: FLASH_LIFE, maxLife: FLASH_LIFE, color: IMMOLATION_RING_COLOR });

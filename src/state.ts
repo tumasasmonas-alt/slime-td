@@ -383,6 +383,21 @@ export interface ShockwaveRing {
   armorShred?: number;
   armorScaled?: number;
   densityScaled?: number;
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Vigilance's
+  // reading on Shockwave — baked in at fire time like every other RESOLVE
+  // field above, since the ring's own band geometry (bandInner/bandOuter,
+  // systems/shockwave.ts) is computed per-tick and has nowhere else to
+  // read a per-ring setting from. Clamps the band's inner edge to at
+  // least this value; usually near-redundant with the ring's own
+  // perimeter-floored start radius, but real once Implosion sends a ring
+  // travelling back inward.
+  vigilanceFloor?: number;
+  // Threat/Triage/Breach/Fixation's aura reading on Shockwave — committed
+  // once at ring creation (weapons/shockwave.ts), not re-evaluated as the
+  // ring travels, since "which coagulant this ring is focused on" is a
+  // property of the shot, not of any one tick's band.
+  focusTarget?: Coagulant;
+  focusBonus?: number;
 }
 
 // Phase 6C-2 (docs/plans/phase-6c2-lance.md S4.2, S5.2): Lance's own
@@ -736,6 +751,23 @@ export interface GameState {
   // never falsely reads as "a coagulant just died."
   lastCoagulantDeathAt: number;
 
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Opportunist's
+  // shared record — wherever the most recent clearAt call landed, written
+  // once per grid/clear.ts's clearAt, from any weapon. A mutated-in-place
+  // object, never reallocated (clearAt is the hottest function in the
+  // game — the plan's own risk S6), so the object identity here is
+  // constant for the run's whole lifetime.
+  lastHitPoint: { x: number; y: number; time: number };
+  // Fixation's per-weapon locked target — the only Targeting gem that
+  // carries state across ticks (the other six are pure functions of the
+  // current field). A direct Coagulant reference, not an id: coagulants
+  // have no id field (Rule 4 identity is derived from mass/maturity/shape,
+  // not tracked), and object identity is exactly the "same blob" test
+  // this needs. Read every tick against the live state.coagulants array
+  // and dropped once the referenced coagulant's mass reaches 0 — never a
+  // stale pointer kept past its target's death (systems/targetingGems.ts).
+  fixationTarget: Partial<Record<WeaponKey, Coagulant>>;
+
   // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10a): the HUD's
   // overall-DPS readout, replacing the deleted global DMG/SPD passives
   // readout. `dpsAccum` is mass destroyed since the last frame — every
@@ -841,6 +873,12 @@ export function freshState(): GameState {
     bladeStreak: {},
     bladeWhirlUntil: {},
     lastCoagulantDeathAt: -Infinity,
+    // -Infinity so Opportunist's recency check naturally fails until a
+    // real hit lands, falling back to its default acquire — the same
+    // "don't do nothing for 90 seconds" guarantee every other Targeting
+    // gem's acquire function gives itself.
+    lastHitPoint: { x: 0, y: 0, time: -Infinity },
+    fixationTarget: {},
 
     pendingEmissions: [],
     pendingLevelUps: 0,

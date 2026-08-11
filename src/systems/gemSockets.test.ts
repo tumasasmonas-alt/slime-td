@@ -49,6 +49,41 @@ describe('gemLegalFor', () => {
     const state = freshState();
     expect(gemLegalFor(state, 'bolt', 'amplifier')).toBe(false);
   });
+
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): a Targeting
+  // gem replaces ACQUIRE wholesale, so at most one per weapon — refused
+  // here exactly like an already-owned kind, so the UI never needs its
+  // own copy of the rule.
+  describe('at most one Targeting gem per weapon (Phase 6D-1)', () => {
+    it('refuses a second Targeting gem, even a different kind, once one is socketed', () => {
+      const state = freshState();
+      state.weapons.bolt = 1;
+      state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'threatPriority' }] };
+      expect(gemLegalFor(state, 'bolt', 'triage')).toBe(false);
+    });
+
+    it('does not block a Behaviour or Amplifier gem alongside an already-socketed Targeting gem', () => {
+      const state = freshState();
+      state.weapons.bolt = 1;
+      state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'threatPriority' }] };
+      expect(gemLegalFor(state, 'bolt', 'amplifier')).toBe(true);
+    });
+
+    it('a Targeting gem is still legal on a weapon with no Targeting gem socketed yet, even with other gems present', () => {
+      const state = freshState();
+      state.weapons.bolt = 1;
+      state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'amplifier' }] };
+      expect(gemLegalFor(state, 'bolt', 'threatPriority')).toBe(true);
+    });
+
+    it('the same Targeting gem is still legal in a DIFFERENT weapon', () => {
+      const state = freshState();
+      state.weapons.bolt = 1;
+      state.weapons.chain = 1;
+      state.weaponSockets.bolt = { extensions: [], gems: [{ id: 1, kind: 'threatPriority' }] };
+      expect(gemLegalFor(state, 'chain', 'threatPriority')).toBe(true);
+    });
+  });
 });
 
 describe('socketGem', () => {

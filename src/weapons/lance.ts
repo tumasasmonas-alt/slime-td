@@ -5,6 +5,7 @@ import { extensionLevel } from '../systems/extensions';
 import { scheduleEmission } from '../systems/emissions';
 import { resolveOpts } from '../systems/resolveOpts';
 import { highestMassPoint } from '../systems/targeting';
+import { targetingAcquire } from '../systems/targetingGems';
 import { weaponMods } from '../systems/weaponMods';
 import { LANCE_LINGER, LANCE_LINGER_MULT, LANCE_RANGE, lanceBeamWidth, lanceChargeTime, lanceDamage } from '../tuning/weapons';
 import type { ReadyFn, WeaponPipeline } from './pipeline';
@@ -24,10 +25,18 @@ const OVERCHARGE_POWER_MULT: readonly [number, number, number] = [1.7, 2.1, 2.6]
 
 // Phase 6C-2 (docs/plans/phase-6c2-lance.md S4.2, S5.2): NOT
 // cooldownReady — Lance owns its own charge bookkeeping so the renderer
-// can draw a live "who is it charging at" tell. Re-acquires
-// highestMassPoint EVERY tick while charging, not only at the moment it
-// fires, so the target line jumps to a newly-formed bigger coagulant
-// instead of lying about what's about to get hit.
+// can draw a live "who is it charging at" tell. Re-acquires its target
+// EVERY tick while charging, not only at the moment it fires, so the
+// target line jumps to a newly-formed bigger coagulant instead of lying
+// about what's about to get hit.
+//
+// Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Lance's own
+// targeting IS Threat Priority, built in — routed through the exact same
+// targetingAcquire wrapper every other weapon uses, with highestMassPoint
+// as its default, so socketing a different Targeting gem into Lance
+// genuinely changes what it charges toward, and the two can never drift.
+const lanceTargetAcquire = targetingAcquire('lance', () => LANCE_RANGE, (state) => highestMassPoint(state, LANCE_RANGE));
+
 const lanceReady: ReadyFn = (state, dt, lvl) => {
   const grid = state.grid;
   if (!grid) return false;
@@ -35,7 +44,7 @@ const lanceReady: ReadyFn = (state, dt, lvl) => {
   const overchargeLvl = extensionLevel(state, 'lance', 'lanceOvercharge');
   const chargeTimeMult = overchargeLvl > 0 ? 1 + OVERCHARGE_TIME_MULT[overchargeLvl - 1]! : 1;
   const chargeTime = (lanceChargeTime(lvl) * chargeTimeMult) / mods.rate;
-  const target = highestMassPoint(state, LANCE_RANGE);
+  const target = lanceTargetAcquire(state);
   const progress = (state.lanceCharge?.progress ?? 0) + dt;
   state.lanceCharge = { progress, chargeTime, target };
   if (progress < chargeTime) return false;

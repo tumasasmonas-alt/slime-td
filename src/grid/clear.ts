@@ -93,6 +93,17 @@ export interface ClearOptions {
   // flat `1 + densityScaled` bonus, applied in the coagulant loop below.
   densityScaled?: number;
 
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Threat
+  // Priority/Triage/Breach Priority/Fixation's aura reading — a bonus
+  // fraction applied only to the ONE coagulant that equals `focusTarget`
+  // by reference (coagulants have no id field; identity is the object
+  // itself), so a weapon with no aim can still express "focus damage on
+  // whichever one this gem's selection criterion picked" without a second
+  // damage path. `focusTarget` is set by systems/targetingGems.ts, never
+  // constructed here.
+  focusTarget?: Coagulant;
+  focusBonus?: number;
+
   // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S3): the shape
   // this call damages, generalizing "distance from (x,y), capped at
   // radiusPx" so Shockwave's travelling ring and (6C-2) Lance's beam can
@@ -280,6 +291,16 @@ function shapeCoagulantOverlap(shape: ClearShape | undefined, x: number, y: numb
 export function clearAt(state: GameState, x: number, y: number, power: number, opts: ClearOptions = {}): number {
   const grid = state.grid;
   if (!grid) return 0;
+  // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Opportunist's
+  // shared record — a single mutation of the existing object, never a new
+  // allocation (clearAt is the hottest function in the game, per the
+  // plan's own risk S6). Written unconditionally, on every hit regardless
+  // of which weapon or how much damage actually lands, since "wherever
+  // damage last landed" is honestly about the hit's location, not a
+  // confirmed kill.
+  state.lastHitPoint.x = x;
+  state.lastHitPoint.y = y;
+  state.lastHitPoint.time = state.time;
   // Bucketing (not the yield formula below) needs the current age floor —
   // see tuning/maturity.ts's maturityBucket for why a fixed 0..1 split
   // can't stay legible as the floor itself rises over a run.
@@ -407,6 +428,14 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     // this collapses to a flat `1 + densityScaled` bonus rather than a
     // per-cell sample.
     const densityMult = opts.densityScaled ? 1 + opts.densityScaled : 1;
+    // Phase 6D-1: Threat Priority/Triage/Breach Priority/Fixation's aura
+    // reading — only the one coagulant `systems/targetingGems.ts` picked
+    // gets the bonus, everything else this hit's radius also overlaps is
+    // unaffected. Reference equality, not a kind/mass comparison: the
+    // selection already happened once, upstream, and re-deriving "which
+    // one was picked" here from mass/distance would risk silently picking
+    // a different coagulant than the one the gem's own description named.
+    const focusMult = opts.focusTarget === c && opts.focusBonus ? 1 + opts.focusBonus : 1;
     const raw =
       effectivePower *
       DAMAGE_COEFF *
@@ -416,7 +445,8 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       COAGULANT_DAMAGE_SCALE *
       primingMult *
       shatterMult *
-      densityMult;
+      densityMult *
+      focusMult;
     const removeAmt = clamp(raw, 0, c.mass);
     if (opts.chill) c.chilledUntil = Math.max(c.chilledUntil, state.time + opts.chill);
     if (opts.armorShred) {

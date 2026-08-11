@@ -134,4 +134,106 @@ acquire inherits that fallback rather than rediscovering the problem.
 
 ## 7. As-built delta
 
-*To be filled in when this ships.*
+**Shipped 2026-08-11.** Built largely as planned, with two real
+deviations found while implementing — both narrow the plan's own table
+rather than contradicting it, and both are recorded here rather than
+silently reinterpreted (`CLAUDE.md`'s ground-truth protocol: raised, not
+decided unilaterally, though these are implementation-level findings
+within the scope of building this very batch, not disputes with an
+already-shipped decision).
+
+**Deviation 1 — Vigilance is also refused on `orbital` (Blades).** The
+plan's §1 table lists Vigilance as real on every aura. Found while
+implementing: Blades' orbit radius already floors at `perimeter + margin`
+(`tuning/weaponGeometry.ts`'s `towerCenteredRadius`, Decision 16) — the
+blade's own center is structurally never inside the perimeter. "Only
+outside the perimeter" would therefore be a guaranteed no-op on Blades,
+not a real choice — exactly the silent-inert failure §4 test 2 exists to
+catch, just caught during the build instead of after. Vigilance now
+refuses `orbital` the same way Field Priority and Opportunist refuse
+`orbital`/`pulse`/`ring` — three refusals total, not two.
+
+**Deviation 2 — Breach Priority's aura reading is a focus-damage bonus,
+not a literal inner-edge pull.** §1's table describes it as "the aura's
+inner edge is pulled inward, prioritising whatever got closest" — the
+mirror of Vigilance's outward push. But a plain disc hit's inner edge is
+already 0; there is nothing to pull further inward. Implemented instead as
+bonus damage to whichever coagulant within the aura's radius is closest to
+the tower — mechanically the same `focusTarget`/`focusBonus` machinery as
+Threat Priority/Triage/Fixation, just keyed on proximity instead of mass.
+This keeps the *thematic* mirror (Vigilance ignores the near field; Breach
+Priority especially rewards it) without inventing a second mechanism.
+
+**What shipped:**
+
+1. **`types.ts`**: `TargetingGemKey` (7 keys), folded into `GemKey`.
+2. **`tuning/gems.ts`**: `TARGETING_GEM_DEFS`, `isTargetingGem`, and every
+   dispatch function (`gemDesc`/`gemGenericDesc`/`gemName`/`gemIcon`/
+   `gemSupportsDelivery`/`ALL_GEM_KEYS`) extended to cover the class —
+   card pool and inventory UI needed no changes beyond this, confirming
+   `systems/cards.ts`'s pool-building is genuinely gem-class-agnostic.
+3. **`systems/gemSockets.ts`**: `gemLegalFor` refuses a second Targeting
+   gem on the same weapon, alongside its existing archetype/duplicate
+   checks.
+4. **`systems/targeting.ts`**: `highestMassPoint` refactored onto a new
+   shared `bestCoagulant(state, x, y, maxRange, isBetter)` loop (behaviour
+   unchanged, confirmed by Lance's existing tests still passing unmodified)
+   plus four new acquire functions — `weakestCoagulantPoint`,
+   `densestFieldPoint`, `deepestIncursionPoint`, `outsidePerimeterPoint` —
+   each mirroring `highestMassPoint`'s nearest-frontier fallback except
+   `outsidePerimeterPoint`, which returns `null` on purpose when nothing
+   outside the perimeter qualifies (that's the gem working, not the
+   "does nothing for 90 seconds" failure the others guard against).
+5. **`systems/targetingGems.ts`** (new): the dispatch layer.
+   `targetingAcquire(key, maxRangeFor, defaultAcquire)` wraps a weapon's
+   ACQUIRE stage; `auraTargetingReading(state, key, originX, originY,
+   radius)` gives the self-centered reading (a `ClearShape` for Vigilance,
+   or a `focusTarget`/`focusBonus` pair for the other four legal-on-aura
+   gems). Fixation's per-weapon lock (`state.fixationTarget`) is shared
+   between both paths so a weapon's ACQUIRE-stage and aura-stage readings
+   (were it ever legal on both, which no weapon currently is) couldn't
+   drift.
+6. **`grid/clear.ts`**: `ClearOptions.focusTarget`/`focusBonus` — a
+   reference-equality bonus multiplier in the coagulant loop, no second
+   damage path. `state.lastHitPoint` written (mutated in place, not
+   reallocated) unconditionally at the top of every `clearAt` call, for
+   Opportunist.
+7. **`state.ts`**: `lastHitPoint`, `fixationTarget`, and three new
+   `ShockwaveRing` fields (`vigilanceFloor`, `focusTarget`, `focusBonus`) —
+   Shockwave's own damage happens per-tick in `systems/shockwave.ts`, not
+   in its pipeline's `deliver`, so its aura reading is computed once at
+   ring creation and carried on the entity rather than recomputed per
+   tick.
+8. **Every weapon wired**: `bolt`/`chain`/`poison`/`missile`/`fission`
+   swap `acquire: frontierAcquire` for `acquire:
+   targetingAcquire(key, ..., frontierAcquire)`; `lance`'s `lanceReady`
+   routes its own `highestMassPoint` call through the same wrapper — "Threat
+   Priority, built in," per the plan, now literally true rather than a
+   parallel implementation; `frost`/`immolation`/`blades` call
+   `auraTargetingReading` directly in `deliver`; `shockwave` computes it
+   once at ring creation and `systems/shockwave.ts`'s tick loop reads the
+   stored fields, clamping the travelling band's inner edge to
+   `vigilanceFloor` (usually redundant with the ring's own perimeter-
+   floored start, real once Implosion sends it travelling back inward).
+
+**Tests:** legality matrix (all 7 gems × 6 archetypes, `tuning/gems.test.ts`);
+the four new acquire functions plus their fallback behaviour
+(`systems/targeting.test.ts`); the full dispatcher — every gem kind, both
+paths, Fixation's persistence and re-target-on-death, Opportunist's
+recency window (`systems/targetingGems.test.ts`, new file); the
+at-most-one-per-weapon socket-time refusal (`systems/gemSockets.test.ts`);
+and end-to-end wiring proofs in each weapon's own test file
+(`bolt`/`frost`/`immolation`/`blades`/`lance`/`systems/shockwave`) —
+Threat Priority/Triage's focus bonus tested as a **paired with/without-gem
+mass-loss comparison**, not a loss-*ratio* comparison across different
+masses (an early draft of these tests compared ratios and failed
+correctly — a smaller coagulant loses a much larger fraction of its own
+mass than a bigger one even with zero bonus, since a hit's absolute
+damage is roughly mass-independent, so the ratio was measuring that
+confound instead of the gem's actual effect). 731 tests pass; `tsc
+--noEmit` clean.
+
+**Not done this session, per the owner's instruction:** no live/browser
+playtest — same departure as 6D-0's as-built delta records, continued
+through this batch. 6D-1 was built immediately after 6D-0 without the
+playtest 6D-0's own plan called for in between.
