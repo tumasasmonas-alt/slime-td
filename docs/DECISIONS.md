@@ -3034,6 +3034,42 @@ keeps fixing in gem copy, just in pixels instead of text.
 
 ---
 
+**96. The core could not die while any level of the Regen core gem was
+socketed — found in live play, 2026-08-11, immediately after the Radar
+Sweep session.**
+📋 *2026-08-11.*
+
+`main.ts`'s per-frame `update()` ran `updateTowerTick` (passive Regen
+healing) *before* the `state.tower.hp <= 0` game-over check, both inside
+the same frame. `damageTower` (`systems/tower.ts`) clamps a lethal hit to
+exactly 0 via `Math.max(0, ...)` — every tower-damage source (contact
+pressure, coagulant arrival splatter) runs earlier still, inside
+`runSimulation`. With Regen socketed, `updateTowerTick` added a small
+positive heal (`REGEN_PER_LEVEL * regenLvl * dt`, uncapped on the low
+end) immediately after that clamp, on the *same* frame — pushing hp
+strictly back above 0 before the death check ever saw the zeroed value.
+Deterministic, not rare: any level of Regen made the tower unkillable,
+since a fatal frame's own healing tick always ran before that frame's
+own death check.
+
+**Fix:** reordered `update()` so the death check runs immediately after
+the HUD/DPS sync that follows all of a frame's damage sources, and
+`updateTowerTick` now runs *after* it (with an early `return` once the
+game is over, skipping a now-pointless regen tick). Verified live: a
+fresh run with no Regen picked up (Chaining/Expansion/Echo/Overclock
+instead, across five level-ups) correctly hit "Core Overwhelmed" at
+00:50 — the death path itself was never broken, only reachable, once
+regen no longer got a chance to intervene first.
+
+No dedicated regression test — `main.ts` is DOM-wiring entry-point code
+with no test file of its own (consistent with the rest of the project:
+`systems/` modules are unit tested, `main.ts`'s orchestration isn't). The
+invariant this fix protects — a fatal hit's own frame must resolve to
+game-over before anything in that same frame can heal it back above 0 —
+is now stated directly in `main.ts`'s own comment at the check.
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

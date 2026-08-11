@@ -163,7 +163,6 @@ function update(dt: number): void {
   updateNovaFx(state, dt);
   updateBeamFx(state, dt);
   updateClouds(state, dt);
-  updateTowerTick(state, dt); // regen + shake decay
   updateAnnounceFade(hudRefs, state, dt);
   if (state.grid && state.slimeLayer) {
     flushDirtyCells(state.grid, state.slimeLayer, state.dirty);
@@ -172,10 +171,23 @@ function update(dt: number): void {
   syncUpgradeOverlay(cardRefs, state);
   updateHud(hudRefs, state);
 
+  // Checked BEFORE updateTowerTick's regen tick, not after (bug found in
+  // live play, 2026-08-11): damageTower() clamps a lethal hit to exactly
+  // 0, and every tower-damage source (contact.ts, coagulants.ts's arrival
+  // splatter) runs inside runSimulation() above, well before this point —
+  // but regen used to run between that damage and this check, healing a
+  // fraction of a point back above 0 on the very same frame a hit would
+  // otherwise have been lethal. Any socketed Regen core gem (even level
+  // 1) made this deterministic, not rare: the tower could never actually
+  // die, since regen got a chance to "rescue" it every single frame hp
+  // would have hit 0. Regen now runs after this check instead.
   if (state.tower.hp <= 0 && state.running) {
     state.running = false;
     showGameOver(overlayRefs, state);
+    return;
   }
+
+  updateTowerTick(state, dt); // regen + shake decay
 }
 
 function render(): void {

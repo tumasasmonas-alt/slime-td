@@ -20,6 +20,26 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
+### 🔴 Immolation/Shockwave pulses grant XP for clearing unrevealed ("invisible") density — investigation in progress.
+
+Found in the same 2026-08-11 visual-testing pass as Decision 96 (the
+Regen death bug). `grid/clear.ts`'s `applyCellDamage` reads
+`grid.growth[i]` directly and never checks `isRevealedIdx` — it removes
+mass (and that mass feeds `dropGemShower`'s XP grant) regardless of
+whether a cell has actually crossed its own reveal threshold yet. This
+is the same class of bug CLAUDE.md's "known sharp edges" section already
+names ("must gate on revealed density, never raw... raw density can
+cross a threshold before a cell is actually visible") and that
+`contact.ts` was already fixed to respect — `clearAt`'s own grid-cell
+damage path never got the same fix. Self-centered aura weapons
+(Immolation, Shockwave, Frost, Blades) are hit hardest since their whole
+coverage area is chosen without regard to what's revealed nearby (unlike
+targeted weapons, which at least centre on a revealed point) — and 6D-0's
+aura reach buff made this much more visible by sweeping a far bigger
+area of low-density, not-yet-revealed ground every pulse. Matches the
+owner's report exactly: XP with nothing visibly destroyed on screen.
+**Not yet fixed — next step.**
+
 ### 🔴 A fuller playtest is still owed — the first pass found real problems, now fixed; unverified whether the fixes are right.
 
 **6D-0, 6D-1 and 6D-2 all shipped 2026-08-11 with typecheck + `vitest run`
