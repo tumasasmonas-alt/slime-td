@@ -20,45 +20,115 @@ Bugs, TODOs, and ideas in one list.
 
 ## Now
 
-### ▶ Phase 6D — planned in full, greenlit, four sub-batches. **Start with 6D-0.**
+### 🔴 A playtest is owed — three batches shipped 2026-08-11, none verified by play.
 
-Planned 2026-08-10 evening. **No code written yet.** Full reasoning:
-`docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`; umbrella
-`docs/plans/phase-6d-conditional-targeting-gems.md`.
+**6D-0, 6D-1 and 6D-2 all shipped in one session with typecheck +
+`vitest run` only**, at the owner's explicit instruction (weekly-limit
+constraint). This overrode `phase-6d0-balance-shape.md` §8's own
+"playtest before 6D-1" gate. Decisions 88/89/91 record it; full reasoning
+in `docs/sessions/2026-08-11-phase-6d-batches.md` §1.
 
-- **6D-0** — balance shape (`phase-6d0-balance-shape.md`). Unbounded
-  escalation, opening ~10% easier, **the aura reach fix**, weapon spread
-  from both ends, armour raised/time-scaled/bounded. Tuning only.
-  **Playtest before 6D-1** — its result changes what the rest should be.
-- **6D-1** — 7 Targeting gems (`phase-6d1-targeting-gems.md`).
-  Scattershot cut. Includes the aura ACQUIRE problem: 5 real readings +
-  2 honest refusals.
-- **6D-2** — 9 Conditional gems (`phase-6d2-conditional-gems.md`).
-  Shatter and Sterilizer cut as duplicates of shipped 6B extensions.
-- **6D-3** — the gem-reality fix (`phase-6d3-gem-reality.md`). Largest;
-  touches `clearAt`. Makes six already-shipped gems do what they claim.
+**The coupled risk:** 6D-0 moved the aura weapons' reach from ~105px to
+165–210px, and 6D-1's five aura-targeting readings assume that move
+landed them somewhere with mass in it. **If 6D-0's numbers are wrong,
+6D-1's aura gems are built on a wrong assumption** — check the two
+together, never one alone.
 
-**The roadmap's "cheap batch, 0 new renderers" estimate for 6D is now
-wrong** — that was written before the audit. 6D-3 alone needs new
-rendering (satellite orbits, concentric rings). `phase-6-roadmap.md` §3's
-6D row should be corrected when 6D lands.
+**What to watch, in priority order:**
+1. **Do the aura weapons engage at all now?** If still dead, reach moved
+   too little; if they trivialise the opening, too much — and §3's
+   separate ~10% opening cut is the first thing to revert (two
+   constants: `AMBIENT_BASE`, `CREEP_RAMP`).
+2. **Does the late game still flatten?** If it now spikes instead,
+   `LATE_GROWTH_PER_MINUTE` (1.05/min, `tuning/growth.ts`) is the lever.
+3. **Do the Targeting gems read as real choices** — especially the five
+   aura readings, the most invented part of the batch.
+4. **Does any stack of Conditional gems trivialise the curve?** Nine
+   multipliers compound; `phase-6d2-conditional-gems.md` §7 flagged this.
 
-### 🔴 Six shipped gems don't do what they say — folded into 6D-3.
+### ▶ Phase 6D-3 — the gem-reality fix. The one sub-batch still unbuilt.
+
+`docs/plans/phase-6d3-gem-reality.md`. Largest of the four, touches
+`clearAt` hardest. Makes six already-shipped gems do what their cards
+claim (the entry below). Was outside the 2026-08-11 session's stated
+scope. **6D-0/6D-1/6D-2 are all shipped** — see the Done section.
+
+**The roadmap's "cheap batch, 0 new renderers" estimate for 6D was
+wrong** — written before the audit. 6D-3 alone needs new rendering
+(satellite orbits, concentric rings). `phase-6-roadmap.md` §3's 6D row
+has been corrected.
+
+### 🔴 Six shipped gems don't do what they say — still open, 6D-3's job.
 
 Recorded here as a bug, not just a plan item, because it is a shipped
 defect: **Fork, Chaining, Bounce and Ricochet are wired into Bolt Turret
 alone** (only `weapons/bolt.ts` imports `projectileFlags()`), and
 **Multishot/Formation divide damage unconditionally** — a precise zero on
 Blades, a downgrade on Frost. The inventory copy describes effects that
-never happen. `tuning/gems.ts:158` discloses part of this as "projectile
+never happen. `tuning/gems.ts` discloses part of this as "projectile
 archetype only"; the reality is one weapon of ten.
 
-### 🟡 Blades' `perLevel` reach term has never worked — folded into 6D-0.
+**Unchanged by the 2026-08-11 batches** — 6D-1 and 6D-2 added new gem
+classes, they did not touch the Behaviour class this bug lives in.
 
-`BLADE_REACH.perLevel` is 2, so `64 + 2×(lvl-1)` never clears the
-`perimeter + margin` = 105 floor at any level, ever. Orbiting Blades'
-radius is identical at level 1, 8 and 12. Immolation's clears its own
-floor only at level 7. Guarded by a new test in 6D-0.
+### 🟡 A gem and its twin extension don't stack — the gem wins (Decision 90).
+
+Penetration reuses `armorIgnoreCap` (Lance's Piercing Core) and Corrosion
+reuses `armorShred` (Poison's Corrosive). Every weapon spreads the
+gem-derived `...opts` **last** in its own `clearAt` call, so socketing
+both the gem and the matching extension on one weapon gives the gem's
+value, not the sum. Not a no-op and not a crash — just not additive.
+Left as-is deliberately; noted so nobody assumes Penetration + Piercing
+Core on Lance is stronger than either alone.
+
+### ✅ Phase 6D-0/6D-1/6D-2 — shipped, committed, pushed 2026-08-11.
+
+Three separate commits (`4c211f0`, `3e4fbe8`, `e6ff7d2`), docs updated
+between each. Decisions 88–91. Full account:
+`docs/sessions/2026-08-11-phase-6d-batches.md`; per-batch as-built deltas
+in each plan's own final section. 828 tests, typecheck clean.
+**Not playtested — see the 🔴 entry at the top of this file.**
+
+- **6D-0** — unbounded ambient/event escalation (both curves used to
+  plateau at t=560s/t=420s while player power never did); opening ~10%
+  softer; **the aura reach fix** (Immolation 66→190, Frost 115→210,
+  Blades 64→165, plus Blades' `HIT_RADIUS` 16→26 and level-1 blade count
+  1→2); Chain Bolt/Fission nerfed, Shockwave buffed; armour 20→35 with a
+  **bounded** time term. *Also closes the old "Blades' `perLevel` reach
+  term has never worked" entry — `BLADE_REACH.perLevel` 2→14 now clears
+  the floor, guarded by a `bladeRadius` level-response test.*
+- **6D-1** — 7 Targeting gems via a new dispatch layer
+  (`systems/targetingGems.ts`). Two deviations from the plan, both found
+  while implementing: **Vigilance also refuses `orbital`** (Blades' orbit
+  already floors outside the perimeter, so it would be a guaranteed
+  no-op — the exact defect the batch exists to prevent, one table row
+  from shipping inside the fix for it), and **Breach Priority's aura
+  reading is a focus-damage bonus**, not a literal inner-edge pull (a
+  disc's inner edge is already 0).
+- **6D-2** — 9 Conditional gems, all RESOLVE-stage `ClearOptions`
+  fields, no second damage path. **Contained the session's only serious
+  bug** (Decision 91) — see the entry below.
+
+### ✅ Conditional gems were silently inert on 6 of 10 weapons — caught pre-ship, 2026-08-11.
+
+Decision 91. Fields reached each weapon's spawned entity fine, but
+`systems/projectiles.ts` (2 call sites), `systems/clouds.ts` and
+`systems/shockwave.ts` each read that entity back at **impact** time
+through a hardcoded field list predating the batch — none of the nine
+new fields was on any of them. Bolt/Chain/Missile/Fission/Poison/
+Shockwave would have dropped every Conditional gem at the moment of
+impact. `tsc` was clean and all 823 tests passed, because every existing
+test checked one boundary at a time and the gap lives strictly between
+them.
+
+Fixed via a shared `ConditionalGemFields` interface in `state.ts` +
+forwarding at all four call sites; regression guards added in all three
+consumer test files.
+
+**The rule worth carrying:** *a field reaching an entity at spawn is not
+evidence it reaches `clearAt` at resolution.* Any future `ClearOptions`
+field intended to work on the deferred-entity weapons must be checked at
+the consumer, not just set in the weapon file.
 
 ### ✅ The Phase 5 gate — ran and passed, 2026-08-10. Decision 87.
 

@@ -66,10 +66,33 @@ batches**, continuing the departure Decisions 88/89 recorded. **828 tests
 pass, `tsc --noEmit` clean.**
 
 **6D-0/6D-1/6D-2 are shipped; 6D-3 (the gem-reality fix) was not part of
-this session's scope and remains unbuilt.** Next: a real playtest — none
-of the three batches this session shipped has been verified by play — or
-`docs/plans/phase-6d3-gem-reality.md` if the owner wants to keep building
-before that playtest happens.
+this session's scope and remains unbuilt.**
+
+**▶ MACHINE HANDOFF — pick up here.** Tree is clean, everything pushed to
+`main` (`e6ff7d2`). Full session account:
+`docs/sessions/2026-08-11-phase-6d-batches.md`.
+
+**The next session has a real choice to make, and it should be made
+deliberately rather than by momentum:**
+
+- **Option A — playtest first (recommended).** Three batches shipped
+  unverified. 6D-0 moved the aura weapons' reach from ~105px to
+  165–210px, and **6D-1's five aura-targeting gem readings assume that
+  move landed them somewhere with mass in it** — the two are a coupled
+  pair, and if 6D-0's numbers are wrong, 6D-1's gems are built on a wrong
+  assumption. What to watch, and which lever to reach for in each case,
+  is written out in `docs/BACKLOG.md`'s top entry.
+- **Option B — build 6D-3 first** (`docs/plans/phase-6d3-gem-reality.md`),
+  the last unbuilt sub-batch: the gem-reality fix that makes six
+  already-shipped gems do what their cards claim. Largest of the four,
+  touches `clearAt` hardest. Choosing this means carrying four unverified
+  batches instead of three.
+
+Either way, **read Decision 91 before adding any new `ClearOptions`
+field** — this session's one serious bug was a field that reached each
+weapon's spawned entity correctly and was then silently dropped at
+impact by three consumers with hardcoded field lists, invisible to both
+typecheck and 823 passing tests.
 
 **Previously:** 2026-08-11, **Phase 6D-1 shipped** — Decision 89: the 7
 Targeting gems, each replacing a weapon's ACQUIRE stage via a new
@@ -548,10 +571,12 @@ src/
 
 *Newest first.*
 
-### 2026-08-11 — Phase 6D-2 shipped: the Conditional gems (Decisions 90–91) — Phase 6D complete
+### 2026-08-11 — Phase 6D-2 shipped: the Conditional gems (Decisions 90–91)
 
-**Full account:** `docs/plans/phase-6d2-conditional-gems.md` (build + §8
-as-built). Umbrella: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
+**Full account:** `docs/sessions/2026-08-11-phase-6d-batches.md` (the
+whole session, all three batches) and
+`docs/plans/phase-6d2-conditional-gems.md` (build + §8 as-built).
+Umbrella: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
 
 **⚠️ Third and last of the 6D batches built with no playtest in between**,
 per the owner's explicit instruction — same departure Decisions 88/89
@@ -636,8 +661,9 @@ see Decisions 88/89/91.
 
 ### 2026-08-11 — Phase 6D-1 shipped: the Targeting gems (Decision 89)
 
-**Full account:** `docs/plans/phase-6d1-targeting-gems.md` (build + §7
-as-built). Umbrella: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
+**Full account:** `docs/sessions/2026-08-11-phase-6d-batches.md` §3 and
+`docs/plans/phase-6d1-targeting-gems.md` (build + §7 as-built).
+Umbrella: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
 
 **⚠️ Continues the departure Decision 88 recorded** — built immediately
 after 6D-0 in the same session, no live playtest in between, per the
@@ -709,8 +735,9 @@ weapon's own test file. **731 tests pass, `tsc --noEmit` clean.**
 
 ### 2026-08-11 — Phase 6D-0 shipped: the balance-shape tuning pass (Decision 88)
 
-**Full account:** `docs/plans/phase-6d0-balance-shape.md` (build + §10
-as-built delta). Umbrella/findings: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
+**Full account:** `docs/sessions/2026-08-11-phase-6d-batches.md` §2 and
+`docs/plans/phase-6d0-balance-shape.md` (build + §10 as-built delta).
+Umbrella/findings: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
 
 **⚠️ Departure from the plan: no playtest before 6D-1.** The plan's own
 §8 says *"playtest before 6D-1 — this batch is the one whose result
