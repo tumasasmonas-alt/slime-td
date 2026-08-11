@@ -72,17 +72,18 @@ untouched** — see the entry below for what's still unverified. **902
 tests pass, `tsc --noEmit` clean**, plus two browser smoke tests (game
 loads, no console errors — neither is a full playtest).
 
-**▶ MACHINE HANDOFF — pick up here.** No code work is queued — this was
-a direct response to playtest feedback, not a plan step. **A fuller
-playtest is the next real step**, watching specifically: does Radar
-Sweep actually read as a sweep in play (nobody has watched it fire in a
-real run yet), did the Immolation/Shockwave damage cuts land right or
-overshoot the other way, do Blades/Frost need the same treatment (either
-the plain cut, or Radar Sweep's shape fix if either has a similarly
-"instant, full-coverage" extension), does the armour raise deny
-weak/unlevelled weapons too hard, does the gem-ramp's shape (0.15 floor,
-level-10 end) feel right. Full list: `docs/BACKLOG.md`'s top entry. Once
-that's in, 6D-3 Steps 4–5 (below) are still the next *build* item.
+**▶ MACHINE HANDOFF — pick up here.** Tree is clean, everything pushed to
+`main` (`8faaf54`). No code work is queued — this was a direct response
+to playtest feedback, not a plan step. **A fuller playtest is the next
+real step**, watching specifically: does Radar Sweep actually read as a
+sweep in play (nobody has watched it fire in a real run yet), did the
+Immolation/Shockwave damage cuts land right or overshoot the other way,
+do Blades/Frost need the same treatment (either the plain cut, or Radar
+Sweep's shape fix if either has a similarly "instant, full-coverage"
+extension), does the armour raise deny weak/unlevelled weapons too hard,
+does the gem-ramp's shape (0.15 floor, level-10 end) feel right. Full
+list: `docs/BACKLOG.md`'s top entry. Once that's in, 6D-3 Steps 4–5
+(below) are still the next *build* item.
 
 **Previously:** 2026-08-11 (**Phase 6D-3 partially shipped** —
 Decision 92: Steps 1–3 of the gem-reality fix. Fork/Chaining/Bounce/
