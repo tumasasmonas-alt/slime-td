@@ -48,6 +48,20 @@ export function updateClouds(state: GameState, dt: number): void {
         kickback: c.kickback,
         priming: c.priming,
         armorShred: c.armorShred,
+        // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3,
+        // Decision 91): the nine Conditional gems — same forwarding gap
+        // projectiles.ts had, fixed the same way, for Poison (the only
+        // cloud weapon).
+        armorIgnoreCap: c.armorIgnoreCap,
+        maturityScaled: c.maturityScaled,
+        saturationScaled: c.saturationScaled,
+        massScaledUp: c.massScaledUp,
+        massScaledDown: c.massScaledDown,
+        cullingFinishFraction: c.cullingFinishFraction,
+        desperationScaled: c.desperationScaled,
+        proximityScaled: c.proximityScaled,
+        momentumMult: c.momentumMult,
+        momentumKey: c.momentumKey,
       });
     }
     if (c.life > 0) remaining.push(c);

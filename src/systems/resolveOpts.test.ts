@@ -53,6 +53,111 @@ describe('resolveOpts', () => {
     state.weaponSockets.frost = { extensions: [], gems: [{ id: 1, kind: 'pierce' }] };
     expect(resolveOpts(state, 'bolt')).toEqual({});
   });
+
+  // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3): the nine
+  // Conditional gems. Penetration/Corrosion reuse fields that already
+  // exist (armorIgnoreCap/armorShred, from Lance's Piercing Core and
+  // Poison's Corrosive) — the guard here is that the GEM path actually
+  // sets them, same as the extension path already does elsewhere.
+  describe('Conditional gems (Phase 6D-2)', () => {
+    it('penetration sets armorIgnoreCap', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'penetration');
+      expect(resolveOpts(state, 'bolt').armorIgnoreCap).toBeGreaterThan(0);
+    });
+
+    it('virulence sets maturityScaled', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'virulence');
+      expect(resolveOpts(state, 'bolt').maturityScaled).toBeGreaterThan(0);
+    });
+
+    it('saturation sets saturationScaled, distinct from densityScaled', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'saturation');
+      const opts = resolveOpts(state, 'bolt');
+      expect(opts.saturationScaled).toBeGreaterThan(0);
+      expect(opts.densityScaled).toBeUndefined();
+    });
+
+    it('giantSlayer sets massScaledUp', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'giantSlayer');
+      expect(resolveOpts(state, 'bolt').massScaledUp).toBeGreaterThan(0);
+    });
+
+    it('culling sets both massScaledDown and cullingFinishFraction', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'culling');
+      const opts = resolveOpts(state, 'bolt');
+      expect(opts.massScaledDown).toBeGreaterThan(0);
+      expect(opts.cullingFinishFraction).toBeGreaterThan(0);
+    });
+
+    it('corrosion sets armorShred', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'corrosion');
+      expect(resolveOpts(state, 'bolt').armorShred).toBeGreaterThan(0);
+    });
+
+    it('desperation sets desperationScaled', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'desperation');
+      expect(resolveOpts(state, 'bolt').desperationScaled).toBeGreaterThan(0);
+    });
+
+    it('proximity sets proximityScaled', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'proximity');
+      expect(resolveOpts(state, 'bolt').proximityScaled).toBeGreaterThan(0);
+    });
+
+    describe('momentum', () => {
+      it('sets momentumKey to the weapon it is socketed into', () => {
+        const state = freshState();
+        socket(state, 'bolt', 'momentum');
+        expect(resolveOpts(state, 'bolt').momentumKey).toBe('bolt');
+      });
+
+      it('momentumMult is 1 (no bonus) with no streak yet', () => {
+        const state = freshState();
+        socket(state, 'bolt', 'momentum');
+        expect(resolveOpts(state, 'bolt').momentumMult).toBe(1);
+      });
+
+      it('momentumMult rises with state.weaponStreak for that weapon', () => {
+        const state = freshState();
+        socket(state, 'bolt', 'momentum');
+        state.weaponStreak.bolt = 3;
+        expect(resolveOpts(state, 'bolt').momentumMult).toBeGreaterThan(1);
+      });
+
+      it('momentumMult is capped — an absurd streak does not produce an absurd multiplier', () => {
+        const state = freshState();
+        socket(state, 'bolt', 'momentum');
+        state.weaponStreak.bolt = 1000;
+        const capped = resolveOpts(state, 'bolt').momentumMult!;
+
+        state.weaponStreak.bolt = 5;
+        const atFive = resolveOpts(state, 'bolt').momentumMult!;
+
+        expect(capped).toBe(atFive); // both clamp to the same cap
+      });
+
+      it('reads THIS weapon\'s own streak, not another weapon\'s', () => {
+        const state = freshState();
+        socket(state, 'bolt', 'momentum');
+        state.weaponStreak.chain = 10; // a different weapon's streak
+        expect(resolveOpts(state, 'bolt').momentumMult).toBe(1); // unaffected
+      });
+    });
+
+    it('a Targeting-class gem contributes nothing to RESOLVE options either', () => {
+      const state = freshState();
+      socket(state, 'bolt', 'threatPriority');
+      expect(resolveOpts(state, 'bolt')).toEqual({});
+    });
+  });
 });
 
 describe('projectileFlags', () => {

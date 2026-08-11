@@ -148,4 +148,75 @@ for a weapon's basic viability.
 
 ## 8. As-built delta
 
-*To be filled in when this ships.*
+**Shipped 2026-08-11.** Built as planned, with one real bug found and
+fixed during implementation, plus two scoped simplifications.
+
+**⚠️ A real bug, caught by the tests this batch's own §5 called for, not
+the browser: three of ten weapons would have shipped every Conditional
+gem silently inert (Decision 91).** `systems/resolveOpts.ts` spreads a
+weapon's socketed Conditional gems into a `ClearOptions`-shaped object at
+*spawn* time, and every weapon already spreads that fully onto whatever
+it creates (a projectile, a cloud, a `ShockwaveRing`) — that half worked
+immediately. What didn't: `systems/projectiles.ts` (two call sites),
+`systems/clouds.ts`, and `systems/shockwave.ts` each read that entity back
+at *impact* time through a **hardcoded field whitelist** written before
+this batch existed — five or six named fields, never all of `ClearOptions`.
+None of the nine new fields were on any of those lists. Bolt, Chain,
+Missile, Fission Charge, Poison and Shockwave — six of the ten weapons —
+would have carried a socketed Conditional gem all the way to the moment
+of impact and then silently dropped it. Frost, Immolation, Blades and
+Lance were unaffected: all four call `clearAt` directly inside their own
+`deliver`, with no entity in between to lose a field.
+
+Found by writing exactly the test plan §5 test 3 asks for ("no gem is a
+silent no-op on any archetype") as an actual spawn-then-impact test
+rather than a spawn-only or impact-only one — the gap is invisible at
+either boundary alone. Fixed by centralizing the nine fields (plus
+`armorIgnoreCap`/`armorShred`, which Penetration/Corrosion reuse) into one
+shared `ConditionalGemFields` interface in `state.ts`, and forwarding all
+of it at all four call sites. Regression guards: new describe blocks in
+`systems/projectiles.test.ts`, `systems/clouds.test.ts`, and
+`systems/shockwave.test.ts`, each a paired with/without comparison proving
+a field set at spawn actually changes the outcome at impact — the shape
+of test that would have caught this before it shipped.
+
+**Simplification 1 — Desperation and Proximity resolve once per `clearAt`
+call, folded into `power` itself**, rather than the plan's more literal
+"both loops" framing for Proximity (which could be read as a per-cell
+distance-from-tower gradient within one hit). Matches Desperation's own
+shape exactly and keeps both cheap — no new per-cell trig on the hot path.
+
+**Simplification 2 — Culling's damage bonus and its instant-finish are
+two independent `ClearOptions` fields** (`massScaledDown`,
+`cullingFinishFraction`) rather than one combined mechanism, since they
+have genuinely different triggers (a continuous mass-relative multiplier
+vs. a one-shot threshold check after the hit lands).
+
+**Field-reuse non-stacking, recorded rather than silently accepted
+(Decision 90):** Penetration reuses `armorIgnoreCap` (Lance's Piercing
+Core) and Corrosion reuses `armorShred` (Poison's Corrosive). Every
+weapon's own `clearAt` call spreads `...opts` (the gem-derived object)
+*last*, after any of its own extension-set fields — so on a weapon
+carrying both the matching extension and the gem, the gem's value wins
+outright rather than the two stacking. Not a bug (no silent no-op, no
+crash), just non-additive — worth knowing before assuming Penetration +
+Piercing Core on Lance is stronger than either alone.
+
+**Tests:** `grid/clear.test.ts` gained a new `Phase 6D-2: Conditional
+gems` block testing every field directly against `ClearOptions` (the
+same level 6A-2's RESOLVE options are tested at) — each as a paired
+with/without-gem comparison on identical targets, not a same-call ratio
+between different targets (a same-call ratio comparison was the first
+draft's mistake for three of these tests too, the same class of error
+Decision 89 already named for the Targeting gems — see the failing-test
+notes in that file's own history). `systems/resolveOpts.test.ts` gained
+per-gem dispatch tests including Momentum's streak-read/cap behaviour.
+`tuning/gems.test.ts` gained the always-legal-everywhere matrix (36
+assertions, 9 gems × 6 archetypes — Conditional gems have no refusal
+table at all, unlike Targeting). Plus the spawn-to-impact regression
+guards named above. **828 tests pass; `tsc --noEmit` clean.**
+
+**Not done this session, per the owner's instruction:** no live/browser
+playtest — continuing the departure Decisions 88/89 already recorded.
+This is the third of three 6D sub-batches built in one session without a
+playtest between any of them.

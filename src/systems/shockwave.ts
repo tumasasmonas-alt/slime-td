@@ -54,6 +54,19 @@ export function updateShockwaveRings(state: GameState, dt: number): void {
         densityScaled: ring.densityScaled,
         focusTarget: ring.focusTarget,
         focusBonus: ring.focusBonus,
+        // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3,
+        // Decision 91): the nine Conditional gems — same forwarding gap
+        // as projectiles.ts/clouds.ts had, fixed the same way.
+        armorIgnoreCap: ring.armorIgnoreCap,
+        maturityScaled: ring.maturityScaled,
+        saturationScaled: ring.saturationScaled,
+        massScaledUp: ring.massScaledUp,
+        massScaledDown: ring.massScaledDown,
+        cullingFinishFraction: ring.cullingFinishFraction,
+        desperationScaled: ring.desperationScaled,
+        proximityScaled: ring.proximityScaled,
+        momentumMult: ring.momentumMult,
+        momentumKey: ring.momentumKey,
       });
     }
     ring.damagedTo = newRadius;

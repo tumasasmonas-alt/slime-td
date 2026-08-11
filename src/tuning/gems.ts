@@ -1,4 +1,4 @@
-import type { AmplifierGemKey, BehaviourGemKey, DeliveryKind, GemKey, TargetingGemKey } from '../types';
+import type { AmplifierGemKey, BehaviourGemKey, ConditionalGemKey, DeliveryKind, GemKey, TargetingGemKey } from '../types';
 
 // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S5): the six
 // Amplifier gems — a per-weapon replacement for the deleted global
@@ -414,11 +414,88 @@ export function isTargetingGem(kind: GemKey): kind is TargetingGemKey {
   return kind in TARGETING_GEM_DEFS;
 }
 
+// Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md): the nine
+// Conditional gems — every one a RESOLVE-stage damage multiplier or
+// debuff (grid/clear.ts's ClearOptions), legal on every weapon. Unlike
+// Amplifier or Targeting, there is no `supports` gate here: none of these
+// nine reads anything archetype-specific (delivery shape, aim, orbit) —
+// only target state (mass, maturity, density, armour) or player state
+// (core HP, hit streak) — so `gemSupportsDelivery` falls through to the
+// same `true` Behaviour gems get, below.
+export interface ConditionalGemDef {
+  readonly name: string;
+  readonly icon: string;
+  readonly desc: string;
+  readonly genericDesc: string;
+}
+
+export const CONDITIONAL_GEM_DEFS: Readonly<Record<ConditionalGemKey, ConditionalGemDef>> = {
+  penetration: {
+    name: 'Penetration',
+    icon: '🗡️',
+    desc: 'Ignores a flat amount of the target\'s armour, capped.',
+    genericDesc: 'Ignores armour up to a cap — the counter to a coagulant\'s own armour, which rises over the course of a run.',
+  },
+  virulence: {
+    name: 'Virulence',
+    icon: '🧬',
+    desc: 'Bonus damage against high-maturity (scarred) ground.',
+    genericDesc: 'Rewards fighting the hardest terrain instead of avoiding it — bonus damage scales with how scarred the ground already is.',
+  },
+  saturation: {
+    name: 'Saturation',
+    icon: '💦',
+    desc: 'Bonus damage scaled by how dense the ground is at the hit.',
+    genericDesc: 'Pays you for hitting dense tissue instead of only being blunted by it — distinct from Pierce, which ignores the density penalty rather than reversing it.',
+  },
+  giantSlayer: {
+    name: 'Giant-Slayer',
+    icon: '🏔️',
+    desc: 'Bonus damage against high-mass coagulants.',
+    genericDesc: 'Scales up against the biggest threats on the field — full bonus at behemoth mass and up.',
+  },
+  culling: {
+    name: 'Culling',
+    icon: '🔪',
+    desc: 'Bonus damage against low-mass coagulants, and instantly finishes ones already near death.',
+    genericDesc: 'The inverse of Giant-Slayer — rewards mopping up the small stuff instead of leaving it to pile up, and finishes off anything already reduced to a sliver of its own starting mass.',
+  },
+  corrosion: {
+    name: 'Corrosion',
+    icon: '☣️',
+    desc: 'Hits strip a fraction of the target\'s armour for a few seconds.',
+    genericDesc: 'A universal armour strip, not just Poison\'s speciality — matters once armour actually scales with time (6D-0).',
+  },
+  desperation: {
+    name: 'Desperation',
+    icon: '💢',
+    desc: 'Bonus damage that rises the lower the core\'s own health drops.',
+    genericDesc: 'A comeback mechanic — reads current HP, not max, so it\'s inert at full health and strongest right when the run is in danger.',
+  },
+  proximity: {
+    name: 'Proximity',
+    icon: '🎯',
+    desc: 'Bonus damage the closer this hit lands to the core.',
+    genericDesc: 'Rewards defending the near field specifically — the aura weapons\' own zone, after 6D-0\'s reach fix put them there.',
+  },
+  momentum: {
+    name: 'Momentum',
+    icon: '📈',
+    desc: 'Damage ramps while landing hits in a row; resets on a miss or a kill.',
+    genericDesc: 'Rewards sustained pressure on a target over finishing it off — the mirror of Priming, which rewards spreading fire instead.',
+  },
+};
+
+export function isConditionalGem(kind: GemKey): kind is ConditionalGemKey {
+  return kind in CONDITIONAL_GEM_DEFS;
+}
+
 // The archetype-aware description, read once a gem is sitting in a
 // specific weapon's socket (the inventory screen).
 export function gemDesc(kind: GemKey, delivery: DeliveryKind): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].desc(delivery);
   if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].desc(delivery);
+  if (isConditionalGem(kind)) return CONDITIONAL_GEM_DEFS[kind].desc;
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].desc(delivery);
 }
 
@@ -427,25 +504,29 @@ export function gemDesc(kind: GemKey, delivery: DeliveryKind): string {
 export function gemGenericDesc(kind: GemKey): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].genericDesc;
   if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].genericDesc;
+  if (isConditionalGem(kind)) return CONDITIONAL_GEM_DEFS[kind].genericDesc;
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].genericDesc;
 }
 
 export function gemName(kind: GemKey): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].name;
   if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].name;
+  if (isConditionalGem(kind)) return CONDITIONAL_GEM_DEFS[kind].name;
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].name;
 }
 
 export function gemIcon(kind: GemKey): string {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].icon;
   if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].icon;
+  if (isConditionalGem(kind)) return CONDITIONAL_GEM_DEFS[kind].icon;
   return BEHAVIOUR_GEM_DEFS[kind as BehaviourGemKey].icon;
 }
 
-// Behaviour gems have no refusals (the owner's 2026-08-09 call) — every
-// archetype gets a real reading in the `desc` table above, even where the
-// class comment says the mechanism isn't wired up on that archetype yet.
-// Targeting gems DO have refusals (see TARGETING_GEM_DEFS's own comment).
+// Behaviour and Conditional gems have no refusals — every archetype gets
+// a real reading (Behaviour: the class comment above explains where the
+// mechanism isn't wired up yet even so; Conditional: none of the nine
+// reads anything archetype-specific in the first place). Targeting gems
+// DO have refusals (see TARGETING_GEM_DEFS's own comment).
 export function gemSupportsDelivery(kind: GemKey, delivery: DeliveryKind): boolean {
   if (isAmplifierGem(kind)) return AMPLIFIER_GEM_DEFS[kind].supports(delivery);
   if (isTargetingGem(kind)) return TARGETING_GEM_DEFS[kind].supports(delivery);
@@ -457,4 +538,5 @@ export const ALL_GEM_KEYS: readonly GemKey[] = [
   ...(Object.keys(AMPLIFIER_GEM_DEFS) as GemKey[]),
   ...(Object.keys(BEHAVIOUR_GEM_DEFS) as GemKey[]),
   ...(Object.keys(TARGETING_GEM_DEFS) as GemKey[]),
+  ...(Object.keys(CONDITIONAL_GEM_DEFS) as GemKey[]),
 ];

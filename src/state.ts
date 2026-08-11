@@ -59,7 +59,35 @@ export interface SlimeLayer {
   ctx: CanvasRenderingContext2D;
 }
 
-interface ProjectileBase {
+// Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3): the nine
+// Conditional gems' own RESOLVE fields — shared by every entity that
+// carries a hit forward from spawn to a LATER clearAt call (a
+// projectile, a cloud, a travelling ring). Direct-clearAt weapons
+// (Frost, Immolation, Blades, Lance) never need this: resolveOpts()'s
+// output flows straight into clearAt with no entity in between, so
+// nothing gets lost. Defined once here and shared via `extends`, the
+// same "individual fields, not a nested ClearOptions" pattern
+// ProjectileBase/CausticCloud/ShockwaveRing already used before this
+// batch, for the same reason each already states (no type-only import
+// cycle with grid/clear.ts, which already imports GameState from here) —
+// just centralized instead of the same eleven fields typed out three
+// times, and forgotten in a fourth place, which is exactly what
+// happened on the first pass at this batch (see Decision 91).
+interface ConditionalGemFields {
+  armorIgnoreCap?: number;
+  armorShred?: number;
+  maturityScaled?: number;
+  saturationScaled?: number;
+  massScaledUp?: number;
+  massScaledDown?: number;
+  cullingFinishFraction?: number;
+  desperationScaled?: number;
+  proximityScaled?: number;
+  momentumMult?: number;
+  momentumKey?: WeaponKey;
+}
+
+interface ProjectileBase extends ConditionalGemFields {
   x: number;
   y: number;
   vx: number;
@@ -253,7 +281,7 @@ export interface BubbleSeed {
   phase: number;
 }
 
-export interface CausticCloud {
+export interface CausticCloud extends ConditionalGemFields {
   x: number;
   y: number;
   radius: number;
@@ -297,7 +325,6 @@ export interface CausticCloud {
   // making every cloud drift due east forever, not actually outward.
   // `driftAngle` is chosen once, randomly, at spawn (weapons/poison.ts)
   // and held fixed — originX/originY are no longer needed.
-  armorShred?: number;
   driftOutward?: number;
   driftAngle?: number;
 }
@@ -349,7 +376,7 @@ export interface NovaFx {
 // crosses; render/shockwave.ts reads `radius` continuously from
 // `state.time - bornAt` for a smooth visual independent of the sim's
 // tick-quantized damage passes (S2.2).
-export interface ShockwaveRing {
+export interface ShockwaveRing extends ConditionalGemFields {
   x: number;
   y: number;
   bornAt: number;
@@ -380,7 +407,6 @@ export interface ShockwaveRing {
   priming?: number;
   chill?: number;
   shatter?: number;
-  armorShred?: number;
   armorScaled?: number;
   densityScaled?: number;
   // Phase 6D-1 (docs/plans/phase-6d1-targeting-gems.md S3): Vigilance's
@@ -768,6 +794,13 @@ export interface GameState {
   // stale pointer kept past its target's death (systems/targetingGems.ts).
   fixationTarget: Partial<Record<WeaponKey, Coagulant>>;
 
+  // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3): Momentum's
+  // per-weapon consecutive-hit streak — the only Conditional gem that
+  // carries state across ticks. Written by grid/clear.ts's clearAt
+  // (incremented on a hit, reset on a miss or a kill), read by
+  // systems/resolveOpts.ts to build the next call's damage multiplier.
+  weaponStreak: Partial<Record<WeaponKey, number>>;
+
   // Phase 6A-1 (docs/plans/phase-6a1-gem-foundation.md S10a): the HUD's
   // overall-DPS readout, replacing the deleted global DMG/SPD passives
   // readout. `dpsAccum` is mass destroyed since the last frame — every
@@ -879,6 +912,7 @@ export function freshState(): GameState {
     // gem's acquire function gives itself.
     lastHitPoint: { x: 0, y: 0, time: -Infinity },
     fixationTarget: {},
+    weaponStreak: {},
 
     pendingEmissions: [],
     pendingLevelUps: 0,

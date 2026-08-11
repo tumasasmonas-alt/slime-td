@@ -194,3 +194,60 @@ describe('updateShockwaveRings — Vigilance (Phase 6D-1)', () => {
     expect(grid.growth[idx]).toBe(0.5); // untouched — vigilanceFloor kept the band from ever reaching it
   });
 });
+
+// Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3, Decision 91):
+// same forwarding-gap regression guard as systems/projectiles.test.ts —
+// updateShockwaveRings' own clearAt call only forwarded a hardcoded field
+// subset, which would have made every Conditional gem silently inert on
+// Shockwave specifically, despite the ring already carrying the field
+// (baked on at creation, weapons/shockwave.ts).
+describe('updateShockwaveRings — Conditional gems (Phase 6D-2)', () => {
+  it('Virulence (maturityScaled) reaches the grid loop', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    const grid = state.grid;
+    const gx = Math.floor((300 + 150) / grid.cellSize);
+    const gy = Math.floor(300 / grid.cellSize);
+    const idx = gy * grid.cols + gx;
+    grid.maturity[idx] = 1; // fully mature
+
+    state.shockwaveRings.push({
+      x: 300,
+      y: 300,
+      bornAt: 0,
+      damagedTo: 40,
+      radius: 40,
+      startRadius: 40,
+      maxRadius: 200,
+      speed: 260,
+      power: 50,
+      color: '#7fd8ff',
+      maturityScaled: 0.5,
+    });
+
+    const before = grid.growth[idx]!;
+    for (let i = 0; i < 40; i++) updateShockwaveRings(state, 0.05);
+    const withGemRemoved = before - grid.growth[idx]!;
+
+    const control = freshState();
+    control.grid = makeTestGrid();
+    control.grid.maturity[idx] = 1;
+    control.shockwaveRings.push({
+      x: 300,
+      y: 300,
+      bornAt: 0,
+      damagedTo: 40,
+      radius: 40,
+      startRadius: 40,
+      maxRadius: 200,
+      speed: 260,
+      power: 50,
+      color: '#7fd8ff',
+    });
+    const beforeControl = control.grid.growth[idx]!;
+    for (let i = 0; i < 40; i++) updateShockwaveRings(control, 0.05);
+    const withoutRemoved = beforeControl - control.grid.growth[idx]!;
+
+    expect(withGemRemoved).toBeGreaterThan(withoutRemoved);
+  });
+});

@@ -48,18 +48,38 @@ the reasoning and the plan, which git does *not* capture.
 
 ## Current state
 
-**Last updated:** 2026-08-11 (**Phase 6D-1 shipped** — Decision 89: the 7
+**Last updated:** 2026-08-11 (**Phase 6D-2 shipped** — Decisions 90–91:
+the 9 Conditional gems, all RESOLVE-stage damage multipliers/debuffs on
+`ClearOptions`, legal on every weapon (no refusal table). **A real bug
+found and fixed during implementation, not by the browser** — six of ten
+weapons (everything whose damage travels via an entity: projectiles,
+clouds, the Shockwave ring) would have shipped every Conditional gem
+silently inert, because each entity's impact-time `clearAt` call read a
+hardcoded field whitelist that predated this batch and never learned the
+nine new fields. Caught writing the batch's own "no gem is a silent
+no-op" test as an actual spawn-to-impact test. Fixed by centralizing the
+fields into one shared interface and forwarding them at all four
+consuming call sites — see Decision 91. **Built immediately after 6D-0
+and 6D-1 in the same session, at the owner's explicit instruction,
+typecheck + `vitest run` only — no live playtest across any of the three
+batches**, continuing the departure Decisions 88/89 recorded. **828 tests
+pass, `tsc --noEmit` clean.**
+
+**6D-0/6D-1/6D-2 are shipped; 6D-3 (the gem-reality fix) was not part of
+this session's scope and remains unbuilt.** Next: a real playtest — none
+of the three batches this session shipped has been verified by play — or
+`docs/plans/phase-6d3-gem-reality.md` if the owner wants to keep building
+before that playtest happens.
+
+**Previously:** 2026-08-11, **Phase 6D-1 shipped** — Decision 89: the 7
 Targeting gems, each replacing a weapon's ACQUIRE stage via a new
 dispatch layer, `systems/targetingGems.ts`. Two deviations from the plan
 found while implementing — Vigilance also refuses `orbital` (Blades),
 and Breach Priority's aura reading is a focus-damage bonus rather than a
 literal inner-edge pull — both recorded in Decision 89 and the plan's own
-as-built delta. **Built immediately after 6D-0 in the same session, at
-the owner's explicit instruction, typecheck + `vitest run` only — still
-no live playtest** between either batch, continuing the departure
-Decision 88 recorded. Next: 6D-2, the Conditional gems.
+as-built delta.
 
-**Previously:** 2026-08-11, **Phase 6D-0 shipped** — Decision 88: the
+**Before that:** 2026-08-11, **Phase 6D-0 shipped** — Decision 88: the
 balance-shape tuning pass. Unbounded ambient/event escalation, the aura
 reach fix for Blades/Frost/Immolation, Chain Bolt/Fission nerfs, Shockwave
 buff, and bounded time-scaled armour. Tuning-only, no new gems.)
@@ -527,6 +547,92 @@ src/
 ## Session log
 
 *Newest first.*
+
+### 2026-08-11 — Phase 6D-2 shipped: the Conditional gems (Decisions 90–91) — Phase 6D complete
+
+**Full account:** `docs/plans/phase-6d2-conditional-gems.md` (build + §8
+as-built). Umbrella: `docs/sessions/2026-08-10-phase-5-gate-and-6d-planning.md`.
+
+**⚠️ Third and last of the 6D batches built with no playtest in between**,
+per the owner's explicit instruction — same departure Decisions 88/89
+recorded, now covering all of 6D-0/6D-1/6D-2.
+
+**What shipped:** 9 Conditional gems (Shatter and Sterilizer cut as
+duplicates of shipped 6B extensions; Corrosion kept per the owner's
+reversal — armour now matters after 6D-0). Every one a RESOLVE-stage
+`ClearOptions` field or debuff, legal on every weapon — no refusal table
+at all, unlike Targeting's three refusals:
+
+- **Penetration / Corrosion** reuse existing fields (`armorIgnoreCap`
+  from Lance's Piercing Core, `armorShred` from Poison's Corrosive) —
+  Decision 90 records that the gem wins outright over the extension when
+  both are socketed on the same weapon, rather than the two stacking
+  (every weapon's own `clearAt` call spreads the gem-derived object
+  *last*).
+- **Virulence / Saturation** — new grid-loop terms in `applyCellDamage`,
+  bonus damage scaled by a cell's own maturity or density.
+- **Giant-Slayer / Culling** — mirrored coagulant-loop terms scaled by
+  mass relative to `MASS_BEHEMOTH`/`MASS_CONGEALER`; Culling additionally
+  instantly finishes a coagulant left at or below a **fraction of its own
+  starting mass** (not an absolute), so it does something to a behemoth
+  and doesn't delete a mote on sight.
+- **Desperation / Proximity** — resolved once per `clearAt` call (core HP
+  and hit-distance-from-tower don't vary within one hit) and folded
+  directly into `power`, rather than a per-cell/per-coagulant term.
+- **Momentum** — the one gem carrying state across ticks
+  (`state.weaponStreak`, per weapon): ramps on a landed hit, resets on a
+  miss or a kill. Read and written entirely inside `resolveOpts.ts`
+  (read) and `clearAt` (write) — zero weapon-file changes needed for this
+  one either, reusing `state.lastCoagulantDeathAt` (Bladestorm's own
+  signal) for kill detection, tightened to compare across exactly one
+  `clearAt` call rather than a multi-second window.
+
+**⚠️ A real bug, caught by the tests this batch's own plan called for,
+not the browser (Decision 91).** `systems/resolveOpts.ts` already reaches
+every weapon's spawned entity (a projectile, a cloud, the Shockwave
+ring) — that half worked immediately. What didn't: `systems/projectiles.ts`
+(both its call sites), `systems/clouds.ts`, and `systems/shockwave.ts`
+each read that entity back at *impact* time through a **hardcoded field
+whitelist written before this batch existed** — none of the nine new
+fields were on it. **Bolt, Chain, Missile, Fission Charge, Poison, and
+Shockwave — six of the ten weapons — would have shipped every Conditional
+gem completely inert**, despite `tsc --noEmit` and the rest of the 823-test
+suite passing clean, because TypeScript's structural typing doesn't flag
+a spread-contributed property nobody reads back out. Frost, Immolation,
+Blades, and Lance were unaffected — all four call `clearAt` directly with
+no entity in between.
+
+Found writing the plan's own "no gem is a silent no-op on any archetype"
+test as an actual spawn-then-impact test rather than checking either
+boundary alone. Fixed by centralizing the eleven fields (nine new, plus
+`armorIgnoreCap`/`armorShred`) into one shared `ConditionalGemFields`
+interface in `state.ts`, extended by `ProjectileBase`/`CausticCloud`/
+`ShockwaveRing`, and forwarding the full set at all four consuming call
+sites. **The general lesson recorded in Decision 91 for the next batch
+that adds a per-weapon damage field:** reaching an entity at spawn is not
+evidence it reaches `clearAt` at resolution — the deferred-entity
+consumers need an explicit check, not just the spawning weapon file.
+
+**Test coverage:** a new `Phase 6D-2: Conditional gems` block in
+`grid/clear.test.ts` testing every field directly against `ClearOptions`
+(same level 6A-2's RESOLVE options are tested at) — as paired
+with/without-gem comparisons on identical targets, not same-call ratios
+between different targets (the first draft of three of these tests made
+exactly that mistake and failed correctly, the same class of error
+Decision 89 already named for the Targeting gems); per-gem dispatch tests
+in `systems/resolveOpts.test.ts`; the always-legal-everywhere matrix in
+`tuning/gems.test.ts`; and the spawn-to-impact regression guards in
+`systems/projectiles.test.ts`, `systems/clouds.test.ts`, and
+`systems/shockwave.test.ts` that catch Decision 91's bug directly. **828
+tests pass, `tsc --noEmit` clean.**
+
+**Three of Phase 6D's four sub-batches are now shipped** (6D-0 balance,
+6D-1 Targeting, 6D-2 Conditional). **6D-3 (the gem-reality fix,
+`docs/plans/phase-6d3-gem-reality.md`) was not part of this session's
+scope** and remains unbuilt — the owner's instruction covered 6D-0
+through 6D-2 only. **No playtest has run across any of the three shipped
+batches** — that is the standing risk carried into whatever comes next;
+see Decisions 88/89/91.
 
 ### 2026-08-11 — Phase 6D-1 shipped: the Targeting gems (Decision 89)
 

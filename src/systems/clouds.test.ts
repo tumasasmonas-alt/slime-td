@@ -182,4 +182,90 @@ describe('updateClouds', () => {
       expect(state.clouds[0]!.y).toBe(300);
     });
   });
+
+  // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3, Decision
+  // 91): same forwarding-gap regression guard as systems/projectiles.test.ts —
+  // updateClouds' own clearAt call only forwarded a hardcoded field
+  // subset, which would have made every Conditional gem silently inert
+  // on Poison specifically.
+  it('Penetration (armorIgnoreCap) reaches the coagulant loop on a tick', () => {
+    const withGem = freshState();
+    withGem.grid = makeTestGrid();
+    withGem.coagulants = [
+      {
+        x: 300,
+        y: 300,
+        mass: 1000,
+        armor: 40,
+        kind: 'congealer',
+        radius: 10,
+        speed: 45,
+        phase: 'active',
+        phaseTimer: 0,
+        seeds: [],
+        splitAtMass: 0,
+        sourceMaturity: 0,
+        parts: [],
+        startMass: 1000,
+        lastHitAt: -Infinity,
+        chilledUntil: 0,
+        armorDebuff: 0,
+        armorDebuffUntil: 0,
+      },
+    ];
+    withGem.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 30,
+      life: 3.4,
+      maxLife: 3.4,
+      dmgPerSec: 500,
+      color: '#8aff4d',
+      tickTimer: 0,
+      bubbleSeeds: [],
+      armorIgnoreCap: 30,
+    });
+    updateClouds(withGem, 0.1);
+    const removedWith = 1000 - withGem.coagulants[0]!.mass;
+
+    const without = freshState();
+    without.grid = makeTestGrid();
+    without.coagulants = [
+      {
+        x: 300,
+        y: 300,
+        mass: 1000,
+        armor: 40,
+        kind: 'congealer',
+        radius: 10,
+        speed: 45,
+        phase: 'active',
+        phaseTimer: 0,
+        seeds: [],
+        splitAtMass: 0,
+        sourceMaturity: 0,
+        parts: [],
+        startMass: 1000,
+        lastHitAt: -Infinity,
+        chilledUntil: 0,
+        armorDebuff: 0,
+        armorDebuffUntil: 0,
+      },
+    ];
+    without.clouds.push({
+      x: 300,
+      y: 300,
+      radius: 30,
+      life: 3.4,
+      maxLife: 3.4,
+      dmgPerSec: 500,
+      color: '#8aff4d',
+      tickTimer: 0,
+      bubbleSeeds: [],
+    });
+    updateClouds(without, 0.1);
+    const removedWithout = 1000 - without.coagulants[0]!.mass;
+
+    expect(removedWith).toBeGreaterThan(removedWithout);
+  });
 });

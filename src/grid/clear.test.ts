@@ -703,6 +703,457 @@ describe('clearAt', () => {
     });
   });
 
+  // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3, S5): the nine
+  // Conditional gems, tested directly against ClearOptions the same way
+  // Phase 6A-2's RESOLVE options are above — systems/resolveOpts.ts is
+  // the thing that turns a socketed gem into these fields; this file
+  // guards that the fields themselves do what they claim, independent of
+  // any one weapon's wiring. Each test guards "changes damage in its
+  // condition and not outside it" (plan S5 test 1) via a paired
+  // with/without comparison, not a same-call ratio between different
+  // targets — see docs/plans/phase-6d1-targeting-gems.md's own as-built
+  // delta for why a ratio comparison across different masses measures the
+  // wrong thing.
+  describe('Phase 6D-2: Conditional gems', () => {
+    describe('Penetration (armorIgnoreCap — reused from Lance\'s Piercing Core)', () => {
+      it('a hit with armorIgnoreCap removes more mass than the same hit without it, against an armoured target', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const target1 = makeCoagulant({ mass: 1000, armor: 40 });
+        state.coagulants = [target1];
+        clearAt(state, 105, 105, 50, { radiusPx: 20, armorIgnoreCap: 30 });
+        const removedWith = 1000 - target1.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const target2 = makeCoagulant({ mass: 1000, armor: 40 });
+        control.coagulants = [target2];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const removedWithout = 1000 - target2.mass;
+
+        expect(removedWith).toBeGreaterThan(removedWithout);
+      });
+
+      it('does nothing against an unarmoured target — the condition is armour, not a flat bonus', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const target1 = makeCoagulant({ mass: 1000, armor: 0 });
+        state.coagulants = [target1];
+        clearAt(state, 105, 105, 50, { radiusPx: 20, armorIgnoreCap: 30 });
+        const removedWith = 1000 - target1.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const target2 = makeCoagulant({ mass: 1000, armor: 0 });
+        control.coagulants = [target2];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const removedWithout = 1000 - target2.mass;
+
+        expect(removedWith).toBeCloseTo(removedWithout, 5);
+      });
+    });
+
+    describe('Virulence (maturityScaled)', () => {
+      // Paired with/without on the SAME mature cell, not a mature-vs-
+      // virgin comparison — mature ground already carries an independent
+      // yield PENALTY (maturityYieldMult, Decision 25/63's "durability
+      // threat"), strong enough that Virulence's own bonus doesn't
+      // necessarily make mature ground clear faster than virgin outright.
+      // The gem's actual claim is narrower: mature ground clears faster
+      // WITH the gem than WITHOUT it — that's what this isolates.
+      it('removes more density from mature ground with the gem than without it', () => {
+        const withGem = freshState();
+        withGem.grid = makeTestGrid();
+        const idx = 10 * withGem.grid.cols + 10;
+        withGem.grid.growth[idx] = 0.6;
+        withGem.grid.maturity[idx] = MATURITY_MAX;
+        clearAt(withGem, 105, 105, 15, { radiusPx: 5, maturityScaled: 0.5 });
+        const withGemRemoved = 0.6 - withGem.grid.growth[idx]!;
+
+        const without = freshState();
+        without.grid = makeTestGrid();
+        without.grid.growth[idx] = 0.6;
+        without.grid.maturity[idx] = MATURITY_MAX;
+        clearAt(without, 105, 105, 15, { radiusPx: 5 });
+        const withoutRemoved = 0.6 - without.grid.growth[idx]!;
+
+        expect(withGemRemoved).toBeGreaterThan(withoutRemoved);
+      });
+
+      it('is inert (no change vs. no gem) on virgin ground — the bonus scales FROM zero maturity', () => {
+        const withGem = freshState();
+        withGem.grid = makeTestGrid();
+        const idx = 10 * withGem.grid.cols + 10;
+        withGem.grid.growth[idx] = 0.6;
+        clearAt(withGem, 105, 105, 50, { radiusPx: 5, maturityScaled: 0.5 });
+
+        const without = freshState();
+        without.grid = makeTestGrid();
+        without.grid.growth[idx] = 0.6;
+        clearAt(without, 105, 105, 50, { radiusPx: 5 });
+
+        expect(withGem.grid.growth[idx]).toBeCloseTo(without.grid.growth[idx]!, 5);
+      });
+    });
+
+    describe('Saturation (saturationScaled)', () => {
+      // Paired with/without on the SAME dense cell — a dense-vs-sparse
+      // comparison would conflate Saturation's bonus with the pre-
+      // existing `resistance` term, which already scales DOWN with
+      // density (the opposite direction) independent of this gem. Low
+      // power, so the hit doesn't fully clear the cell and clamp away
+      // the difference this gem is supposed to produce.
+      it('removes more density from dense ground with the gem than without it', () => {
+        const withGem = freshState();
+        withGem.grid = makeTestGrid();
+        const idx = 10 * withGem.grid.cols + 10;
+        withGem.grid.growth[idx] = 0.9;
+        clearAt(withGem, 105, 105, 8, { radiusPx: 5, saturationScaled: 0.5 });
+        const withGemRemoved = 0.9 - withGem.grid.growth[idx]!;
+
+        const without = freshState();
+        without.grid = makeTestGrid();
+        without.grid.growth[idx] = 0.9;
+        clearAt(without, 105, 105, 8, { radiusPx: 5 });
+        const withoutRemoved = 0.9 - without.grid.growth[idx]!;
+
+        expect(withGemRemoved).toBeGreaterThan(withoutRemoved);
+      });
+
+      it('does not silently reuse densityScaled (Resonant Ring\'s own field) — the two stack instead of colliding', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const idx = 10 * state.grid.cols + 10;
+        state.grid.growth[idx] = 0.9;
+        clearAt(state, 105, 105, 8, { radiusPx: 5, saturationScaled: 0.5, densityScaled: 0.5 });
+        const bothRemoved = 0.9 - state.grid.growth[idx]!;
+
+        const onlyDensityScaled = freshState();
+        onlyDensityScaled.grid = makeTestGrid();
+        onlyDensityScaled.grid.growth[idx] = 0.9;
+        clearAt(onlyDensityScaled, 105, 105, 8, { radiusPx: 5, densityScaled: 0.5 });
+        const densityScaledOnlyRemoved = 0.9 - onlyDensityScaled.grid.growth[idx]!;
+
+        // If saturationScaled silently reused densityScaled's own field
+        // internally, having both set would be indistinguishable from
+        // densityScaled alone — they must stack instead.
+        expect(bothRemoved).toBeGreaterThan(densityScaledOnlyRemoved);
+      });
+    });
+
+    describe('Giant-Slayer (massScaledUp) and Culling (massScaledDown)', () => {
+      it('Giant-Slayer deals more damage to a coagulant near behemoth mass than the same hit does without it', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const target1 = makeCoagulant({ mass: 400 }); // well up toward MASS_BEHEMOTH (150)
+        state.coagulants = [target1];
+        clearAt(state, 105, 105, 50, { radiusPx: 20, massScaledUp: 0.5 });
+        const removedWith = 400 - target1.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const target2 = makeCoagulant({ mass: 400 });
+        control.coagulants = [target2];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const removedWithout = 400 - target2.mass;
+
+        expect(removedWith).toBeGreaterThan(removedWithout);
+      });
+
+      it('Giant-Slayer\'s bonus at low mass is a small fraction of its bonus at high mass — conditional on mass, not flat', () => {
+        // Not "exactly inert" — clamp(mass/MASS_BEHEMOTH, 0, 1) is ~0.08
+        // at mass 12, not 0, so a small bonus is expected and correct.
+        // The claim this guards is relative: the bonus scales WITH mass,
+        // so a low-mass target's uplift should be a small fraction of a
+        // high-mass target's uplift under the identical gem value.
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const target1 = makeCoagulant({ mass: 12 }); // just above MASS_MIN_FORMATION, far below MASS_BEHEMOTH
+        state.coagulants = [target1];
+        clearAt(state, 105, 105, 50, { radiusPx: 20, massScaledUp: 0.5 });
+        const removedWith = 12 - target1.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const target2 = makeCoagulant({ mass: 12 });
+        control.coagulants = [target2];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const removedWithout = 12 - target2.mass;
+
+        // At mass 12, clamp(12/MASS_BEHEMOTH, 0, 1) ≈ 0.08 — a real but
+        // small uplift (~4%), not zero. A generous relative bound (well
+        // under the 0.5-scaled bonus a behemoth-mass target gets in the
+        // test above) is the honest way to assert "small," not a tight
+        // absolute closeness check that a legitimate small bonus fails.
+        expect(removedWith).toBeLessThan(removedWithout * 1.15);
+      });
+
+      it('Culling deals more damage to a low-mass coagulant than the same hit does without it', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const target1 = makeCoagulant({ mass: 12, startMass: 12 });
+        state.coagulants = [target1];
+        clearAt(state, 105, 105, 50, { radiusPx: 20, massScaledDown: 0.5 });
+        const removedWith = 12 - target1.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const target2 = makeCoagulant({ mass: 12, startMass: 12 });
+        control.coagulants = [target2];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const removedWithout = 12 - target2.mass;
+
+        expect(removedWith).toBeGreaterThan(removedWithout);
+      });
+
+      // Plan S3/S5 test 6: the threshold is a FRACTION of the coagulant's
+      // OWN starting mass, so it does something to a behemoth and doesn't
+      // delete a mote on sight — asserted against both.
+      it('Culling\'s finisher instantly zeroes a coagulant left below the fraction of its OWN starting mass — a mote', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        // startMass 50, current mass already reduced to 10% of it (5) —
+        // one more (small) hit should finish it, not just chip it.
+        const target = makeCoagulant({ mass: 5, startMass: 50 });
+        state.coagulants = [target];
+
+        clearAt(state, 105, 105, 1, { radiusPx: 20, cullingFinishFraction: 0.12 });
+
+        expect(target.mass).toBe(0);
+      });
+
+      it('Culling\'s finisher does the equivalent thing to a behemoth — a fraction of ITS OWN (much larger) starting mass, not an absolute', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const target = makeCoagulant({ mass: 20, startMass: 200 }); // 10% of its own starting mass — below the 12% finish threshold
+        state.coagulants = [target];
+
+        clearAt(state, 105, 105, 1, { radiusPx: 20, cullingFinishFraction: 0.12 });
+
+        expect(target.mass).toBe(0);
+      });
+
+      it('does NOT finish a coagulant still well above the fraction of its own starting mass', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const target = makeCoagulant({ mass: 40, startMass: 50 }); // 80% of its own starting mass
+        state.coagulants = [target];
+
+        clearAt(state, 105, 105, 1, { radiusPx: 20, cullingFinishFraction: 0.12 });
+
+        expect(target.mass).toBeGreaterThan(0);
+      });
+    });
+
+    describe('Corrosion (armorShred — reused from Poison\'s Corrosive)', () => {
+      // Mirrors the armorShred/armorScaled describe block above almost
+      // exactly — Corrosion reuses that exact mechanism, so this is
+      // mostly confirming the reuse is real, not re-deriving the guard.
+      it('a Corrosion-debuffed coagulant takes more damage on the NEXT hit than the same coagulant at full armour', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1000, armor: 40 });
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, armorShred: 0.35 }); // Corrosion's own value
+        const afterShred = c.mass;
+        clearAt(state, 105, 105, 50, { radiusPx: 20 }); // a plain second hit, benefiting from the debuff
+        const debuffedRemoved = afterShred - c.mass;
+
+        const control = freshState();
+        control.grid = makeTestGrid();
+        const cControl = makeCoagulant({ mass: afterShred, armor: 40 });
+        control.coagulants = [cControl];
+        clearAt(control, 105, 105, 50, { radiusPx: 20 });
+        const fullArmorRemoved = afterShred - cControl.mass;
+
+        expect(debuffedRemoved).toBeGreaterThan(fullArmorRemoved);
+      });
+
+      it('respects COAGULANT_ARMOR_FLOOR — even fully shredded, a hit never exceeds the floor-bounded ceiling', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 1_000_000, armor: 1000 });
+        state.coagulants = [c];
+
+        clearAt(state, 105, 105, 50, { radiusPx: 20, armorShred: 1 }); // 100% shred
+        clearAt(state, 105, 105, 50, { radiusPx: 20 });
+        const removed = 1_000_000 - c.mass;
+
+        // Fully shredded armour on a 50-power hit should land close to
+        // full power, not some unbounded multiple of it.
+        expect(removed).toBeLessThanOrEqual(50 * 1.1);
+      });
+
+      // The ordering rule 6B-2's Shatter Core already established
+      // (grid/clear.ts's own comment on the `chill`/`shatter` read order):
+      // a hit that WRITES the debuff must not itself benefit from it.
+      // armorShred is written after `effectiveArmor` is already read for
+      // THIS hit, so this is a regression guard, not new behaviour.
+      it('a hit that applies the Corrosion debuff does not itself benefit from it', () => {
+        const withShred = freshState();
+        withShred.grid = makeTestGrid();
+        const c1 = makeCoagulant({ mass: 1000, armor: 40 });
+        withShred.coagulants = [c1];
+        clearAt(withShred, 105, 105, 50, { radiusPx: 20, armorShred: 0.35 });
+        const removedWithShred = 1000 - c1.mass;
+
+        const without = freshState();
+        without.grid = makeTestGrid();
+        const c2 = makeCoagulant({ mass: 1000, armor: 40 });
+        without.coagulants = [c2];
+        clearAt(without, 105, 105, 50, { radiusPx: 20 });
+        const removedWithout = 1000 - c2.mass;
+
+        expect(removedWithShred).toBeCloseTo(removedWithout, 5);
+      });
+    });
+
+    describe('Desperation (desperationScaled)', () => {
+      it('deals more damage the lower the core\'s own HP is', () => {
+        const wounded = freshState();
+        wounded.grid = makeTestGrid();
+        wounded.tower.hp = 10;
+        wounded.tower.maxHp = 100;
+        const idx = 10 * wounded.grid.cols + 10;
+        wounded.grid.growth[idx] = 0.9;
+        clearAt(wounded, 105, 105, 50, { radiusPx: 5, desperationScaled: 0.6 });
+        const woundedRemoved = 0.9 - wounded.grid.growth[idx]!;
+
+        const healthy = freshState();
+        healthy.grid = makeTestGrid();
+        healthy.tower.hp = 100;
+        healthy.tower.maxHp = 100;
+        healthy.grid.growth[idx] = 0.9;
+        clearAt(healthy, 105, 105, 50, { radiusPx: 5, desperationScaled: 0.6 });
+        const healthyRemoved = 0.9 - healthy.grid.growth[idx]!;
+
+        expect(woundedRemoved).toBeGreaterThan(healthyRemoved);
+      });
+
+      it('is inert at full HP — reads current HP, not max', () => {
+        const withGem = freshState();
+        withGem.grid = makeTestGrid();
+        withGem.tower.hp = withGem.tower.maxHp; // full
+        const idx = 10 * withGem.grid.cols + 10;
+        withGem.grid.growth[idx] = 0.9;
+        clearAt(withGem, 105, 105, 50, { radiusPx: 5, desperationScaled: 0.6 });
+
+        const without = freshState();
+        without.grid = makeTestGrid();
+        without.tower.hp = without.tower.maxHp;
+        without.grid.growth[idx] = 0.9;
+        clearAt(without, 105, 105, 50, { radiusPx: 5 });
+
+        expect(withGem.grid.growth[idx]).toBeCloseTo(without.grid.growth[idx]!, 5);
+      });
+    });
+
+    describe('Proximity (proximityScaled)', () => {
+      it('deals more damage the closer the hit lands to the tower', () => {
+        const near = freshState();
+        near.grid = makeTestGrid({ maxRange: 300 });
+        near.tower.x = 105;
+        near.tower.y = 105;
+        const nearIdx = 10 * near.grid.cols + 10;
+        near.grid.growth[nearIdx] = 0.9;
+        clearAt(near, 105, 105, 50, { radiusPx: 5, proximityScaled: 0.5 }); // hit centred ON the tower
+        const nearRemoved = 0.9 - near.grid.growth[nearIdx]!;
+
+        const far = freshState();
+        far.grid = makeTestGrid({ maxRange: 300 });
+        far.tower.x = 105;
+        far.tower.y = 105;
+        const farHitX = 105 + 280;
+        const farIdx = 10 * far.grid.cols + Math.round(farHitX / far.grid.cellSize);
+        far.grid.growth[farIdx] = 0.9;
+        clearAt(far, farHitX, 105, 50, { radiusPx: 5, proximityScaled: 0.5 }); // hit far from the tower
+        const farRemoved = 0.9 - far.grid.growth[farIdx]!;
+
+        expect(nearRemoved).toBeGreaterThan(farRemoved);
+      });
+    });
+
+    describe('Momentum (momentumMult / momentumKey / state.weaponStreak)', () => {
+      it('ramps: a hit lands harder the higher the current streak already is', () => {
+        const highStreak = freshState();
+        highStreak.grid = makeTestGrid();
+        highStreak.weaponStreak.bolt = 4;
+        const idx = 10 * highStreak.grid.cols + 10;
+        highStreak.grid.growth[idx] = 0.9;
+        clearAt(highStreak, 105, 105, 50, { radiusPx: 5, momentumMult: 1 + 0.08 * 4, momentumKey: 'bolt' });
+        const highStreakRemoved = 0.9 - highStreak.grid.growth[idx]!;
+
+        const noStreak = freshState();
+        noStreak.grid = makeTestGrid();
+        noStreak.grid.growth[idx] = 0.9;
+        clearAt(noStreak, 105, 105, 50, { radiusPx: 5, momentumMult: 1, momentumKey: 'bolt' });
+        const noStreakRemoved = 0.9 - noStreak.grid.growth[idx]!;
+
+        expect(highStreakRemoved).toBeGreaterThan(noStreakRemoved);
+      });
+
+      it('increments the streak after a hit that actually removed mass', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const idx = 10 * state.grid.cols + 10;
+        state.grid.growth[idx] = 0.9;
+        state.weaponStreak.bolt = 2;
+
+        clearAt(state, 105, 105, 50, { radiusPx: 5, momentumMult: 1, momentumKey: 'bolt' });
+
+        expect(state.weaponStreak.bolt).toBe(3);
+      });
+
+      it('resets the streak to 0 on a miss — nothing removed', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        state.weaponStreak.bolt = 3;
+        // Nothing revealed anywhere in range — this hit removes 0 mass.
+
+        clearAt(state, 105, 105, 50, { radiusPx: 5, momentumMult: 1, momentumKey: 'bolt' });
+
+        expect(state.weaponStreak.bolt).toBe(0);
+      });
+
+      it('resets the streak to 0 on a kill, per the plan\'s own rule — rewards sustained pressure, not finishing', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const c = makeCoagulant({ mass: 5 }); // dies this hit
+        state.coagulants = [c];
+        state.weaponStreak.bolt = 3;
+
+        clearAt(state, 105, 105, 500, { radiusPx: 20, momentumMult: 1, momentumKey: 'bolt' });
+
+        expect(c.mass).toBe(0);
+        expect(state.weaponStreak.bolt).toBe(0);
+      });
+
+      it('a DIFFERENT weapon\'s streak is untouched by this call', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const idx = 10 * state.grid.cols + 10;
+        state.grid.growth[idx] = 0.9;
+        state.weaponStreak.chain = 7;
+
+        clearAt(state, 105, 105, 50, { radiusPx: 5, momentumMult: 1, momentumKey: 'bolt' });
+
+        expect(state.weaponStreak.chain).toBe(7);
+      });
+
+      it('does not touch state.weaponStreak at all when momentumKey is absent — no gem, no bookkeeping', () => {
+        const state = freshState();
+        state.grid = makeTestGrid();
+        const idx = 10 * state.grid.cols + 10;
+        state.grid.growth[idx] = 0.9;
+
+        clearAt(state, 105, 105, 50, { radiusPx: 5 });
+
+        expect(state.weaponStreak.bolt).toBeUndefined();
+      });
+    });
+  });
+
   // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S3, S8): the
   // annulus shape Shockwave's travelling ring uses. Bigger grid than the
   // rest of this file's fixtures (world fixtures elsewhere top out around

@@ -122,12 +122,31 @@ export function updateProjectiles(state: GameState, dt: number): void {
       // Priming), also baked in at spawn — see state.ts's ProjectileBase
       // comment for why these are individual fields rather than one
       // nested ClearOptions.
+      //
+      // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3, Decision
+      // 91): the nine Conditional gems' own fields, forwarded the same
+      // way — found missing on the first pass at this batch, which would
+      // have made every Conditional gem silently inert on Bolt/Chain (the
+      // two projectile weapons this object feeds), since resolveOpts()'s
+      // output was reaching the projectile at spawn but never reaching
+      // clearAt at impact.
       const resolveOpts = {
         ignoreResistance: p.ignoreResistance,
         flattenFalloff: p.flattenFalloff,
         overflow: p.overflow,
         kickback: p.kickback,
         priming: p.priming,
+        armorIgnoreCap: p.armorIgnoreCap,
+        armorShred: p.armorShred,
+        maturityScaled: p.maturityScaled,
+        saturationScaled: p.saturationScaled,
+        massScaledUp: p.massScaledUp,
+        massScaledDown: p.massScaledDown,
+        cullingFinishFraction: p.cullingFinishFraction,
+        desperationScaled: p.desperationScaled,
+        proximityScaled: p.proximityScaled,
+        momentumMult: p.momentumMult,
+        momentumKey: p.momentumKey,
       };
 
       if (p.type === 'chain') {
@@ -461,6 +480,21 @@ function updateMissile(state: GameState, grid: Grid, p: MissileProjectile, dt: n
       priming: p.priming,
       // Phase 6B-2: Bunker Buster.
       armorScaled: p.armorScaled,
+      // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3, Decision
+      // 91): the nine Conditional gems — same forwarding gap as the
+      // chain/bolt branch above, fixed the same way, for Missile and
+      // Fission Charge (both ride this branch via `p.type`).
+      armorIgnoreCap: p.armorIgnoreCap,
+      armorShred: p.armorShred,
+      maturityScaled: p.maturityScaled,
+      saturationScaled: p.saturationScaled,
+      massScaledUp: p.massScaledUp,
+      massScaledDown: p.massScaledDown,
+      cullingFinishFraction: p.cullingFinishFraction,
+      desperationScaled: p.desperationScaled,
+      proximityScaled: p.proximityScaled,
+      momentumMult: p.momentumMult,
+      momentumKey: p.momentumKey,
     });
     // Phase 6C-1 (S5): Sticky — every submunition carrying this leaves a
     // small burning patch, reusing the CausticCloud entity/renderer wholesale

@@ -2765,6 +2765,67 @@ where 6D-0 actually put the aura weapons' reach.
 
 ---
 
+**90. Penetration/Corrosion reusing `armorIgnoreCap`/`armorShred` do not
+stack with the matching extension (Piercing Core/Corrosive) — the gem
+wins outright when both are socketed on the same weapon.**
+📋 *2026-08-11.*
+
+Every weapon's own `clearAt` call spreads `...opts` (the gem-derived
+`ClearOptions` object from `systems/resolveOpts.ts`) *last*, after any of
+its own extension-set fields (e.g. Lance's `armorIgnoreCap: pierceLvl>0 ?
+PIERCE_CAP[...] : undefined, ..., ...opts`). If the gem sets the same key,
+it overwrites the extension's value rather than the two combining. Not a
+silent no-op — the weapon still gets the stronger of the two effects,
+just not both. Recorded rather than silently accepted so nobody assumes
+Penetration + Piercing Core on Lance is additive. Applies wherever a
+Phase 6D-2 Conditional gem reuses an existing `ClearOptions` field a
+6B-2/6C-2 extension already writes to the same weapon.
+
+**91. Six of ten weapons shipped every Conditional gem silently inert on
+the first implementation pass of Phase 6D-2 — a hardcoded field
+whitelist at each weapon's IMPACT point never learned the nine new
+fields, caught by the batch's own tests before it reached the browser.**
+📋 *2026-08-11.*
+
+`systems/resolveOpts.ts` builds a `ClearOptions`-shaped object from a
+weapon's socketed Conditional gems at *spawn* time, and every weapon
+already spread that fully onto whatever entity it creates (a projectile,
+a cloud, a `ShockwaveRing`) — that half worked on the first attempt.
+`systems/projectiles.ts` (both its chain/bolt and missile/fission
+`clearAt` call sites), `systems/clouds.ts`, and `systems/shockwave.ts`
+each read the entity back at *impact* time through a hardcoded field
+list written before Phase 6D-2 existed (five or six named fields, never
+the whole set) — none of the nine new fields were on any of them. Bolt,
+Chain, Missile, Fission Charge, Poison, and Shockwave — everything whose
+damage happens via a travelling entity rather than an immediate `clearAt`
+call inside `deliver` — would have carried a socketed Conditional gem all
+the way to the moment of impact and then silently dropped it. Frost,
+Immolation, Blades, and Lance were unaffected (no entity in between).
+
+Found while writing `phase-6d2-conditional-gems.md` §5 test 3 ("no gem is
+a silent no-op on any archetype") as an actual spawn-then-impact test —
+the gap is invisible checking either boundary alone, which is exactly why
+neither `tsc --noEmit` nor the rest of the suite caught it (TypeScript's
+structural typing doesn't flag a spread-contributed property nobody reads
+back out). Fixed by centralizing the nine fields (plus
+`armorIgnoreCap`/`armorShred`, reused by Penetration/Corrosion — see
+Decision 90) into one shared `ConditionalGemFields` interface in
+`state.ts`, extended by `ProjectileBase`/`CausticCloud`/`ShockwaveRing`,
+and forwarding the full set at all four consuming call sites. Regression
+guards added in `systems/projectiles.test.ts`, `systems/clouds.test.ts`,
+and `systems/shockwave.test.ts` — each a paired with/without spawn-to-
+impact comparison, the shape of test that actually exercises this path.
+
+**The general lesson, worth naming for the next batch that adds a
+per-weapon damage-modifying field:** a field reaching an entity at spawn
+time is not evidence it reaches `clearAt` at resolution time. Any future
+`ClearOptions` field meant to work on Bolt/Chain/Missile/Fission/Poison/
+Shockwave needs an explicit check that the deferred-entity consumers
+(`systems/projectiles.ts`, `systems/clouds.ts`, `systems/shockwave.ts`)
+actually forward it, not just that the spawning weapon file sets it.
+
+---
+
 Bugs 1–4 came from the prototype's own handoff doc — each cost real
 debugging time once already. Bug 5 was found during the Phase 2E review.
 

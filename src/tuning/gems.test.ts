@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DeliveryKind } from '../types';
-import { AMPLIFIER_GEM_DEFS, gemSupportsDelivery, TARGETING_GEM_DEFS } from './gems';
+import { AMPLIFIER_GEM_DEFS, CONDITIONAL_GEM_DEFS, gemSupportsDelivery, TARGETING_GEM_DEFS } from './gems';
 
 // Phase 6C-2 (docs/plans/phase-6c2-lance.md S2.1, S9): the two real
 // legality calls the 'beam' archetype forces — settled by the owner
@@ -60,6 +60,24 @@ describe('Targeting gem legality matrix (Phase 6D-1)', () => {
       const expected = EXPECTED[kind](delivery);
       it(`${kind} is ${expected ? 'legal' : 'illegal'} on ${delivery}`, () => {
         expect(gemSupportsDelivery(kind, delivery)).toBe(expected);
+      });
+    }
+  }
+});
+
+// Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md): unlike Targeting,
+// Conditional gems have no refusal table at all — none of the nine reads
+// anything archetype-specific (delivery shape, aim, orbit), only target
+// or player state. Pinned per gem per archetype anyway, same guard as the
+// Targeting matrix above, so a future gem in this class that DOES need a
+// refusal can't silently inherit "always legal" by accident.
+describe('Conditional gem legality — always legal, every archetype (Phase 6D-2)', () => {
+  const ALL_DELIVERIES: readonly DeliveryKind[] = ['projectile', 'orbital', 'pulse', 'cloud', 'ring', 'beam'];
+
+  for (const kind of Object.keys(CONDITIONAL_GEM_DEFS) as (keyof typeof CONDITIONAL_GEM_DEFS)[]) {
+    for (const delivery of ALL_DELIVERIES) {
+      it(`${kind} is legal on ${delivery}`, () => {
+        expect(gemSupportsDelivery(kind, delivery)).toBe(true);
       });
     }
   }

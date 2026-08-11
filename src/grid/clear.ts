@@ -1,9 +1,12 @@
 import type { Coagulant, GameState, Grid } from '../state';
+import type { WeaponKey } from '../types';
 import { circleOverlapArea, clamp, closestPointOnSegment, dist, distToSegment, rand } from '../util/math';
 import {
   COAGULANT_ARMOR_FLOOR,
   COAGULANT_DAMAGE_SCALE,
   COAGULANT_RESISTANCE,
+  MASS_BEHEMOTH,
+  MASS_CONGEALER,
 } from '../tuning/coagulants';
 import { MATURITY_MAX, SCAR_PER_DENSITY, ageFloorAt, maturityBucket, maturityYieldMult } from '../tuning/maturity';
 import { COAGULANT_XP_RISK_PREMIUM, gemValueFromRemoved } from '../tuning/xp';
@@ -104,6 +107,65 @@ export interface ClearOptions {
   focusTarget?: Coagulant;
   focusBonus?: number;
 
+  // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3): the nine
+  // Conditional gems. All RESOLVE-stage, all new `ClearOptions` fields,
+  // no second damage path — Penetration and Corrosion reuse
+  // `armorIgnoreCap`/`armorShred` above (already exist, from Lance's
+  // Piercing Core and Poison's Corrosive extensions respectively — see
+  // Decision 90 for the one thing that costs: when both a gem and the
+  // matching extension are socketed on the same weapon, the gem's value
+  // wins outright rather than stacking, since every weapon's own clearAt
+  // call spreads `...opts` LAST, after its own extension-set fields).
+
+  // Virulence: bonus damage against high-**maturity** ground. Grid-only —
+  // coagulants have no per-cell maturity of their own (their `armor` is
+  // already derived from maturity once, at formation).
+  maturityScaled?: number;
+  // Saturation: bonus damage scaled by local **density** at the hit.
+  // Distinct from `densityScaled` above (Resonant Ring's own field) even
+  // though both read `dens` — reusing that field would mean an extension
+  // silently overwrites the gem's contribution instead of the two
+  // stacking, the same collision this comment block just named for
+  // armorIgnoreCap/armorShred, avoidable here since this is a new gem
+  // with no field to collide against yet.
+  saturationScaled?: number;
+  // Giant-Slayer: bonus damage against **high-mass** coagulants, scaled
+  // by mass relative to MASS_BEHEMOTH (tuning/coagulants.ts) — full bonus
+  // at behemoth mass and up, tapering to none at low mass. Coagulant-only
+  // (grid cells have no mass).
+  massScaledUp?: number;
+  // Culling: bonus damage against **low-mass** coagulants, the mirror of
+  // Giant-Slayer — scaled by how far mass sits below MASS_CONGEALER.
+  massScaledDown?: number;
+  // Culling's other half: instantly finishes a coagulant once a hit
+  // leaves it at or below this FRACTION of its own mass at formation
+  // (`c.startMass`) — a fraction, not an absolute, so it does something to
+  // a behemoth and doesn't delete a mote on sight (plan S3).
+  cullingFinishFraction?: number;
+  // Desperation: bonus damage scaling up as core integrity drops — read
+  // from `state.tower.hp`/`maxHp` ONCE per clearAt call (not per cell or
+  // per coagulant, since it doesn't vary within one hit) and folded
+  // directly into `power` before either loop runs.
+  desperationScaled?: number;
+  // Proximity: bonus damage the closer this HIT's own centre is to the
+  // core, relative to `grid.maxRange` — resolved once per call, same
+  // shape as Desperation, folded into `power` before either loop.
+  proximityScaled?: number;
+  // Momentum: the ALREADY-RESOLVED multiplier for this call (built from
+  // `state.weaponStreak[momentumKey]` by systems/resolveOpts.ts, since
+  // that's the one place that already knows both the weapon key and the
+  // live socket state) — applied to `power` once, same as Desperation/
+  // Proximity above. `momentumKey` is carried alongside it purely so
+  // clearAt can update the streak afterward: incremented on a hit,
+  // reset on a miss OR a kill. Kill detection reuses
+  // `state.lastCoagulantDeathAt` (Bladestorm's own signal,
+  // weapons/blades.ts) rather than a new one — the same disclosed
+  // imprecision Bladestorm already accepted ("any weapon, any
+  // coagulant," not attributed to this specific hit), since clearAt has
+  // no per-hit kill-attribution channel to read instead.
+  momentumMult?: number;
+  momentumKey?: WeaponKey;
+
   // Phase 6C-1 (docs/plans/phase-6c1-shockwave-fission.md S3): the shape
   // this call damages, generalizing "distance from (x,y), capped at
   // radiusPx" so Shockwave's travelling ring and (6C-2) Lance's beam can
@@ -188,7 +250,18 @@ function applyCellDamage(
   // of (and stacking with) `resistance`'s usual scaling-down — the two
   // aren't the same lever, since resistance already applies regardless.
   const densityMult = opts.densityScaled ? 1 + opts.densityScaled * dens : 1;
-  const removeAmt = clamp(power * DAMAGE_COEFF * falloff * resistance * matYield * densityMult, 0, dens);
+  // Phase 6D-2: Saturation — the same "reward for hitting dense ground"
+  // shape as Resonant Ring above, kept as its own field rather than
+  // reusing `densityScaled` (this comment block's own ClearOptions note
+  // explains why: an extension setting that field would silently
+  // overwrite a gem's contribution instead of the two stacking).
+  const saturationMult = opts.saturationScaled ? 1 + opts.saturationScaled * dens : 1;
+  // Virulence: bonus scaling with this cell's own maturity — full bonus
+  // at MATURITY_MAX, none on virgin ground. Independent of matYield
+  // above: that term already reduces what mature ground YIELDS; this one
+  // rewards a weapon for choosing to fight it anyway.
+  const maturityMult = opts.maturityScaled ? 1 + opts.maturityScaled * (grid.maturity[i]! / MATURITY_MAX) : 1;
+  const removeAmt = clamp(power * DAMAGE_COEFF * falloff * resistance * matYield * densityMult * saturationMult * maturityMult, 0, dens);
   if (removeAmt <= 0) return 0;
   const newDens = Math.max(0, dens - removeAmt);
   const removedHere = dens - newDens;
@@ -301,6 +374,37 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
   state.lastHitPoint.x = x;
   state.lastHitPoint.y = y;
   state.lastHitPoint.time = state.time;
+  // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3): Desperation/
+  // Proximity/Momentum — all three fold into `power` itself, once, here,
+  // rather than as per-cell/per-coagulant terms: none of them varies
+  // within a single hit (Desperation and Momentum read state that's fixed
+  // for the whole call; Proximity reads this hit's own (x,y), not a
+  // per-cell position).
+  //
+  // Desperation: reads CURRENT hp, not max — inert at full health.
+  if (opts.desperationScaled) {
+    const missingFrac = 1 - state.tower.hp / state.tower.maxHp;
+    power *= 1 + opts.desperationScaled * missingFrac;
+  }
+  // Proximity: the closer this hit's own centre is to the tower relative
+  // to the field's own maxRange, the bigger the bonus — clamped so a hit
+  // literally on the tower doesn't exceed the gem's own intended cap.
+  if (opts.proximityScaled) {
+    const proximityFrac = clamp(1 - dist(x, y, state.tower.x, state.tower.y) / grid.maxRange, 0, 1);
+    power *= 1 + opts.proximityScaled * proximityFrac;
+  }
+  // Momentum: `momentumMult` is already the fully-resolved multiplier
+  // (systems/resolveOpts.ts builds it from `state.weaponStreak`, since
+  // that's the one place that already knows both the weapon key and the
+  // live socket state) — just applied here, same as the other two.
+  if (opts.momentumMult) power *= opts.momentumMult;
+  // Captured before either loop runs so the streak update at the bottom
+  // can tell whether a kill happened DURING this specific call, not just
+  // whether one happened recently — tighter attribution than Bladestorm's
+  // window check gets away with, since we're comparing across exactly
+  // this synchronous call rather than a multi-second window.
+  const deathAtBefore = state.lastCoagulantDeathAt;
+
   // Bucketing (not the yield formula below) needs the current age floor —
   // see tuning/maturity.ts's maturityBucket for why a fixed 0..1 split
   // can't stay legible as the floor itself rises over a run.
@@ -436,6 +540,12 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     // one was picked" here from mass/distance would risk silently picking
     // a different coagulant than the one the gem's own description named.
     const focusMult = opts.focusTarget === c && opts.focusBonus ? 1 + opts.focusBonus : 1;
+    // Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3): Giant-
+    // Slayer/Culling — mirrored scaling against mass, each clamped to
+    // [0,1] so an absurdly large or small coagulant doesn't blow the
+    // multiplier past its own intended bonus.
+    const giantSlayerMult = opts.massScaledUp ? 1 + opts.massScaledUp * clamp(c.mass / MASS_BEHEMOTH, 0, 1) : 1;
+    const cullingMult = opts.massScaledDown ? 1 + opts.massScaledDown * clamp(1 - c.mass / MASS_CONGEALER, 0, 1) : 1;
     const raw =
       effectivePower *
       DAMAGE_COEFF *
@@ -446,7 +556,9 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
       primingMult *
       shatterMult *
       densityMult *
-      focusMult;
+      focusMult *
+      giantSlayerMult *
+      cullingMult;
     const removeAmt = clamp(raw, 0, c.mass);
     if (opts.chill) c.chilledUntil = Math.max(c.chilledUntil, state.time + opts.chill);
     if (opts.armorShred) {
@@ -458,6 +570,16 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     c.mass -= removeAmt;
     totalRemoved += removeAmt;
     coagulantRemoved += removeAmt;
+    // Culling's finisher: a fraction of the coagulant's OWN starting
+    // mass, not an absolute — checked after this hit's ordinary damage
+    // has already landed, only on a hit that actually did something
+    // (removeAmt > 0, already guaranteed by the guard above), so a graze
+    // can't finish a behemoth outright.
+    if (opts.cullingFinishFraction && c.mass > 0 && c.mass <= c.startMass * opts.cullingFinishFraction) {
+      totalRemoved += c.mass;
+      coagulantRemoved += c.mass;
+      c.mass = 0;
+    }
     if (opts.overflow && raw > removeAmt) overflowExcess += raw - removeAmt;
     if (opts.kickback && opts.kickback > 0) {
       const angle = Math.atan2(c.y - y, c.x - x);
@@ -504,5 +626,15 @@ export function clearAt(state: GameState, x: number, y: number, power: number, o
     if (xpVal >= 1) dropGemShower(state, x + rand(-10, 10), y + rand(-10, 10), xpVal);
     spawnParticles(state, x, y, '#ff5d8a', Math.min(10, Math.round(totalRemoved * 3)), 70);
   }
+
+  // Momentum's streak update — the write side of the read at the top.
+  // Ramps on a hit that actually removed mass; resets on a miss (nothing
+  // removed) or a kill (the plan's own rule S1: it rewards sustained
+  // pressure on a target, not finishing it off).
+  if (opts.momentumKey) {
+    const killedThisCall = state.lastCoagulantDeathAt !== deathAtBefore;
+    state.weaponStreak[opts.momentumKey] = totalRemoved > 0 && !killedThisCall ? (state.weaponStreak[opts.momentumKey] ?? 0) + 1 : 0;
+  }
+
   return totalRemoved;
 }

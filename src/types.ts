@@ -66,4 +66,21 @@ export type TargetingGemKey =
   | 'triage'
   | 'opportunist';
 
-export type GemKey = AmplifierGemKey | BehaviourGemKey | TargetingGemKey;
+// Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md): the nine
+// Conditional gems (Shatter and Sterilizer cut as duplicates of shipped
+// 6B extensions — umbrella plan S2). Every one is a RESOLVE-stage damage
+// multiplier or debuff, legal on every weapon (no refusal table, unlike
+// Amplifier or Targeting) — none of them reads anything archetype-
+// specific, only target/player state.
+export type ConditionalGemKey =
+  | 'penetration'
+  | 'virulence'
+  | 'saturation'
+  | 'giantSlayer'
+  | 'culling'
+  | 'corrosion'
+  | 'desperation'
+  | 'proximity'
+  | 'momentum';
+
+export type GemKey = AmplifierGemKey | BehaviourGemKey | TargetingGemKey | ConditionalGemKey;

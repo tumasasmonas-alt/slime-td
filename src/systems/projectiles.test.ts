@@ -956,3 +956,135 @@ describe('updateProjectiles — behaviour flags', () => {
     expect(state.projectiles[0]!.vy).not.toBe(0);
   });
 });
+
+// Phase 6D-2 (docs/plans/phase-6d2-conditional-gems.md S3, Decision 91):
+// a real bug caught while building this batch, not by the browser — the
+// nine Conditional gems' fields reach a projectile at SPAWN (resolveOpts()
+// is spread onto the projectile object in every weapon file), but
+// updateProjectiles' own two clearAt call sites only ever forwarded a
+// hardcoded subset of fields at IMPACT time. Every Conditional gem would
+// have been silently inert on Bolt/Chain/Missile/Fission — three of ten
+// weapons' worth of projectile paths — despite typechecking cleanly and
+// every other test passing, since nothing exercised spawn-through-impact
+// for a field outside that hardcoded list. Fixed by forwarding the full
+// set at both call sites; these tests are the regression guard.
+describe('Conditional gem fields survive spawn to impact (Phase 6D-2)', () => {
+  it('Penetration (armorIgnoreCap) reaches the coagulant loop on a bolt-type projectile', () => {
+    const withGem = freshState();
+    withGem.grid = makeTestGrid();
+    const target1 = makeCoagulant({ x: 305, y: 300, mass: 1000, armor: 40 });
+    withGem.coagulants = [target1];
+    withGem.projectiles.push({
+      type: 'bolt',
+      src: 'bolt',
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      dmg: 50,
+      radius: 4,
+      color: '#fff',
+      life: 5,
+      armorIgnoreCap: 30,
+    });
+    updateProjectiles(withGem, 0.02);
+    const removedWith = 1000 - target1.mass;
+
+    const without = freshState();
+    without.grid = makeTestGrid();
+    const target2 = makeCoagulant({ x: 305, y: 300, mass: 1000, armor: 40 });
+    without.coagulants = [target2];
+    without.projectiles.push({
+      type: 'bolt',
+      src: 'bolt',
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      dmg: 50,
+      radius: 4,
+      color: '#fff',
+      life: 5,
+    });
+    updateProjectiles(without, 0.02);
+    const removedWithout = 1000 - target2.mass;
+
+    expect(removedWith).toBeGreaterThan(removedWithout);
+  });
+
+  it('Penetration (armorIgnoreCap) reaches the coagulant loop on a missile-type projectile', () => {
+    const withGem = freshState();
+    withGem.grid = makeTestGrid();
+    const target1 = makeCoagulant({ x: 305, y: 300, mass: 1000, armor: 40 });
+    withGem.coagulants = [target1];
+    withGem.projectiles.push({
+      type: 'missile',
+      src: 'missile',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      speed: 300,
+      dmg: 50,
+      splashRadius: 20,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetPoint: { x: 305, y: 300 },
+      armAt: 0,
+      armorIgnoreCap: 30,
+    });
+    updateProjectiles(withGem, 0.02);
+    const removedWith = 1000 - target1.mass;
+
+    const without = freshState();
+    without.grid = makeTestGrid();
+    const target2 = makeCoagulant({ x: 305, y: 300, mass: 1000, armor: 40 });
+    without.coagulants = [target2];
+    without.projectiles.push({
+      type: 'missile',
+      src: 'missile',
+      x: 300,
+      y: 300,
+      vx: 300,
+      vy: 0,
+      speed: 300,
+      dmg: 50,
+      splashRadius: 20,
+      radius: 5,
+      color: '#ff9d6b',
+      life: 5,
+      targetPoint: { x: 305, y: 300 },
+      armAt: 0,
+    });
+    updateProjectiles(without, 0.02);
+    const removedWithout = 1000 - target2.mass;
+
+    expect(removedWith).toBeGreaterThan(removedWithout);
+  });
+
+  it('Momentum (momentumMult / momentumKey) reaches the grid loop and updates state.weaponStreak on a bolt-type projectile', () => {
+    const state = freshState();
+    state.grid = makeTestGrid();
+    revealAt(state.grid, 305, 300, 0.9);
+    state.weaponStreak.bolt = 2;
+    state.projectiles.push({
+      type: 'bolt',
+      src: 'bolt',
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      dmg: 10,
+      radius: 4,
+      color: '#fff',
+      life: 5,
+      momentumMult: 1,
+      momentumKey: 'bolt',
+    });
+
+    updateProjectiles(state, 0.02);
+
+    expect(state.weaponStreak.bolt).toBe(3);
+  });
+});
