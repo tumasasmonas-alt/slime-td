@@ -1,5 +1,16 @@
 # Slime TD
 
+> **⛔ SUNSET — 2026-08-14. This project is no longer in development.**
+>
+> Read **`docs/POSTMORTEM.md`** first — what was built, why it stopped,
+> and what was learned. Read **`docs/SOCKET-ARSENAL.md`** for the
+> weapon/gem/socket system, extracted as a portable design for reuse
+> elsewhere. Everything else in this file describes how the project was
+> run while it was live, and is preserved for context.
+>
+> **Do not start new feature work here.** The build is green and playable;
+> leave it that way.
+
 Browser-based roguelite tower defense. A stationary core sits at the center of
 the screen; infection spreads inward as a continuous procedural density field
 (not discrete enemies) and the player levels up auto-firing weapons
@@ -11,7 +22,8 @@ Read these three, in order. They are the project's authority:
 
 - **`docs/PROGRESS.md`** — current state, what happened in recent sessions
   (including what was discussed and planned, not just what shipped), and
-  what to pick up next. Start here.
+  what to pick up next. Start here. *(Now historical — see the sunset
+  banner above.)*
 - **`docs/DECISIONS.md`** — every load-bearing decision and its reasoning,
   plus the documented bug list. **Check this before changing anything that
   looks odd** — a lot of "odd" is deliberate, and several entries exist

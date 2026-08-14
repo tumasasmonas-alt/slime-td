@@ -1,10 +1,37 @@
 # Slime TD — Progress Tracker
 
-**This is the project's primary status document.** It exists so that work
-can resume on a different machine (this is a solo project developed from
-two machines via git) without re-deriving context — not just *what* the
-code does, but what was discussed, what was decided, and what the plan
-was when the last session ended.
+> # ⛔ PROJECT SUNSET — 2026-08-14
+>
+> **Slime TD is no longer in development.** This file is now a historical
+> record, not a handoff document. Nothing below is a plan; it is what
+> happened.
+>
+> **Read these two instead:**
+>
+> - **`docs/POSTMORTEM.md`** — what was built, why it was stopped, what
+>   worked, what didn't, and the process lessons worth carrying. **Start
+>   here.**
+> - **`docs/SOCKET-ARSENAL.md`** — the weapon/gem/socket system extracted
+>   as a portable, engine-agnostic design, for reuse in the next project.
+>
+> **State at sunset:** 902 tests passing (55 files), `tsc --noEmit` clean,
+> `npm run build` clean, `main` clean and pushed. Two known bugs left
+> unfixed on purpose and recorded in `docs/BACKLOG.md`; Phase 6D-3
+> Steps 4–5 are the only unfinished planned work. The game is playable.
+>
+> **Why it stopped:** the no-aim premise (§4 of the 2026-08-05 session
+> record) capped how engaging the game could be, structurally rather than
+> numerically. Depth kept increasing; engagement did not. Full reasoning
+> in the post-mortem, §2.
+
+---
+
+**Historically, this was the project's primary status document.** It
+existed so that work could resume on a different machine (this is a solo
+project developed from two machines via git) without re-deriving context
+— not just *what* the code does, but what was discussed, what was
+decided, and what the plan was when the last session ended. Everything
+below is preserved as written at the time.
 
 Companion documents:
 - **`docs/DECISIONS.md`** — the full decision register. Every load-bearing
@@ -46,7 +73,10 @@ the reasoning and the plan, which git does *not* capture.
 
 ---
 
-## Current state
+## Final state at sunset
+
+*(Header text below is preserved as last written, 2026-08-11. The
+sunset banner at the top of this file is the authoritative summary.)*
 
 **Last updated:** 2026-08-11 (**Post-6D-3 playtest balance pass, plus a
 same-session design follow-up** — Decisions 93–95. The owner's first live
@@ -72,18 +102,17 @@ untouched** — see the entry below for what's still unverified. **902
 tests pass, `tsc --noEmit` clean**, plus two browser smoke tests (game
 loads, no console errors — neither is a full playtest).
 
-**▶ MACHINE HANDOFF — pick up here.** Tree is clean, everything pushed to
-`main` (`8faaf54`). No code work is queued — this was a direct response
-to playtest feedback, not a plan step. **A fuller playtest is the next
-real step**, watching specifically: does Radar Sweep actually read as a
-sweep in play (nobody has watched it fire in a real run yet), did the
-Immolation/Shockwave damage cuts land right or overshoot the other way,
-do Blades/Frost need the same treatment (either the plain cut, or Radar
-Sweep's shape fix if either has a similarly "instant, full-coverage"
-extension), does the armour raise deny weak/unlevelled weapons too hard,
-does the gem-ramp's shape (0.15 floor, level-10 end) feel right. Full
-list: `docs/BACKLOG.md`'s top entry. Once that's in, 6D-3 Steps 4–5
-(below) are still the next *build* item.
+**▶ ~~MACHINE HANDOFF~~ — SUPERSEDED BY SUNSET (2026-08-14).** No work is
+queued and none is planned. What follows is preserved as the last state
+this document described before development stopped.
+
+*As written at the time:* tree is clean, everything pushed to `main`.
+A fuller playtest was the next step, watching: whether Radar Sweep reads
+as a sweep in play, whether the Immolation/Shockwave damage cuts landed
+right, whether Blades/Frost needed the same treatment, whether the armour
+raise denies weak weapons too hard, and whether the gem-draw ramp's shape
+felt right. `docs/BACKLOG.md`'s top entry has the full list. 6D-3
+Steps 4–5 were the next *build* item and were never started.
 
 **Previously:** 2026-08-11 (**Phase 6D-3 partially shipped** —
 Decision 92: Steps 1–3 of the gem-reality fix. Fork/Chaining/Bounce/

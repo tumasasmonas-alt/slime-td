@@ -1,5 +1,12 @@
 # Slime TD — Backlog
 
+> **⛔ PROJECT SUNSET — 2026-08-14.** Nothing in this file will be worked
+> on. It is preserved because it is an honest record of what was known and
+> unfixed at the end, and because several *Ideas* entries are worth mining
+> for the next project. See `docs/POSTMORTEM.md` §6 for the two live bugs
+> left in the shipped build, and `docs/SOCKET-ARSENAL.md` for the one
+> system being carried forward.
+
 Bugs, TODOs, and ideas in one list.
 
 **How to use this file:**
